@@ -22,8 +22,8 @@ fn scratch_fixture(tag: &str) -> std::path::PathBuf {
 
 fn events_with_method(session: &Session, method: &str) -> Vec<usize> {
     session
-        .client
-        .events
+        .events()
+        .unwrap()
         .iter()
         .enumerate()
         .filter(|(_, event)| event.get("method").and_then(Value::as_str) == Some(method))
@@ -31,68 +31,60 @@ fn events_with_method(session: &Session, method: &str) -> Vec<usize> {
         .collect()
 }
 
-/// (B) The settle contract: a bound that expires without observed
-/// quiescence returns Pending — the caller's cue to answer with status
-/// and issue no semantic query — and a full-bound settle recovers.
-///
-/// Driven from a cold start, where no `serverStatus` has arrived yet:
-/// deterministic, unlike forcing a post-edit `quiescent=false` (r-a's
-/// emission timing there is not stable enough to assert against). The
-/// tool layer's Pending guards sit at every settle call site.
+/// A cold start is not ready until rust-analyzer reports quiescence; the
+/// wait blocks through the initial load and then the snapshot agrees.
 #[test]
 #[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
-fn settle_reports_pending_within_a_tiny_bound_and_recovers() {
-    let root = scratch_fixture("settle-pending");
+fn cold_start_waits_for_quiescence() {
+    let root = scratch_fixture("cold-start");
     let mut session = Session::start(&root).unwrap();
-
-    // Cold start: no serverStatus yet. A zero-width bound cannot observe
-    // quiescence, so settle must report Pending, not block or lie.
-    let readiness = session.settle(Duration::ZERO).expect("settle");
+    session
+        .wait_ready()
+        .expect("the cold start settles within the backstop");
+    let snapshot = session.snapshot().unwrap();
+    assert!(snapshot.ready, "{snapshot:?}");
+    assert_eq!(snapshot.open_progress_tokens, 0, "{snapshot:?}");
+    // The evidence is in the log: at least one quiescent status.
     assert!(
-        matches!(readiness, Readiness::Pending),
-        "no status has arrived; a zero bound expires as Pending: {readiness:?}"
+        session.events().unwrap().iter().any(|event| {
+            event["method"] == "experimental/serverStatus"
+                && event.pointer("/params/quiescent") == Some(&json!(true))
+        }),
+        "a quiescent serverStatus was observed"
     );
-
-    // The full bound waits out the cold start and reports the epoch.
-    let readiness = session
-        .settle(crate::state::QUIESCE_BOUND)
-        .expect("settle with the full bound");
-    assert!(
-        matches!(readiness, Readiness::Quiescent { .. }),
-        "the full bound reaches quiescence: {readiness:?}"
-    );
-
     session.shutdown();
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// (C) Deleting a previously opened document discards the snapshot AND
-/// closes it on the server (didClose after the didOpen); recreating the
-/// file produces a fresh didOpen — a legal sequence, rather than a
-/// duplicate didOpen against a server that never learned the file closed.
+/// Deleting a previously opened document discards the snapshot AND closes
+/// it on the server (didClose after the didOpen); recreating the file
+/// produces a fresh didOpen — a legal sequence, rather than a duplicate
+/// didOpen against a server that never learned the file closed.
 #[test]
 #[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
 fn deleting_an_opened_document_closes_it_on_the_server_and_recovers() {
     let root = scratch_fixture("delete-close");
     let mut session = Session::start(&root).unwrap();
-    session
-        .ensure_ready(crate::state::QUIESCE_BOUND)
-        .expect("cold start reaches quiescence");
+    session.wait_ready().expect("cold start reaches quiescence");
 
     let lib_path = root.join("src/lib.rs");
     let original = std::fs::read_to_string(&lib_path).unwrap();
     let uri = path_uri(&lib_path).unwrap();
 
-    let (_uri, fed, _text) = session.refresh_document(&lib_path).unwrap();
-    assert!(fed);
+    let synced = session.sync(&lib_path).unwrap();
+    assert!(synced.fed);
     assert!(session.opened.contains_key(&uri));
     let opens_before = events_with_method(&session, "textDocument/didOpen");
     assert_eq!(opens_before.len(), 1);
+    assert!(
+        !session.sync(&lib_path).unwrap().fed,
+        "unchanged: nothing sent"
+    );
 
     // Delete: actionable error, snapshot discarded, didClose sent.
     std::fs::remove_file(&lib_path).unwrap();
     let error = session
-        .refresh_document(&lib_path)
+        .sync(&lib_path)
         .expect_err("a deleted opened file is an actionable error");
     assert!(
         error
@@ -114,9 +106,9 @@ fn deleting_an_opened_document_closes_it_on_the_server_and_recovers() {
     // Recreate: a fresh didOpen — legal after didClose; the server never
     // saw a duplicate didOpen for a still-open document.
     std::fs::write(&lib_path, &original).unwrap();
-    let (_uri, fed, text) = session.refresh_document(&lib_path).unwrap();
-    assert!(fed);
-    assert_eq!(text, original);
+    let synced = session.sync(&lib_path).unwrap();
+    assert!(synced.fed);
+    assert_eq!(synced.text, original);
     assert!(session.opened.contains_key(&uri));
     let opens_after = events_with_method(&session, "textDocument/didOpen");
     assert_eq!(opens_after.len(), 2, "one open per server-side open state");

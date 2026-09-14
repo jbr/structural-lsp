@@ -70,9 +70,9 @@ USAGE:
 OPTIONS:
     --server <rust|python|both>   which language server(s) to drive (default: both)
     --out <dir>                   output root (default: target/spike)
-    --quiesce <secs>              max wait for rust-analyzer quiescence (default: 120)
-    --pyright-wait <secs>         bounded wait for pyright, which has no ready signal (default: 5)
-    --query-timeout <secs>        per-query timeout (default: 60)
+    --quiesce <secs>              inactivity backstop while waiting for rust-analyzer readiness (default: 120)
+    --pyright-wait <secs>         the same backstop for pyright, which has no ready signal (default: 5)
+    --query-timeout <secs>        inactivity backstop per query (default: 60)
     -h, --help
 
 The spike is read-only: it never applies an edit and never executes a

@@ -18,7 +18,8 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use structural::lsp::client::Client;
+use structural::lsp::adapter::{ReadinessPolicy, StandardIdle, rust_analyzer::Quiescence};
+use structural::lsp::handle::{ServerHandle, Settings};
 
 mod annotations;
 mod protocol;
@@ -73,10 +74,13 @@ impl Server {
 pub struct Options {
     pub servers: Vec<Server>,
     pub out: PathBuf,
-    /// Longest the spike waits for rust-analyzer's `serverStatus` quiescence.
+    /// Inactivity backstop while waiting for rust-analyzer's readiness: the
+    /// wait fails only if the server says nothing for this long.
     pub quiesce: Duration,
-    /// Bounded wait for pyright, which has no readiness signal.
+    /// The same backstop for pyright, which has no readiness signal beyond
+    /// standard progress.
     pub pyright_wait: Duration,
+    /// Inactivity backstop for every query.
     pub query_timeout: Duration,
 }
 
@@ -130,18 +134,26 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
         server.slug(),
         args.join(" ")
     );
-    let mut client = Client::spawn(command, &args)?;
+    let settings = Settings {
+        backstop: options.query_timeout,
+        // The manifest claims "every notification and server request seen";
+        // keep the log effectively uncapped for a spike run.
+        event_cap: 1_000_000,
+        ..Settings::default()
+    };
+    let policy: Box<dyn ReadinessPolicy> = match server {
+        Server::Rust => Box::new(Quiescence::default()),
+        Server::Python => Box::new(StandardIdle),
+    };
+    let handle = ServerHandle::spawn_with(command, &args, settings, policy)?;
 
     let root_uri = url::Url::from_directory_path(&fixture)
         .map_err(|_| anyhow!("invalid fixture path {}", fixture.display()))?
         .to_string();
 
     let started = Instant::now();
-    let initialize = client.request(
-        "initialize",
-        initialize_params(&root_uri, &fixture, server),
-        Duration::from_secs(60),
-    )?;
+    let initialize =
+        handle.request("initialize", initialize_params(&root_uri, &fixture, server))?;
     // Captured immediately: this is initialize latency, not whole-run time.
     let initialize_elapsed_ms = started.elapsed().as_millis();
     let server_info = initialize.get("serverInfo").cloned().unwrap_or(Value::Null);
@@ -152,9 +164,9 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
         server_info
     );
 
-    client.notify("initialized", json!({}))?;
+    handle.notify("initialized", json!({}))?;
 
-    let readiness = wait_for_ready(&mut client, server, options)?;
+    let readiness = wait_for_ready(&handle, server, options)?;
     eprintln!(
         "=== {}: readiness after {:.1}s (quiescent={}): {}",
         server.slug(),
@@ -163,10 +175,11 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
         readiness.strategy
     );
 
-    // Open every fixture source file, then give the server a moment.
+    // Open every fixture source file, then wait for the server to have no
+    // outstanding work again before querying.
     let sources = collect_sources(&fixture)?;
     for (path, text, uri) in &sources {
-        client.notify(
+        handle.notify(
             "textDocument/didOpen",
             json!({
                 "textDocument": {
@@ -179,12 +192,12 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
         )?;
         eprintln!("=== {}: didOpen {}", server.slug(), path.display());
     }
-    client.pump(Duration::from_millis(500))?;
+    handle.wait_ready(options.quiesce)?;
 
     // Readiness observed *before* didOpen is not necessarily query-phase
     // readiness — rust-analyzer's quiescence can precede source loading. Record
     // what the server reports now, after the opens.
-    let post_open_status = latest_server_status(&mut client, Duration::from_millis(500))?;
+    let post_open_status = latest_server_status(&handle)?;
     if post_open_status != Value::Null {
         eprintln!(
             "=== {}: post-open serverStatus: {post_open_status}",
@@ -258,7 +271,7 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
 
             for (method, params) in queries {
                 index += 1;
-                let captured = capture(&mut client, method, params.clone(), options.query_timeout);
+                let captured = capture(&handle, method, params.clone());
                 let produced_result = captured.error.is_none() && is_nonempty(&captured.result);
                 write_raw(&raw, index, &meta, method, &params, &captured)?;
                 eprintln!(
@@ -308,12 +321,7 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
                         let mut resolve_meta = meta.clone();
                         resolve_meta.query = title;
                         index += 1;
-                        let resolved_action = capture(
-                            &mut client,
-                            "codeAction/resolve",
-                            action,
-                            options.query_timeout,
-                        );
+                        let resolved_action = capture(&handle, "codeAction/resolve", action);
                         write_raw(
                             &raw,
                             index,
@@ -359,7 +367,7 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
                     json!({ "textDocument": { "uri": uri }, "position": target }),
                 ),
             ] {
-                let captured = capture(&mut client, method, params, options.query_timeout);
+                let captured = capture(&handle, method, params);
                 warm_total += 1;
                 if captured.error.is_none() && is_nonempty(&captured.result) {
                     warm_nonempty += 1;
@@ -411,7 +419,7 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
             "error": errored,
             "nonempty": nonempty,
         },
-        "events": client.events,
+        "events": handle.capture_events()?,
         "notes": [
             "read-only: no edit applied, no code-action command executed, workspace/applyEdit declined",
             "raw/ holds the unmodified result for every query",
@@ -419,7 +427,7 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
         ],
     });
 
-    client.shutdown()?;
+    handle.shutdown()?;
 
     fs::write(
         dir.join("manifest.json"),

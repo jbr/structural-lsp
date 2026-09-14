@@ -54,12 +54,19 @@ Work in these checkpoints, each independently reviewed before the next:
    error "connection closed"); and `window/workDoneProgress/create` opens a
    token as well as `$/progress begin`, so a created-but-not-begun token is
    outstanding work.
-2. **1B: migrate `Session`, `show`, and the spike onto the handle** (next); delete
-   the old pump/drain/`Readiness` epochs/`settle`/retry loops; rust-analyzer's
-   `serverStatus` policy moves into the adapter module. Sync owned docs and
-   wait idle before *every* semantic query; validate the workspace candidate's
-   name at its range *before* issuing `definition` there; mismatch is an error.
-3. **MCP integration** against the patched mcplease (see above).
+2. **1B: migrate `Session`, `show`, and the spike onto the handle** — done
+   2026-09-14 evening. `Client` is deleted with its pump/drain/settle/epoch
+   machinery and both retry loops in `show`. rust-analyzer's quiescence
+   policy is `adapter::rust_analyzer::Quiescence`. `show` now syncs owned
+   documents, waits for no outstanding work, queries, syncs the candidate's
+   file, checks the symbol name sits at the reported range (an error if not),
+   waits again, queries `definition`, syncs the target, checks its range the
+   same way, then shapes. rust-analyzer's `workspace/symbol` and `definition`
+   ranges are both the *name* range (verified from the spike's raw output),
+   so the check is exact equality. All six real-server tests pass with no
+   retries. Output wording is unchanged pending item 7; the readiness
+   evidence lines are simply gone.
+3. **MCP integration** against the patched mcplease (see above) — next.
 4. Items 3 through 8 of `docs/slice-2.md` as written.
 
 ## Settled design for 1A
@@ -189,3 +196,32 @@ impl ServerHandle {
 - Whether to release mcplease as 0.4.3 or 0.5.0 once structural's integration
   test passes (no `State`/`Tools` bound changes, but reordered responses are
   observable).
+
+## Observations from Claude Code's rust-analyzer plugin (2026-09-14)
+
+jbr enabled the official `rust-analyzer-lsp` plugin during 1B so its
+behaviour could be compared with this design. Not to copy; to learn from.
+
+- **It served a stale answer.** `findReferences` on `Client::pump` returned
+  "No references found. This may occur if the symbol has no usages, or if
+  the LSP server has not fully indexed the workspace." About a minute later
+  the identical call returned 12 references across 6 files. That is the
+  exact failure `docs/slice-2.md`'s governing rule exists to prevent: the
+  hedge in the message does not help an agent that has to decide something
+  now. Blocking until the server has no outstanding work would have made the
+  first answer correct.
+- **Position-based only.** Every operation needs a file, 1-based line and
+  column; the only name-based entry is `workspaceSymbol`, which returns
+  locations, not bodies. An agent has to already know where a symbol is to
+  ask about it, then read the file itself. `show`'s bare-name-to-decorated-
+  body design is the direct alternative.
+- **Diagnostics are pushed into the conversation.** After each edit a
+  `new-diagnostics` block listed rustc errors with file and line, before any
+  build was run. Genuinely useful when fresh; it also surfaced an error in a
+  `core` file (`result.rs`) as if it were ours, which is noise. Worth
+  studying before slice 3's diagnostics view: the value is real, the
+  staleness risk is the same as above.
+- **Reference output is compact**: `file: line:col` per hit, grouped by
+  file, no context lines. Good token economy; but with no snippet an agent
+  has to open every file to learn anything, so `uses` should carry one line
+  of context per hit.

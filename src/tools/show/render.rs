@@ -1,59 +1,7 @@
 //! Rendering for `show`: every string the tool returns is built here.
 
 use super::*;
-
-/// Status answer when a bounded settle after a feed expires without
-/// quiescence: nothing more is queried and no body is rendered against the
-/// unsettled index.
-pub(super) fn render_pending_indexing(root: &Path, session: &mut Session, what: &str) -> String {
-    format!(
-        "Semantic definitions unavailable: {what} is still being re-indexed; the bounded \
-         readiness wait expired without quiescent=true.\n\
-         No further query was issued and no body is rendered from a possibly stale index.\n\
-         Retry the same call when editing settles.\n{footer}",
-        footer = footer(root, &server_line(session), &readiness_evidence(session)),
-    )
-}
-
-/// Status answer when the bounded wait expires without quiescence: no target
-/// was resolved and no definition was queried.
-pub(super) fn pending_status(root: &Path, session: &mut Session) -> String {
-    let seen = if session.latest_server_status().is_some() {
-        "; a serverStatus was seen, not yet quiescent"
-    } else {
-        "; no serverStatus yet"
-    };
-    let pending_line = format!(
-        "indexing ({waited:.1}s elapsed; the {bound:.0}s readiness bound was reached without \
-         quiescent=true{seen})",
-        waited = QUIESCE_BOUND.as_secs_f32(),
-        bound = QUIESCE_BOUND.as_secs_f32(),
-    );
-    format!(
-        "Semantic definitions unavailable: rust-analyzer is {pending_line}\n\
-         No target was resolved and no definition was queried; this does not mean the symbol \
-         is absent.\n\
-         Retry the same call when indexing finishes.\n{footer}",
-        footer = footer(root, &server_line(session), &pending_line),
-    )
-}
-
-/// Status answer when source files keep changing across the bounded retry:
-/// no body is served, because none could be stated against a stable snapshot.
-pub(super) fn render_unstable(
-    root: &Path,
-    symbol: &str,
-    attempts: usize,
-    server_line: &str,
-    session: &mut Session,
-) -> String {
-    format!(
-        "No stable result for '{symbol}': the source files kept changing while the server was \
-         being refreshed and re-queried ({attempts} bounded attempts).\n\
-         Nothing was rendered as current — retry when editing settles.\n{footer}",
-        footer = footer(root, server_line, &readiness_evidence(session)),
-    )
-}
+use crate::lsp::session::Session;
 
 pub(super) fn render_not_found(
     root: &Path,
@@ -61,25 +9,23 @@ pub(super) fn render_not_found(
     out_of_root: usize,
     out_of_scope: usize,
     server_line: &str,
-    session: &mut Session,
 ) -> String {
     format!(
         "No symbol named '{symbol}' was reported by workspace/symbol.\n\
          This is the server's fuzzy index queried with the bare name; the result is not \
          proven exhaustive.\nNo definition was queried.\n{exclusions}{footer}",
         exclusions = exclusion_note(out_of_root, out_of_scope),
-        footer = footer(root, server_line, &readiness_evidence(session)),
+        footer = footer(root, server_line),
     )
 }
 
 pub(super) fn render_fuzzy(
     root: &Path,
     symbol: &str,
-    fuzzy: &[crate::lsp::definition::Candidate],
+    fuzzy: &[Candidate],
     out_of_root: usize,
     out_of_scope: usize,
     server_line: &str,
-    session: &mut Session,
 ) -> String {
     let mut text = format!(
         "No exact match for '{symbol}'. Possible matches (fuzzy, as reported by \
@@ -94,18 +40,17 @@ pub(super) fn render_fuzzy(
     ));
     text.push_str("Nothing was resolved; no definition was queried.\n");
     text.push_str(&exclusion_note(out_of_root, out_of_scope));
-    text.push_str(&footer(root, server_line, &readiness_evidence(session)));
+    text.push_str(&footer(root, server_line));
     text
 }
 
 pub(super) fn render_ambiguous(
     root: &Path,
     symbol: &str,
-    exact: &[crate::lsp::definition::Candidate],
+    exact: &[Candidate],
     out_of_root: usize,
     out_of_scope: usize,
     server_line: &str,
-    session: &mut Session,
 ) -> String {
     let mut text = format!(
         "Ambiguous: {} exact matches for '{symbol}' (as reported by workspace/symbol; not \
@@ -124,7 +69,7 @@ pub(super) fn render_ambiguous(
          qualified-path targeting is not implemented in this slice.\n",
     );
     text.push_str(&exclusion_note(out_of_root, out_of_scope));
-    text.push_str(&footer(root, server_line, &readiness_evidence(session)));
+    text.push_str(&footer(root, server_line));
     text
 }
 
@@ -137,7 +82,6 @@ pub(super) fn render_multiple_definitions(
     discovery: &Discovery,
     targets: &[DefinitionTarget],
     server_line: &str,
-    session: &mut Session,
 ) -> String {
     let mut text = format!(
         "The server reports {} definition locations for '{symbol}' (queried at {}):\n",
@@ -171,7 +115,7 @@ pub(super) fn render_multiple_definitions(
         discovery.out_of_root,
         discovery.out_of_scope,
     ));
-    text.push_str(&footer(root, server_line, &readiness_evidence(session)));
+    text.push_str(&footer(root, server_line));
     text
 }
 
@@ -180,7 +124,6 @@ pub(super) fn render_null_definition(
     symbol: &str,
     discovery: &Discovery,
     server_line: &str,
-    session: &mut Session,
 ) -> String {
     format!(
         "The server reports no definition for '{symbol}' at {} (null/empty \
@@ -190,12 +133,12 @@ pub(super) fn render_null_definition(
             &discovery.candidate.info.location.uri,
             discovery.candidate.info.location.range.start
         ),
-        footer = footer(root, server_line, &readiness_evidence(session)),
+        footer = footer(root, server_line),
     )
 }
 
 /// The server's name and version, as reported at `initialize`.
-pub(super) fn server_line(session: &mut Session) -> String {
+pub(super) fn server_line(session: &Session) -> String {
     session
         .server_info()
         .and_then(|info| {
@@ -204,24 +147,6 @@ pub(super) fn server_line(session: &mut Session) -> String {
             Some(format!("{name} {version}"))
         })
         .unwrap_or_else(|| "rust-analyzer (serverInfo not reported)".to_string())
-}
-
-/// Current readiness evidence from the latest observed status: evidence, not
-/// a completeness claim.
-pub(super) fn readiness_evidence(session: &mut Session) -> String {
-    match session.readiness_current() {
-        Readiness::Quiescent { after } => format!(
-            "quiescent=true (serverStatus, observed {:.1}s after server start) — latest \
-             observed evidence, not a completeness claim",
-            after.as_secs_f32()
-        ),
-        Readiness::Pending => match session.latest_server_status() {
-            Some(_) => "latest serverStatus: quiescent=false (supersedes any earlier \
-                        quiescence); results may predate re-indexing"
-                .to_string(),
-            None => "no serverStatus observed yet — readiness unverified".to_string(),
-        },
-    }
 }
 
 /// Candidate lines, capped, for the fuzzy and ambiguous listings.
@@ -242,7 +167,11 @@ pub(super) fn listed_candidates(root: &Path, infos: &[&lsp_types::SymbolInformat
 }
 
 /// `path:line:col`, 1-based, relative to the root when inside it.
-pub(super) fn selection_line(root: &Path, uri: &lsp_types::Uri, position: lsp_types::Position) -> String {
+pub(super) fn selection_line(
+    root: &Path,
+    uri: &lsp_types::Uri,
+    position: lsp_types::Position,
+) -> String {
     let path = crate::lsp::definition::candidate_path(uri)
         .map(|path| {
             path.strip_prefix(root)
@@ -251,14 +180,6 @@ pub(super) fn selection_line(root: &Path, uri: &lsp_types::Uri, position: lsp_ty
         })
         .unwrap_or_else(|| uri.to_string());
     format!("{}:{}:{}", path, position.line + 1, position.character + 1)
-}
-
-/// The target's file path for provenance lines, relative to the root when
-/// inside it.
-pub(super) fn target_file_line(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .map(|relative| relative.display().to_string())
-        .unwrap_or_else(|_| path.display().to_string())
 }
 
 /// What the filters excluded, named rather than silently dropped.
@@ -302,14 +223,14 @@ pub(super) fn fallback_body(target_text: &str, target: &DefinitionTarget) -> Opt
     }
 }
 
-/// The honest, concise footer: the fixed root, the one view, the server and
-/// readiness evidence. The schema has no `view` field; the default behavior
-/// (definition) is described, and nothing unimplemented is advertised.
-pub(super) fn footer(root: &Path, server_line: &str, readiness_line: &str) -> String {
+/// The honest, concise footer: the fixed root, the one view, the server. The
+/// schema has no `view` field; the default behavior (definition) is
+/// described, and nothing unimplemented is advertised.
+pub(super) fn footer(root: &Path, server_line: &str) -> String {
     format!(
         "\nworkspace root (fixed at server start): {}\nview: definition by default (the only \
          view in this slice; bare-name resolution only — no line:col or anchor input).\n\
-         server: {server_line} · readiness evidence: {readiness_line}\n",
+         server: {server_line}\n",
         root.display()
     )
 }

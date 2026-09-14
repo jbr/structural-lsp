@@ -21,14 +21,9 @@ pub(super) struct ActionTally {
 }
 
 /// Run one request, capturing result, error, and latency uniformly.
-pub(super) fn capture(
-    client: &mut Client,
-    method: &str,
-    params: Value,
-    timeout: Duration,
-) -> Captured {
+pub(super) fn capture(handle: &ServerHandle, method: &str, params: Value) -> Captured {
     let began = Instant::now();
-    let (result, error) = match client.request(method, params, timeout) {
+    let (result, error) = match handle.request(method, params) {
         Ok(value) => (value, None),
         Err(error) => (Value::Null, Some(format!("{error:#}"))),
     };
@@ -39,12 +34,11 @@ pub(super) fn capture(
     }
 }
 
-/// Pump briefly and return the most recent `experimental/serverStatus` params,
-/// or `Null` when the server advertises none (pyright) or none is new.
-pub(super) fn latest_server_status(client: &mut Client, wait: Duration) -> Result<Value> {
-    client.pump(wait)?;
-    Ok(client
-        .events
+/// The most recent `experimental/serverStatus` params in the event log, or
+/// `Null` when the server advertises none (pyright).
+pub(super) fn latest_server_status(handle: &ServerHandle) -> Result<Value> {
+    Ok(handle
+        .capture_events()?
         .iter()
         .rev()
         .find(|event| {

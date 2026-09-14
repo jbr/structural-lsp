@@ -1,7 +1,7 @@
 //! A language server on its own threads, addressed through a blocking handle.
 //!
-//! This replaces the pump-driven shell in [`super::client`]: nothing here
-//! waits for a tool call to make progress. Three threads per server:
+//! Nothing here waits for a tool call to make progress. Three threads per
+//! server:
 //!
 //! - the **reader** turns the child's stdout into frames and pushes them,
 //!   blocking, into the owner's inbox — backpressure lands on the child, never
@@ -46,7 +46,6 @@
 //! is failed with the reason; none is left hanging.
 
 use crate::lsp::adapter::{ReadinessPolicy, StandardIdle};
-use crate::lsp::client::wire_debug_enabled;
 use crate::lsp::framing::{read_frame, write_frame};
 use crate::lsp::handlers::{self, Reply};
 use crate::lsp::jsonrpc::{self, Incoming};
@@ -433,6 +432,14 @@ struct Waiter {
     reply: Sender<Result<()>>,
     admitted_at: Instant,
     backstop: Duration,
+}
+
+/// Wire tracing to stderr, enabled by `STRUCTURAL_WIRE` (or the spike's
+/// `STRUCTURAL_SPIKE_WIRE`). Diagnostic only.
+pub(crate) fn wire_debug_enabled() -> bool {
+    ["STRUCTURAL_WIRE", "STRUCTURAL_SPIKE_WIRE"]
+        .iter()
+        .any(|name| std::env::var(name).is_ok_and(|value| value != "0"))
 }
 
 /// Wait for a worker to finish, polling briefly; detach it if it does not.

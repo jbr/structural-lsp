@@ -19,10 +19,12 @@
 //!
 //! Server-specific method knowledge belongs in a policy, not in the
 //! transport: rust-analyzer's `experimental/serverStatus` quiescence policy
-//! lands here during the Session migration (slice 2, work item 3's Adapter
-//! seam). The generic transport names no experimental method.
+//! is [`rust_analyzer::Quiescence`]. The generic transport names no
+//! experimental method.
 
 use serde_json::Value;
+
+pub mod rust_analyzer;
 
 /// A server's readiness policy beyond standard progress tracking.
 ///

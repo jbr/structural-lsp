@@ -5,24 +5,24 @@
 //! workspace root, definition only. No anchor/focus targeting, no line:col
 //! input, no qualified paths (rejected with guidance — a bare-name exact
 //! match is the only resolution that can be honestly validated), no other
-//! views. Results state readiness evidence, separate exact from fuzzy
-//! candidates without claiming search completeness, report the resolved
-//! selection before the body, and mark omissions.
+//! views. Results separate exact from fuzzy candidates without claiming
+//! search completeness, report the resolved selection before the body, and
+//! mark omissions.
 //!
-//! Freshness order (review-mandated): every previously opened document is
-//! refreshed from disk *before* discovery; if the chosen candidate's file or
-//! the definition target's file changes relative to what the server knew,
-//! the affected query is re-run once, bounded; files that keep changing
-//! yield a retry/status answer, never a stale body presented as current.
+//! Correctness order: every owned document is synced from disk, then the
+//! call waits until the server has no outstanding work, then queries. Each
+//! file the answer depends on is synced before the query that reads it, and
+//! every range the server returns is checked against the text just read —
+//! the symbol's name must sit there. A mismatch is an error, never a retry
+//! and never a body served from a stale range.
 
 use crate::lsp::definition::{
-    DefinitionSet, DefinitionTarget, NavigationProvenance, Resolution, parse_definition_result,
-    resolve,
+    Candidate, DefinitionSet, DefinitionTarget, NavigationProvenance, Resolution,
+    parse_definition_result, resolve, verify_name_at,
 };
 use crate::lsp::positions::position_to_offset;
-use crate::lsp::session::{Readiness, Session};
 use crate::lsp::shape;
-use crate::state::{QUERY_TIMEOUT, QUIESCE_BOUND, State};
+use crate::state::State;
 use anyhow::{Context, Result, bail};
 use mcplease::{
     traits::{Tool, ToolMeta},
@@ -50,8 +50,8 @@ const MAX_LISTED: usize = 20;
 /// names the server only fuzzy-matches are listed as possible matches and
 /// never silently resolved. Optional `path` narrows candidates to a file or
 /// directory under the workspace root fixed at server start (candidates
-/// outside the root are always excluded, symlink or not). Every result
-/// states the resolved selection, readiness evidence, and the fixed root.
+/// outside the root are always excluded, symlink or not). The call waits for
+/// the server to finish any outstanding work before answering.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "show")]
 #[group(skip)]
@@ -86,22 +86,17 @@ impl ToolMeta for Show {
     }
 }
 
-/// One discovery→refresh round: the chosen candidate with the filter's
-/// exclusion counts, and the refreshed snapshot of its file.
+/// The chosen candidate with the filter's exclusion counts, for rendering.
 struct Discovery {
     out_of_root: usize,
     out_of_scope: usize,
-    candidate: Box<crate::lsp::definition::Candidate>,
-    candidate_uri: String,
-    candidate_text: String,
+    candidate: Box<Candidate>,
 }
 
 impl Tool<State> for Show {
     type Output = String;
 
     fn execute(self, state: &mut State, _context: &RequestContext) -> Result<Self::Output> {
-        // Everything rendering needs is captured up front: the session holds
-        // the mutable borrow for the rest of the call.
         let root = state.root().to_path_buf();
         let symbol = validate_symbol(&self.symbol)?;
         let scope = self
@@ -111,208 +106,113 @@ impl Tool<State> for Show {
             .transpose()?;
 
         let session = state.session()?;
-        let readiness = session
-            .ensure_ready(QUIESCE_BOUND)
-            .context("rust-analyzer stopped responding while waiting for readiness")?;
-        if let Readiness::Pending = readiness {
-            return Ok(pending_status(&root, session));
-        }
-
         let server_line = server_line(session);
 
-        // Freshness before discovery: re-read every previously opened
-        // document and feed the server when its copy is stale, so
-        // `workspace/symbol` runs against the server's current view. A fed
-        // change may start re-indexing; wait for the epoch to go quiescent
-        // again (bounded).
-        let fed = session
-            .refresh_opened()
-            .context("rust-analyzer stopped responding while refreshing opened documents")?;
-        if fed > 0 {
-            let readiness = session
-                .settle(QUIESCE_BOUND)
-                .context("rust-analyzer stopped responding while re-indexing changed files")?;
-            if let Readiness::Pending = readiness {
-                return Ok(render_pending_indexing(
+        // Push disk state for every file the server delegates to us, then
+        // wait until nothing is outstanding. The wait is unbounded except by
+        // the inactivity backstop: a busy server is waited for, a silent one
+        // is an error.
+        session.sync_owned()?;
+        session.wait_ready()?;
+
+        let infos = session.workspace_symbol(&symbol)?;
+        let candidates = resolve(&symbol, infos, &root, scope.as_deref());
+        let (out_of_root, out_of_scope) = (candidates.out_of_root, candidates.out_of_scope);
+        let candidate = match candidates.resolution {
+            Resolution::NotFound => {
+                return Ok(render_not_found(
                     &root,
-                    session,
-                    "the refreshed documents",
-                ));
-            }
-        }
-
-        // Discovery, re-runnable once when the chosen candidate's file turns
-        // out to have changed relative to the server's index.
-        let mut discovery_attempts = 0usize;
-        let discovery = loop {
-            let infos = session
-                .workspace_symbol(&symbol, QUERY_TIMEOUT)
-                .context("rust-analyzer stopped responding during workspace/symbol")?;
-            let candidates = resolve(&symbol, infos, &root, scope.as_deref());
-
-            let (out_of_root, out_of_scope) = (candidates.out_of_root, candidates.out_of_scope);
-            match candidates.resolution {
-                Resolution::NotFound => {
-                    return Ok(render_not_found(
-                        &root,
-                        &symbol,
-                        out_of_root,
-                        out_of_scope,
-                        &server_line,
-                        session,
-                    ));
-                }
-                Resolution::FuzzyOnly(fuzzy) => {
-                    return Ok(render_fuzzy(
-                        &root,
-                        &symbol,
-                        &fuzzy,
-                        out_of_root,
-                        out_of_scope,
-                        &server_line,
-                        session,
-                    ));
-                }
-                Resolution::ExactMany(exact) => {
-                    return Ok(render_ambiguous(
-                        &root,
-                        &symbol,
-                        &exact,
-                        out_of_root,
-                        out_of_scope,
-                        &server_line,
-                        session,
-                    ));
-                }
-                Resolution::ExactOne(_) => {}
-            }
-            let Resolution::ExactOne(candidate) = candidates.resolution else {
-                unreachable!("matched ExactOne above")
-            };
-
-            let candidate_file = candidate
-                .canonical_path
-                .clone()
-                .ok_or_else(|| anyhow::anyhow!("candidate URI is not a readable file path"))?;
-            let (candidate_uri, candidate_fed, candidate_text) = session
-                .refresh_document(&candidate_file)
-                .context("rust-analyzer stopped responding while refreshing the candidate")?;
-            if !candidate_fed {
-                break Discovery {
+                    &symbol,
                     out_of_root,
                     out_of_scope,
-                    candidate,
-                    candidate_uri,
-                    candidate_text,
-                };
+                    &server_line,
+                ));
             }
-            // The file changed relative to the server's index: the symbol
-            // ranges discovery just saw may be stale. Re-wait for re-indexing
-            // and re-run discovery, once; still-changing files yield a
-            // retry/status answer instead of a body.
-            discovery_attempts += 1;
-            if discovery_attempts > 1 {
-                return Ok(render_unstable(
+            Resolution::FuzzyOnly(fuzzy) => {
+                return Ok(render_fuzzy(
                     &root,
                     &symbol,
-                    discovery_attempts,
+                    &fuzzy,
+                    out_of_root,
+                    out_of_scope,
                     &server_line,
-                    session,
                 ));
             }
-            let readiness = session
-                .settle(QUIESCE_BOUND)
-                .context("rust-analyzer stopped responding while re-indexing the candidate")?;
-            if let Readiness::Pending = readiness {
-                return Ok(render_pending_indexing(
-                    &root,
-                    session,
-                    "the re-queried candidate",
-                ));
-            }
-        };
-
-        let navigation = position_to_offset(
-            &discovery.candidate_text,
-            discovery.candidate.info.location.range.start,
-        )
-        .context("candidate range is not inside the candidate file as read from disk")?;
-        let _ = navigation; // used implicitly: the definition query reuses
-        // the candidate's own range start; the offset existed
-
-        // Definition + target synchronization: query at the candidate's own
-        // range start; open the target file (feeding the server when its
-        // state was unknown or stale) and re-query once, bounded, before
-        // shaping against that snapshot.
-        let mut target_attempts = 0usize;
-        let mut target_was_unknown = false;
-        let (target, target_text) = loop {
-            let raw = session
-                .definition(
-                    &discovery.candidate_uri,
-                    discovery.candidate.info.location.range.start,
-                    QUERY_TIMEOUT,
-                )
-                .context("rust-analyzer stopped responding during textDocument/definition")?;
-            let set = parse_definition_result(raw)
-                .context("rust-analyzer returned an unrecognizable definition result")?;
-            let target = match set {
-                DefinitionSet::None => {
-                    return Ok(render_null_definition(
-                        &root,
-                        &symbol,
-                        &discovery,
-                        &server_line,
-                        session,
-                    ));
-                }
-                DefinitionSet::Many(targets) => {
-                    return Ok(render_multiple_definitions(
-                        &root,
-                        &symbol,
-                        &discovery,
-                        &targets,
-                        &server_line,
-                        session,
-                    ));
-                }
-                DefinitionSet::One(target) => target,
-            };
-            let raw_path = candidate_path_of(&target)?;
-            let target_file = std::fs::canonicalize(&raw_path).unwrap_or(raw_path);
-            let (_target_uri, target_fed, target_text) = session
-                .refresh_document(&target_file)
-                .context("rust-analyzer stopped responding while opening the definition target")?;
-            if !target_fed {
-                break (target, target_text);
-            }
-            // The target's on-disk state was unknown to the server (first
-            // open) or had changed: re-run the bounded query against the now
-            // known snapshot, once.
-            target_attempts += 1;
-            if target_attempts > 1 {
-                return Ok(render_unstable(
+            Resolution::ExactMany(exact) => {
+                return Ok(render_ambiguous(
                     &root,
                     &symbol,
-                    target_attempts,
+                    &exact,
+                    out_of_root,
+                    out_of_scope,
                     &server_line,
-                    session,
                 ));
             }
-            target_was_unknown = true;
-            let readiness = session
-                .settle(QUIESCE_BOUND)
-                .context("rust-analyzer stopped responding while re-indexing the target")?;
-            if let Readiness::Pending = readiness {
-                return Ok(render_pending_indexing(
+            Resolution::ExactOne(candidate) => candidate,
+        };
+        let discovery = Discovery {
+            out_of_root,
+            out_of_scope,
+            candidate,
+        };
+        let candidate = &discovery.candidate;
+
+        // Own the candidate's file, then check the index's range against the
+        // text just read before navigating from it: a range that no longer
+        // names the symbol is a stale index, reported rather than followed.
+        let candidate_file = candidate
+            .canonical_path
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("candidate URI is not a readable file path"))?;
+        let candidate_range = candidate.info.location.range;
+        let synced = session.sync(&candidate_file)?;
+        verify_name_at(&synced.text, candidate_range, &symbol).with_context(|| {
+            format!(
+                "the index's location for '{symbol}' ({}) does not match the file on disk; \
+                 the server's view was stale — retry after it re-indexes",
+                selection_line(&root, &candidate.info.location.uri, candidate_range.start)
+            )
+        })?;
+
+        // The didOpen/didChange above precedes this request on the wire, so
+        // the server answers against the text we read. Wait for no
+        // outstanding work again: the sync may have started one.
+        session.wait_ready()?;
+        let raw = session.definition(&synced.uri, candidate_range.start)?;
+        let set = parse_definition_result(raw)
+            .context("rust-analyzer returned an unrecognizable definition result")?;
+        let target = match set {
+            DefinitionSet::None => {
+                return Ok(render_null_definition(
                     &root,
-                    session,
-                    "the re-queried definition target",
+                    &symbol,
+                    &discovery,
+                    &server_line,
                 ));
             }
+            DefinitionSet::Many(targets) => {
+                return Ok(render_multiple_definitions(
+                    &root,
+                    &symbol,
+                    &discovery,
+                    &targets,
+                    &server_line,
+                ));
+            }
+            DefinitionSet::One(target) => target,
         };
 
-        let target_path = candidate_path_of(&target)?;
+        // Own the target's file and check its range the same way.
+        let raw_path = candidate_path_of(&target)?;
+        let target_path = std::fs::canonicalize(&raw_path).unwrap_or(raw_path);
+        let target_text = session.sync(&target_path)?.text;
+        verify_name_at(&target_text, target.selection_range, &symbol).with_context(|| {
+            format!(
+                "the definition target for '{symbol}' ({}) does not match the file on disk; \
+                 the server's view was stale — retry after it re-indexes",
+                selection_line(&root, &target.uri, target.selection_range.start)
+            )
+        })?;
         let target_offset = position_to_offset(&target_text, target.selection_range.start)
             .context("definition target range is not inside the target file as read from disk")?;
 
@@ -348,12 +248,8 @@ impl Tool<State> for Show {
         let mut text = String::new();
         text.push_str(&format!(
             "Resolved: '{symbol}' — {} · {}\n",
-            discovery.candidate.info.name,
-            selection_line(
-                &root,
-                &discovery.candidate.info.location.uri,
-                discovery.candidate.info.location.range.start
-            )
+            candidate.info.name,
+            selection_line(&root, &candidate.info.location.uri, candidate_range.start)
         ));
         let provenance_line = match target.provenance {
             NavigationProvenance::LocationRange => "navigation point from Location.range",
@@ -368,13 +264,6 @@ impl Tool<State> for Show {
             "Definition: {} ({provenance_line})\n",
             selection_line(&root, &target.uri, target.selection_range.start),
         ));
-        if target_was_unknown {
-            text.push_str(&format!(
-                "The definition was re-queried after opening {} (its on-disk state was unknown \
-                 to the server before this call); the shown body reflects that snapshot.\n",
-                target_file_line(&root, &target_path),
-            ));
-        }
         if !target_path.starts_with(&root) {
             text.push_str(&format!(
                 "Definition target is outside the workspace root ({}): dependency \
@@ -382,13 +271,7 @@ impl Tool<State> for Show {
                 root.display()
             ));
         }
-        text.push_str(&format!(
-            "readiness evidence: {server_line} · {} · position encoding {}\n\n",
-            readiness_evidence(session),
-            session
-                .position_encoding()
-                .unwrap_or("utf-16 (LSP default; server did not negotiate)")
-        ));
+        text.push('\n');
         text.push_str(&body);
         text.push('\n');
         text.push_str(&format!("body: {body_provenance}\n"));
@@ -396,12 +279,12 @@ impl Tool<State> for Show {
             discovery.out_of_root,
             discovery.out_of_scope,
         ));
-        text.push_str(&footer(&root, &server_line, &readiness_evidence(session)));
+        text.push_str(&footer(&root, &server_line));
         Ok(text)
     }
 }
 
-/// The filesystem path of a definition target, for reading and refreshing.
+/// The filesystem path of a definition target, for reading and syncing.
 fn candidate_path_of(target: &DefinitionTarget) -> Result<PathBuf> {
     crate::lsp::definition::candidate_path(&target.uri).ok_or_else(|| {
         anyhow::anyhow!(

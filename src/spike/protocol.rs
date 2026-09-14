@@ -65,72 +65,46 @@ pub(super) fn initialize_params(root_uri: &str, root: &Path, server: Server) -> 
 }
 
 pub(super) fn wait_for_ready(
-    client: &mut Client,
+    handle: &ServerHandle,
     server: Server,
     options: &Options,
 ) -> Result<Readiness> {
     let started = Instant::now();
-    let mut evidence = Vec::new();
-
     match server {
         Server::Rust => {
-            let deadline = started + options.quiesce;
-            let mut last_len = 0usize;
-            loop {
-                client.pump(Duration::from_millis(250))?;
-                for event in &client.events[last_len..] {
-                    if event.get("method").and_then(Value::as_str)
-                        == Some("experimental/serverStatus")
-                    {
-                        evidence.push(event.clone());
-                    }
-                }
-                last_len = client.events.len();
-
-                let quiescent = evidence.iter().rev().find_map(|event| {
-                    event
-                        .get("params")
-                        .and_then(|p| p.get("quiescent"))
-                        .and_then(Value::as_bool)
-                });
-                if quiescent == Some(true) {
-                    return Ok(Readiness {
-                        strategy: "rust-analyzer `experimental/serverStatus` quiescent=true".into(),
-                        elapsed: started.elapsed(),
-                        quiescent: true,
-                        evidence,
-                    });
-                }
-                if Instant::now() >= deadline {
-                    break;
-                }
-            }
+            // No open progress token, and the latest `serverStatus` says
+            // quiescent. Bounded only by inactivity: a server still reporting
+            // progress is waited for.
+            handle
+                .wait_ready(options.quiesce)
+                .context("waiting for rust-analyzer to have no outstanding work")?;
+            let evidence = handle
+                .capture_events()?
+                .into_iter()
+                .filter(|event| {
+                    event.get("method").and_then(Value::as_str) == Some("experimental/serverStatus")
+                })
+                .collect();
             Ok(Readiness {
-                strategy: format!(
-                    "timed out after {:.0}s without serverStatus quiescent=true; queries proceed and may be incomplete",
-                    options.quiesce.as_secs_f32()
-                ),
+                strategy: "no open progress token and rust-analyzer `experimental/serverStatus` quiescent=true".into(),
                 elapsed: started.elapsed(),
-                quiescent: false,
+                quiescent: true,
                 evidence,
             })
         }
         Server::Python => {
-            // pyright emits no quiescence signal at all (design.md's readiness
-            // section only covers rust-analyzer). Bounded wait, then proceed,
-            // and say so rather than infer readiness.
-            client.pump(options.pyright_wait)?;
-            evidence.push(json!({
-                "note": "pyright advertises no readiness notification; this is a bounded wait, not observed quiescence",
-            }));
+            // pyright emits no quiescence signal; standard progress is the
+            // only readiness it reports.
+            handle
+                .wait_ready(options.pyright_wait)
+                .context("waiting for pyright to have no outstanding work")?;
             Ok(Readiness {
-                strategy: format!(
-                    "pyright has no readiness signal; bounded {:.0}s wait, then first query",
-                    options.pyright_wait.as_secs_f32()
-                ),
+                strategy: "pyright has no readiness signal beyond standard progress; waited until no progress token was open".into(),
                 elapsed: started.elapsed(),
                 quiescent: false,
-                evidence,
+                evidence: vec![json!({
+                    "note": "pyright advertises no readiness notification; readiness here is standard progress only, not observed quiescence",
+                })],
             })
         }
     }

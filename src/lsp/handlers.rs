@@ -2,7 +2,7 @@
 //!
 //! An LSP server sends requests *to* the client that must be answered. This
 //! module decides the reply for each method with no I/O, so the policy is
-//! testable without a process; [`super::client::Client`] only serializes what
+//! testable without a process; the transport only serializes what
 //! this function returns.
 //!
 //! The spike is read-only and so is the MCP slice: the one request that could

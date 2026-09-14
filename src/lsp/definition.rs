@@ -6,6 +6,7 @@
 //! `Location[]`, `LocationLink[]`, `LocationLink`, `null`, `[]` — every shape
 //! the spec allows). The MCP tool layer composes these with the session.
 
+use crate::lsp::positions::position_to_offset;
 use anyhow::{Context, Result, bail};
 use lsp_types::{Location, Range, SymbolInformation, Uri};
 use serde_json::Value;
@@ -133,6 +134,34 @@ pub fn resolve(
         resolution,
         out_of_root,
         out_of_scope,
+    }
+}
+
+/// Check that `name` is exactly what sits at `range` in `text` — the text
+/// the server was just given for that file. A server range that no longer
+/// names the symbol means the answer came from a stale index; the caller
+/// reports that rather than navigating from it. An empty range (a module
+/// declaration resolving to the top of its file) names nothing and passes.
+pub fn verify_name_at(text: &str, range: Range, name: &str) -> Result<()> {
+    let start = position_to_offset(text, range.start)
+        .context("the reported range starts outside the file as read from disk")?;
+    let end = position_to_offset(text, range.end)
+        .context("the reported range ends outside the file as read from disk")?;
+    if start == end {
+        return Ok(());
+    }
+    if end < start {
+        bail!("the reported range is inverted");
+    }
+    let found = &text[start..end];
+    if found == name {
+        Ok(())
+    } else {
+        bail!(
+            "expected `{name}` at {}:{}, found `{found}`",
+            range.start.line + 1,
+            range.start.character + 1
+        )
     }
 }
 

@@ -99,46 +99,6 @@ fn scope_narrows_candidates_and_counts_exclusions() {
 }
 
 #[test]
-fn readiness_follows_true_false_true_transitions() {
-    use crate::lsp::session::Readiness;
-    use std::time::Duration;
-    let t = |quiescent: bool| serde_json::json!({ "health": "ok", "quiescent": quiescent });
-    // No status: pending stays pending.
-    let readiness = Readiness::Pending.update(None, Duration::from_secs(1));
-    assert!(matches!(readiness, Readiness::Pending));
-    // First true starts an epoch.
-    let readiness = readiness.update(Some(&t(true)), Duration::from_secs(2));
-    let Readiness::Quiescent { after } = readiness else {
-        panic!("expected quiescent after first true")
-    };
-    assert_eq!(after, Duration::from_secs(2));
-    // Repeated true keeps the epoch (same `after`).
-    let readiness = readiness.update(Some(&t(true)), Duration::from_secs(3));
-    let Readiness::Quiescent { after } = readiness else {
-        panic!("expected the epoch to survive a repeated true")
-    };
-    assert_eq!(after, Duration::from_secs(2));
-    // A false ends the epoch — the latching bug fixed here.
-    let readiness = readiness.update(Some(&t(false)), Duration::from_secs(4));
-    assert!(matches!(readiness, Readiness::Pending));
-    // The next true starts a NEW epoch, timestamped then.
-    let readiness = readiness.update(Some(&t(true)), Duration::from_secs(5));
-    let Readiness::Quiescent { after } = readiness else {
-        panic!("expected a fresh epoch after false→true")
-    };
-    assert_eq!(after, Duration::from_secs(5));
-    // A status without the flag changes nothing.
-    let readiness = readiness.update(
-        Some(&serde_json::json!({"health":"ok"})),
-        Duration::from_secs(6),
-    );
-    let Readiness::Quiescent { after } = readiness else {
-        panic!("expected the epoch to survive a status without the flag")
-    };
-    assert_eq!(after, Duration::from_secs(5));
-}
-
-#[test]
 fn null_and_empty_definition_results_mean_none() {
     assert!(matches!(
         parse_definition_result(Value::Null).unwrap(),
@@ -347,4 +307,29 @@ fn symlink_to_another_in_root_file_is_kept_with_its_canonical_path() {
         other => panic!("expected the in-root candidate, got {other:?}"),
     }
     assert_eq!(candidates.out_of_root, 0);
+}
+
+#[test]
+fn verify_name_at_accepts_the_name_and_empty_ranges_only() {
+    let text = "pub struct Config {\n    pub limit: usize,\n}\n";
+    let r = |sl, sc, el, ec| lsp_types::Range {
+        start: lsp_types::Position::new(sl, sc),
+        end: lsp_types::Position::new(el, ec),
+    };
+    verify_name_at(text, r(0, 11, 0, 17), "Config").unwrap();
+    // A module's definition is the top of its file: nothing to check.
+    verify_name_at(text, r(0, 0, 0, 0), "anything").unwrap();
+    let error = verify_name_at(text, r(0, 11, 0, 17), "Settings").unwrap_err();
+    assert!(error.to_string().contains("found `Config`"), "{error}");
+    assert!(error.to_string().contains("1:12"), "{error}");
+    let error = verify_name_at(text, r(0, 4, 0, 10), "Config").unwrap_err();
+    assert!(error.to_string().contains("found `struct`"), "{error}");
+    assert!(
+        verify_name_at(text, r(9, 0, 9, 6), "Config").is_err(),
+        "outside the file"
+    );
+    assert!(
+        verify_name_at(text, r(0, 17, 0, 11), "Config").is_err(),
+        "inverted"
+    );
 }

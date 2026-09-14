@@ -1,21 +1,13 @@
 //! The MCP server's state: one fixed workspace root, one rust-analyzer
 //! session, started eagerly at server start.
 //!
-//! Concurrency: mcplease dispatches on a single thread and hands this state
-//! over as `&mut State`, so LSP access is serialized by construction —
-//! requests are issued strictly sequentially. There is no lock because there
-//! is no second thread touching the session.
+//! Concurrency: mcplease dispatches tool calls on a single thread and hands
+//! this state over as `&mut State`, so the session's document ownership is
+//! serialized by construction. The server itself runs on its own threads
+//! behind the session's handle.
 
 use crate::lsp::session::Session;
 use std::path::PathBuf;
-use std::time::Duration;
-
-/// Longest a tool call waits for rust-analyzer's quiescence before answering
-/// with status rather than results (design: "order of tens of seconds").
-pub const QUIESCE_BOUND: Duration = Duration::from_secs(30);
-
-/// Per-query LSP timeout for the MCP tool path.
-pub const QUERY_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct State {
     /// The canonical workspace root, fixed at server start. `show`'s `path`
