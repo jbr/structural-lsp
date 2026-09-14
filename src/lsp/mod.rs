@@ -1,7 +1,7 @@
 //! Reusable LSP transport kernel, promoted from the spike's `spike_transport.rs`.
 //!
 //! What lives here serves the two actual callers — the MCP `show` slice
-//! ([`super::session`]) and the preserved spike harness (`crate::spike`) — and
+//! ([`session`]) and the preserved spike harness (`crate::spike`) — and
 //! nothing more: there is no generic server registry and no lifecycle
 //! abstraction beyond what those callers need.
 //!

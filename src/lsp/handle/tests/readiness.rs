@@ -1,0 +1,189 @@
+//! Correlation, readiness, and the inactivity backstop.
+
+use super::*;
+
+#[test]
+fn concurrent_requests_correlate_in_reverse_order() {
+    needs_python!();
+    let mock = Mock::new("pair");
+    let handle = mock.spawn(test_settings(), Box::new(StandardIdle));
+    initialize(&handle);
+
+    // Whichever `test/pair` arrives first is held until the second one,
+    // which is answered first: a genuine reverse-order arrival. Each
+    // caller must get its own tag back.
+    thread::scope(|scope| {
+        for tag in ["a", "b"] {
+            let handle = &handle;
+            scope.spawn(move || {
+                let result = handle.request("test/pair", json!({ "tag": tag })).unwrap();
+                assert_eq!(result, json!(tag));
+            });
+        }
+    });
+
+    // An explicit `"result": null` is a null answer, not an error.
+    assert_eq!(
+        handle.request("test/nullresult", json!({})).unwrap(),
+        Value::Null
+    );
+    // An error response is an Err naming the message.
+    let error = handle.request("test/error", json!({})).unwrap_err();
+    assert!(error.to_string().contains("boom"), "{error}");
+
+    let snapshot = handle.snapshot().unwrap();
+    assert_eq!(snapshot.pending_operations, 0);
+    assert!(snapshot.last_message.is_some());
+    handle.shutdown().unwrap();
+}
+
+#[test]
+fn progress_tokens_gate_readiness_and_server_requests_are_answered() {
+    needs_python!();
+    let mock = Mock::new("progress");
+    let handle = mock.spawn(test_settings(), Box::new(StandardIdle));
+    initialize(&handle);
+    assert!(handle.snapshot().unwrap().ready);
+    handle.wait_ready(Duration::from_secs(1)).unwrap();
+
+    // The mock emits the progress frame BEFORE its reply, so when the
+    // request returns the owner has already processed it (same
+    // producer, FIFO): no timing assumption.
+    handle
+        .request(
+            "test/progress",
+            json!({ "action": "create", "token": "t1" }),
+        )
+        .unwrap();
+    let snapshot = handle.snapshot().unwrap();
+    assert_eq!(snapshot.open_progress_tokens, 1);
+    assert!(!snapshot.ready, "a created token is outstanding work");
+
+    // The create was a server request; the owner must have answered it
+    // with an explicit null result (the mock echoes our reply back). Our
+    // reply was queued before this echo request, so the mock has read
+    // and echoed it by the time it answers here.
+    handle.request("test/echo", json!({})).unwrap();
+    let events = handle.capture_events().unwrap();
+    let echo = echo_for(&events, 7001).expect("create reply echoed");
+    assert_eq!(echo.pointer("/params/result"), Some(&Value::Null));
+
+    let waiter = thread::spawn({
+        let handle = handle.clone_for_test();
+        move || handle.wait_ready(Duration::from_secs(5))
+    });
+    handle
+        .request("test/progress", json!({ "action": "begin", "token": "t2" }))
+        .unwrap();
+    assert_eq!(handle.snapshot().unwrap().open_progress_tokens, 2);
+    handle
+        .request("test/progress", json!({ "action": "end", "token": "t1" }))
+        .unwrap();
+    assert!(!handle.snapshot().unwrap().ready, "t2 still open");
+    handle
+        .request("test/progress", json!({ "action": "end", "token": "t2" }))
+        .unwrap();
+    waiter.join().unwrap().unwrap();
+    assert!(handle.snapshot().unwrap().ready);
+    handle.shutdown().unwrap();
+}
+
+#[test]
+fn policy_composes_with_standard_progress() {
+    needs_python!();
+    let mock = Mock::new("policy");
+    let gate = Arc::new(AtomicBool::new(false));
+    let handle = mock.spawn(test_settings(), Box::new(Gate(Arc::clone(&gate))));
+    initialize(&handle);
+
+    // No tokens, but the policy says not ready: not ready.
+    assert!(!handle.snapshot().unwrap().ready);
+    let waiter = thread::spawn({
+        let handle = handle.clone_for_test();
+        move || handle.wait_ready(Duration::from_secs(5))
+    });
+    handle
+        .request("test/gate", json!({ "open": true }))
+        .unwrap();
+    waiter.join().unwrap().unwrap();
+    assert!(handle.snapshot().unwrap().ready);
+
+    // Policy ready, but a token open: the policy cannot override
+    // standard progress.
+    handle
+        .request("test/progress", json!({ "action": "begin", "token": "x" }))
+        .unwrap();
+    assert!(!handle.snapshot().unwrap().ready);
+    handle
+        .request("test/progress", json!({ "action": "end", "token": "x" }))
+        .unwrap();
+    assert!(handle.snapshot().unwrap().ready);
+    handle.shutdown().unwrap();
+}
+
+#[test]
+fn silence_trips_the_backstop_and_the_connection_survives() {
+    needs_python!();
+    let mock = Mock::new("silence");
+    // Python's start-up under a parallel test run can exceed a few
+    // hundred milliseconds, so the backstop is a full second.
+    let settings = Settings {
+        backstop: Duration::from_secs(1),
+        ..test_settings()
+    };
+    let handle = mock.spawn(settings, Box::new(StandardIdle));
+    initialize(&handle);
+
+    let started = Instant::now();
+    let error = handle.request("test/never", json!({})).unwrap_err();
+    let elapsed = started.elapsed();
+    let text = error.to_string();
+    assert!(text.contains("python"), "names the server: {text}");
+    assert!(text.contains("inactivity backstop"), "{text}");
+    assert!(text.contains("last message: response"), "{text}");
+    assert!(
+        elapsed >= Duration::from_secs(1) && elapsed < Duration::from_secs(4),
+        "tripped after {elapsed:?}"
+    );
+
+    // The server is silent, not dead: the connection stays usable.
+    assert_eq!(handle.request("test/echo", json!({})).unwrap(), json!("ok"));
+    handle.shutdown().unwrap();
+}
+
+#[test]
+fn activity_extends_the_backstop() {
+    needs_python!();
+    let mock = Mock::new("chatter");
+    let settings = Settings {
+        backstop: Duration::from_secs(1),
+        ..test_settings()
+    };
+    let handle = mock.spawn(settings, Box::new(StandardIdle));
+    initialize(&handle);
+
+    // Six notifications 400 ms apart, then the reply: 2.4 s of a 1 s
+    // backstop, never silent for more than 400 ms.
+    let result = handle
+        .request("test/chatter", json!({ "count": 6, "period_ms": 400 }))
+        .unwrap();
+    assert_eq!(result, json!("done"));
+    handle.shutdown().unwrap();
+}
+
+#[test]
+fn a_long_idle_connection_accepts_a_new_request() {
+    needs_python!();
+    let mock = Mock::new("idle");
+    let settings = Settings {
+        backstop: Duration::from_secs(1),
+        ..test_settings()
+    };
+    let handle = mock.spawn(settings, Box::new(StandardIdle));
+    initialize(&handle);
+    // Idle for longer than the backstop: the next operation starts its
+    // own clock at admission.
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(handle.request("test/echo", json!({})).unwrap(), json!("ok"));
+    handle.shutdown().unwrap();
+}
