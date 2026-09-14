@@ -1,12 +1,51 @@
 mod spike;
-mod spike_transport;
 
+// The library modules are compiled once (lib target); the binary consumes
+// them instead of re-declaring the sources, so tests no longer run twice.
+use structural::{state, tools};
+
+use anyhow::Context;
 use spike::{Options, Server};
 use std::path::PathBuf;
 use std::time::Duration;
 
 fn main() -> anyhow::Result<()> {
+    // A pre-scan (not a parse): mcplease's CLI owns argv parsing for the
+    // direct-tool path and the `serve` selection; `--root` is ours, consumed
+    // here before the state is constructed.
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(("serve", rest)) = args
+        .split_first()
+        .map(|(first, rest)| (first.as_str(), rest))
+    {
+        let mut root = std::env::current_dir().context("resolving the default workspace root")?;
+        let mut index = 0;
+        while index < rest.len() {
+            match rest[index].as_str() {
+                "--root" => {
+                    let value = rest.get(index + 1).ok_or_else(|| {
+                        anyhow::anyhow!("--root needs a value (the workspace root directory)")
+                    })?;
+                    root = std::fs::canonicalize(value)
+                        .with_context(|| format!("workspace root `{value}` does not exist"))?;
+                    index += 2;
+                }
+                other => anyhow::bail!(
+                    "unknown serve option `{other}` (supported: --root <dir>; the MCP \
+                     protocol itself is spoken on stdin/stdout)"
+                ),
+            }
+        }
+        let mut state = state::State::new(root);
+        let instructions = "\
+show resolves a symbol by bare name to its definition's source. Bare exact \
+names only in this slice; qualified paths are rejected, `path` only scopes \
+candidates under the server's fixed root.";
+        return mcplease::run::<tools::Tools, _>(
+            &mut state,
+            mcplease::ServerConfig::new(mcplease::server_info!()).with_instructions(instructions),
+        );
+    }
     match args.first().map(String::as_str) {
         Some("spike") => run_spike(&args[1..]),
         Some("-h" | "--help" | "help") | None => {

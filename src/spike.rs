@@ -12,13 +12,13 @@
 //! the initialize result, readiness evidence, timings, and every notification
 //! and server request seen.
 
-use crate::spike_transport::Client;
 use anyhow::{Context, Result, anyhow, bail};
 use lsp_types::Position;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use structural::lsp::client::Client;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Server {
