@@ -387,11 +387,15 @@ fn signature_of(state: &mut State, server: &str, target: &DefinitionTarget) -> O
     {
         return Some(detail.to_string());
     }
+    // The extent may begin with doc comments or attributes; the signature
+    // is the first line of code.
     let start = position_to_offset(&synced.text, extent.range.start, server.encoding()).ok()?;
     synced.text[start..]
         .lines()
         .map(str::trim)
-        .find(|line| !line.is_empty())
+        .find(|line| {
+            !line.is_empty() && !line.starts_with("//") && !line.starts_with('#') && !line.starts_with('@')
+        })
         .map(str::to_string)
 }
 

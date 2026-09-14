@@ -276,6 +276,22 @@ confirm it blocks through the cold index (several minutes) and answers
 rather than reporting "unavailable". Record the cold and warm times in this
 file.
 
+Recorded 2026-09-14 (slice 2 complete), `structural show Session` against a
+scratch copy of efference with `backstop_secs = 900`:
+
+| observation | value |
+|---|---|
+| cold, answered | 448 s: `ambiguous: 4 definitions of 'Session'` (two structs, two enum variants), each with its path and signature |
+| silent stretches from rust-analyzer during that cold index | 196 s (3 s to 199 s) and 229 s (200 s to 429 s); every other gap under 20 s |
+| with the default 90 s backstop, two runs | both failed at 99 s and 100 s with the inactivity error, last message a `$/progress` |
+| warm | not measurable this way: the process exits after one call and rust-analyzer keeps no index across processes; a second cold run took the same time |
+
+So the proposed 90 s default is wrong for rust-analyzer on a project this
+size: it goes quiet for minutes while cargo runs build scripts and
+proc-macros, with a progress token open the whole time. The timer needs a
+liveness probe (a `$/`-prefixed request the server must answer with
+`MethodNotFound`) and a higher per-adapter default; decision pending.
+
 ## Questions for jbr, only if they block
 
 - Backstop default: 90 s inactivity is proposed. Raise or lower?

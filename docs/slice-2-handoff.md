@@ -138,8 +138,19 @@ Work in these checkpoints, each independently reviewed before the next:
    writer reports completion best-effort; a lost report lingers until its
    backstop, harmlessly), with a test. `execute` is 43 lines.
 
-Slice 2 is complete. The mounted `structural-dev` MCP command must become
-`structural serve` with `STRUCTURAL_ROOT` set (or the project dir as cwd).
+Slice 2 is complete. The mounted `structural-dev` MCP command is
+`structural serve` with the project dir as cwd (or `STRUCTURAL_ROOT`).
+
+**Open after the efference check** (numbers in `docs/slice-2.md`,
+"Verification"): rust-analyzer goes silent for 196 s and 229 s during
+efference's cold index while a progress token is open, so the 90 s
+inactivity backstop trips a healthy server. Proposed and not yet decided:
+on silence with work pending, send a `$/structural/ping` request, which
+the spec obliges the server to answer with `MethodNotFound`; the backstop
+then means "silent *and* not answering a ping for N seconds", and
+rust-analyzer's adapter default rises. A server that answers pings but
+never finishes is "alive but stuck", which no timer can tell from slow
+without a total bound the design rejects.
 
 ## Settled design for 1A
 
