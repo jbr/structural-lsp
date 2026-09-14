@@ -414,7 +414,7 @@ impl Drop for Client {
     }
 }
 
-fn wire_debug_enabled() -> bool {
+pub(crate) fn wire_debug_enabled() -> bool {
     ["STRUCTURAL_WIRE", "STRUCTURAL_SPIKE_WIRE"]
         .iter()
         .any(|name| std::env::var(name).is_ok_and(|value| value != "0"))

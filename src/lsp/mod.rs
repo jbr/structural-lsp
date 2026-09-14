@@ -11,9 +11,11 @@
 //! strictly sequentially on mcplease's single dispatch thread. Full sans-IO
 //! protocol evolution is deferred, not ruled unnecessary.
 
+pub mod adapter;
 pub mod client;
 pub mod definition;
 pub mod framing;
+pub mod handle;
 pub mod handlers;
 pub mod jsonrpc;
 pub mod positions;
