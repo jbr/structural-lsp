@@ -13,15 +13,16 @@ An MCP server that gives coding agents LSP-backed code intelligence. Design in
 - Correct and current beats fast. No settle sleeps, retry loops, or partial
   answers on a timer; the only timer is the inactivity backstop
   (`docs/slice-2.md`, "Governing rule").
-- Server-specific strings and methods live in an adapter, never in the
-  generic transport.
+- Server-specific strings and methods live in `src/lsp/adapter/`, never in
+  the generic transport or server. Adding a server means adding an adapter
+  there or a `[servers.<name>]` entry in `structural.toml`.
 - No `#[allow(dead_code)]` per item; delete or use.
 
 ## Verifying
 
 ```sh
 cargo test                                   # unit + Python-mock tests
-cargo test -- --ignored                      # rust-analyzer and pyright e2e
+cargo test -- --ignored                      # rust-analyzer, pyright, gopls e2e
 cargo clippy --all-targets -- -D warnings
 ```
 

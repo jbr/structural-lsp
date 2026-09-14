@@ -1,29 +1,35 @@
-//! Per-server readiness policies: the seam where a server's own readiness
-//! signal joins the transport's standard progress tracking.
+//! Per-server knowledge: the seam between the generic transport and what
+//! each language server needs said to it.
 //!
-//! The transport ([`crate::lsp::handle`]) tracks *standard* readiness itself:
-//! the set of `window/workDoneProgress/create` / `$/progress` tokens the
-//! server has opened and not ended ("standard idle" = the set is empty). A
-//! policy may add a stronger, server-specific condition; the transport
-//! composes readiness as
+//! The transport ([`crate::lsp::handle`]) tracks *standard* readiness
+//! itself: the set of `window/workDoneProgress/create` / `$/progress` tokens
+//! the server has opened and not ended ("standard idle" = the set is
+//! empty). A [`ReadinessPolicy`] may add a stronger, server-specific
+//! condition; the transport composes readiness as
 //!
 //! ```text
 //! ready = standard_idle && policy.is_ready()
 //! ```
 //!
-//! so a policy **cannot** override active standard progress: while any token
-//! is open the connection is not ready, whatever the policy says. A policy
-//! that wants a server-specific signal observes the notification stream
-//! through [`ReadinessPolicy::observe`] and keeps its own protocol state —
-//! it never rescans the event log, which is capped and diagnostics-only.
+//! so a policy **cannot** override active standard progress. A policy that
+//! wants a server-specific signal observes the notification stream through
+//! [`ReadinessPolicy::observe`] and keeps its own protocol state — it never
+//! rescans the event log, which is capped and diagnostics-only.
 //!
-//! Server-specific method knowledge belongs in a policy, not in the
-//! transport: rust-analyzer's `experimental/serverStatus` quiescence policy
-//! is [`rust_analyzer::Quiescence`]. The generic transport names no
-//! experimental method.
+//! An [`Adapter`] is everything else the generic server
+//! ([`crate::lsp::server::LspServer`]) asks about one kind of language
+//! server: how to launch it, which files it serves, what to say at
+//! `initialize`, how to rewrite a symbol query, and which readiness policy
+//! to run. Every method has a default; the built-ins are
+//! [`rust_analyzer::RustAnalyzer`] and [`pyright::Pyright`], and
+//! [`configured::Configured`] is any command named in `structural.toml`.
+//! No server-specific string belongs anywhere else.
 
-use serde_json::Value;
+use serde_json::{Value, json};
+use std::time::Duration;
 
+pub mod configured;
+pub mod pyright;
 pub mod rust_analyzer;
 
 /// A server's readiness policy beyond standard progress tracking.
@@ -53,3 +59,184 @@ pub trait ReadinessPolicy: Send {
 pub struct StandardIdle;
 
 impl ReadinessPolicy for StandardIdle {}
+
+/// A language a server serves: the LSP `languageId` and the file extensions
+/// that map to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Language {
+    pub id: String,
+    pub extensions: Vec<String>,
+}
+
+impl Language {
+    pub fn new(id: &str, extensions: &[&str]) -> Self {
+        Self {
+            id: id.to_string(),
+            extensions: extensions.iter().map(|e| e.to_string()).collect(),
+        }
+    }
+}
+
+/// The default inactivity backstop: a server that says nothing for this
+/// long while work is pending is broken, not busy.
+pub const DEFAULT_BACKSTOP: Duration = Duration::from_secs(90);
+
+/// One kind of language server. Implementations are cheap value objects;
+/// the registry keeps one per running server.
+pub trait Adapter: Send + Sync {
+    /// The registry key and the name shown in results: `rust-analyzer`,
+    /// `pyright`, or the `[servers.<name>]` from `structural.toml`.
+    fn name(&self) -> &str;
+
+    /// The full argv, executable first.
+    fn command(&self) -> Vec<String>;
+
+    /// What to tell the user when the executable is not on `PATH`.
+    fn install_hint(&self) -> String {
+        format!("install `{}` and put it on PATH", self.command()[0])
+    }
+
+    /// The languages this server answers for.
+    fn languages(&self) -> Vec<Language>;
+
+    /// `initializationOptions` for `initialize`.
+    fn initialization_options(&self) -> Value {
+        json!({})
+    }
+
+    /// The `experimental` block of the client capabilities, or `Null`.
+    fn experimental_capabilities(&self) -> Value {
+        Value::Null
+    }
+
+    /// Position encodings to offer, in order of preference. The server picks
+    /// one; the generic server converts with whichever it picked.
+    fn position_encodings(&self) -> Vec<&'static str> {
+        vec!["utf-16"]
+    }
+
+    /// The client capabilities to send. The default profile is
+    /// [`standard_capabilities`] with this adapter's encodings and
+    /// experimental block; override only for a server that needs a different
+    /// shape.
+    fn client_capabilities(&self) -> Value {
+        standard_capabilities(&self.position_encodings(), self.experimental_capabilities())
+    }
+
+    /// The readiness condition beyond standard progress. Fresh per server.
+    fn readiness_policy(&self) -> Box<dyn ReadinessPolicy> {
+        Box::new(StandardIdle)
+    }
+
+    /// Rewrite a `workspace/symbol` query for this server, when it needs it.
+    fn symbol_query(&self, query: &str) -> String {
+        query.to_string()
+    }
+
+    /// The inactivity backstop for this server's waits and queries.
+    fn backstop(&self) -> Duration {
+        DEFAULT_BACKSTOP
+    }
+
+    /// Views beyond the standard queries this server can answer. Empty in
+    /// slice 2; the hook for slice 3.
+    fn extra_views(&self) -> Vec<&'static str> {
+        Vec::new()
+    }
+}
+
+/// The honest capability set: what this client actually handles. Every
+/// server-initiated request it advertises is answered in
+/// [`crate::lsp::handlers`].
+///
+/// `workspace.workspaceFolders` is deliberately *not* advertised. With it,
+/// pyright 1.1.403 answered `initialize` and `workspace/symbol` but never a
+/// document request (`docs/spike.md`, "Observed capability association"); the
+/// mechanism is not established, and nothing here needs the capability. The
+/// folders themselves are still sent in the `initialize` params.
+pub fn standard_capabilities(position_encodings: &[&str], experimental: Value) -> Value {
+    let mut capabilities = json!({
+        "workspace": {
+            "configuration": true,
+            "symbol": { "symbolKind": { "valueSet": (1..=26).collect::<Vec<_>>() } }
+        },
+        "textDocument": {
+            "synchronization": {
+                "dynamicRegistration": false,
+                // Full-text changes: the server is sent the whole file when
+                // the disk copy differs.
+                "didSave": true,
+                "change": 1
+            },
+            "definition": { "linkSupport": false },
+            "references": {},
+            "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
+            "hover": { "contentFormat": ["markdown", "plaintext"] },
+            "codeAction": {
+                "dynamicRegistration": false,
+                "dataSupport": true,
+                "resolveSupport": { "properties": ["edit"] },
+                "codeActionLiteralSupport": {
+                    "codeActionKind": {
+                        "valueSet": ["", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports"]
+                    }
+                }
+            }
+        },
+        "window": { "workDoneProgress": true, "showMessage": {} },
+        "general": { "positionEncodings": position_encodings },
+    });
+    if !experimental.is_null() {
+        capabilities["experimental"] = experimental;
+    }
+    capabilities
+}
+
+/// The adapters that are on by default.
+pub fn builtins() -> Vec<Box<dyn Adapter>> {
+    vec![
+        Box::new(rust_analyzer::RustAnalyzer),
+        Box::new(pyright::Pyright),
+    ]
+}
+
+/// The language id a path's extension maps to, per this list of languages.
+pub fn language_for<'a>(languages: &'a [Language], path: &std::path::Path) -> Option<&'a Language> {
+    let extension = path.extension()?.to_str()?;
+    languages
+        .iter()
+        .find(|language| language.extensions.iter().any(|e| e == extension))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn standard_capabilities_never_advertise_workspace_folders() {
+        let capabilities = standard_capabilities(&["utf-16"], Value::Null);
+        assert!(
+            capabilities
+                .pointer("/workspace/workspaceFolders")
+                .is_none()
+        );
+        assert!(capabilities.get("experimental").is_none());
+        assert_eq!(
+            capabilities.pointer("/general/positionEncodings"),
+            Some(&json!(["utf-16"]))
+        );
+        let with = standard_capabilities(&["utf-8", "utf-16"], json!({ "x": true }));
+        assert_eq!(with.pointer("/experimental/x"), Some(&json!(true)));
+    }
+
+    #[test]
+    fn language_lookup_is_by_extension() {
+        let languages = vec![Language::new("python", &["py", "pyi"])];
+        assert_eq!(
+            language_for(&languages, std::path::Path::new("/x/a.pyi")).map(|l| l.id.as_str()),
+            Some("python")
+        );
+        assert!(language_for(&languages, std::path::Path::new("/x/a.rs")).is_none());
+        assert!(language_for(&languages, std::path::Path::new("/x/Makefile")).is_none());
+    }
+}

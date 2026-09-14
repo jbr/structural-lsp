@@ -17,6 +17,31 @@
 use anyhow::{Result, bail};
 use lsp_types::Position;
 
+/// How a server counts columns: the encoding it picked at `initialize` from
+/// what the adapter offered. UTF-16 is LSP's default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Encoding {
+    Utf8,
+    Utf16,
+}
+
+impl Encoding {
+    /// The width of one character in this encoding's units.
+    fn width(self, ch: char) -> u32 {
+        match self {
+            Encoding::Utf8 => ch.len_utf8() as u32,
+            Encoding::Utf16 => ch.len_utf16() as u32,
+        }
+    }
+
+    fn unit(self) -> &'static str {
+        match self {
+            Encoding::Utf8 => "UTF-8 bytes",
+            Encoding::Utf16 => "UTF-16 units",
+        }
+    }
+}
+
 /// LSP line terminators, per the spec: `"\r\n"`, `"\n"`, or a bare `"\r"`.
 /// Length of the terminator starting at `index`, if any.
 fn terminator_len(text: &str, index: usize) -> Option<usize> {
@@ -42,7 +67,7 @@ fn terminator_len(text: &str, index: usize) -> Option<usize> {
 /// [`position_to_offset`]; the tool path only needs the reverse conversion —
 /// this direction is exercised by the round-trip tests.
 #[allow(dead_code)]
-pub fn offset_to_position(text: &str, offset: usize) -> Result<Position> {
+pub fn offset_to_position(text: &str, offset: usize, encoding: Encoding) -> Result<Position> {
     if offset > text.len() {
         bail!(
             "byte offset {offset} is past the end of {len}-byte text",
@@ -68,7 +93,7 @@ pub fn offset_to_position(text: &str, offset: usize) -> Result<Position> {
             index += len;
         } else {
             let ch = text[index..].chars().next().expect("char boundary checked");
-            character += ch.len_utf16() as u32;
+            character += encoding.width(ch);
             index += ch.len_utf8();
         }
     }
@@ -76,7 +101,7 @@ pub fn offset_to_position(text: &str, offset: usize) -> Result<Position> {
 }
 
 /// Convert an LSP position to a byte offset.
-pub fn position_to_offset(text: &str, position: Position) -> Result<usize> {
+pub fn position_to_offset(text: &str, position: Position, encoding: Encoding) -> Result<usize> {
     // Locate the start of `position.line`, recognizing every LSP line
     // terminator. Line 0 starts at byte 0; a text ending in a terminator has
     // a final empty line that is addressable (its start is the end of the
@@ -117,17 +142,19 @@ pub fn position_to_offset(text: &str, position: Position) -> Result<usize> {
         }
         if terminator_len(text, offset).is_some() {
             bail!(
-                "column {} is past the end of line {} ({character} UTF-16 units long)",
+                "column {} is past the end of line {} ({character} {} long)",
                 position.character,
-                position.line
+                position.line,
+                encoding.unit()
             );
         }
         let ch = text[offset..].chars().next().expect("char boundary");
-        let width = ch.len_utf16() as u32;
+        let width = encoding.width(ch);
         if position.character < character + width {
             bail!(
-                "column {} points between the two halves of a surrogate pair (the character at column {character} is {width} UTF-16 units wide)",
-                position.character
+                "column {} points inside a character (the character at column {character} is {width} {} wide)",
+                position.character,
+                encoding.unit()
             );
         }
         character += width;
@@ -137,9 +164,10 @@ pub fn position_to_offset(text: &str, position: Position) -> Result<usize> {
         return Ok(offset); // end of the line, or end of the text
     }
     bail!(
-        "column {} is past the end of line {} ({character} UTF-16 units long)",
+        "column {} is past the end of line {} ({character} {} long)",
         position.character,
-        position.line
+        position.line,
+        encoding.unit()
     )
 }
 
@@ -155,8 +183,11 @@ mod tests {
     fn ascii_round_trips() {
         let text = "let config = Config::from_toml(&source)?;\nlet x = 1;\n";
         for offset in [0usize, 4, 12, 41, 42, 51, 53] {
-            let position = offset_to_position(text, offset).unwrap();
-            assert_eq!(position_to_offset(text, position).unwrap(), offset);
+            let position = offset_to_position(text, offset, Encoding::Utf16).unwrap();
+            assert_eq!(
+                position_to_offset(text, position, Encoding::Utf16).unwrap(),
+                offset
+            );
         }
     }
 
@@ -165,17 +196,32 @@ mod tests {
         // "aÄb中c😀d": a=1 byte, Ä=2 bytes (1..3), b=1 byte (3), 中=3 bytes
         // (4..7), c=1 byte (7), 😀=4 bytes (8..12), d=1 byte (12).
         let text = "aÄb中c😀d";
-        assert_eq!(offset_to_position(text, 1).unwrap(), pos(0, 1)); // after 'a'
-        assert_eq!(offset_to_position(text, 3).unwrap(), pos(0, 2)); // after 'Ä'
-        assert_eq!(offset_to_position(text, 7).unwrap(), pos(0, 4)); // after 中, at 'c'
-        assert_eq!(offset_to_position(text, 12).unwrap(), pos(0, 7)); // after 😀 (2 units), at 'd'
+        assert_eq!(
+            offset_to_position(text, 1, Encoding::Utf16).unwrap(),
+            pos(0, 1)
+        ); // after 'a'
+        assert_eq!(
+            offset_to_position(text, 3, Encoding::Utf16).unwrap(),
+            pos(0, 2)
+        ); // after 'Ä'
+        assert_eq!(
+            offset_to_position(text, 7, Encoding::Utf16).unwrap(),
+            pos(0, 4)
+        ); // after 中, at 'c'
+        assert_eq!(
+            offset_to_position(text, 12, Encoding::Utf16).unwrap(),
+            pos(0, 7)
+        ); // after 😀 (2 units), at 'd'
         // and back again
         for (column, byte) in [(1u32, 1usize), (2, 3), (3, 4), (4, 7), (5, 8), (7, 12)] {
-            assert_eq!(position_to_offset(text, pos(0, column)).unwrap(), byte);
+            assert_eq!(
+                position_to_offset(text, pos(0, column), Encoding::Utf16).unwrap(),
+                byte
+            );
         }
         // byte offsets *inside* a multi-byte character are rejected.
         for offset in [2usize, 5, 6, 9, 10, 11] {
-            let error = offset_to_position(text, offset).unwrap_err();
+            let error = offset_to_position(text, offset, Encoding::Utf16).unwrap_err();
             assert!(error.to_string().contains("boundary"), "{error}");
         }
     }
@@ -185,50 +231,74 @@ mod tests {
         let text = "one\ntwo三家\nfour";
         // '三' on line 1: 3 UTF-8 bytes after 'w' 'o' → column 3
         let offset = text.find('三').unwrap();
-        assert_eq!(offset_to_position(text, offset).unwrap(), pos(1, 3));
-        assert_eq!(position_to_offset(text, pos(1, 3)).unwrap(), offset);
+        assert_eq!(
+            offset_to_position(text, offset, Encoding::Utf16).unwrap(),
+            pos(1, 3)
+        );
+        assert_eq!(
+            position_to_offset(text, pos(1, 3), Encoding::Utf16).unwrap(),
+            offset
+        );
         // 'f' on line 2
         let offset = text.find('f').unwrap();
-        assert_eq!(offset_to_position(text, offset).unwrap(), pos(2, 0));
-        assert_eq!(position_to_offset(text, pos(2, 0)).unwrap(), offset);
+        assert_eq!(
+            offset_to_position(text, offset, Encoding::Utf16).unwrap(),
+            pos(2, 0)
+        );
+        assert_eq!(
+            position_to_offset(text, pos(2, 0), Encoding::Utf16).unwrap(),
+            offset
+        );
     }
 
     #[test]
     fn end_of_text_is_a_valid_position() {
         let text = "abc\n";
-        assert_eq!(offset_to_position(text, 4).unwrap(), pos(1, 0));
-        assert_eq!(position_to_offset(text, pos(1, 0)).unwrap(), 4);
-        assert_eq!(position_to_offset(text, pos(0, 3)).unwrap(), 3);
+        assert_eq!(
+            offset_to_position(text, 4, Encoding::Utf16).unwrap(),
+            pos(1, 0)
+        );
+        assert_eq!(
+            position_to_offset(text, pos(1, 0), Encoding::Utf16).unwrap(),
+            4
+        );
+        assert_eq!(
+            position_to_offset(text, pos(0, 3), Encoding::Utf16).unwrap(),
+            3
+        );
     }
 
     #[test]
     fn non_boundary_and_out_of_range_byte_offsets_are_rejected() {
         let text = "aÄb"; // bytes: a=0, Ä=1..3, b=3, len=4
-        let error = offset_to_position(text, 2).unwrap_err();
+        let error = offset_to_position(text, 2, Encoding::Utf16).unwrap_err();
         assert!(error.to_string().contains("boundary"), "{error}");
         // The end of the text is a valid offset; only *past* it is rejected.
-        assert_eq!(offset_to_position(text, 4).unwrap(), pos(0, 3));
-        let error = offset_to_position(text, 5).unwrap_err();
+        assert_eq!(
+            offset_to_position(text, 4, Encoding::Utf16).unwrap(),
+            pos(0, 3)
+        );
+        let error = offset_to_position(text, 5, Encoding::Utf16).unwrap_err();
         assert!(error.to_string().contains("past the end"), "{error}");
     }
 
     #[test]
     fn line_past_the_end_is_rejected() {
         let text = "abc\ndef";
-        let error = position_to_offset(text, pos(2, 0)).unwrap_err();
+        let error = position_to_offset(text, pos(2, 0), Encoding::Utf16).unwrap_err();
         assert!(error.to_string().contains("past the end"), "{error}");
     }
 
     #[test]
     fn column_past_the_line_end_is_rejected() {
         let text = "abc\ndef";
-        let error = position_to_offset(text, pos(0, 4)).unwrap_err();
+        let error = position_to_offset(text, pos(0, 4), Encoding::Utf16).unwrap_err();
         assert!(
             error.to_string().contains("past the end of line 0"),
             "{error}"
         );
         // Past the end of a *later* line too — the newline must not be eaten.
-        let error = position_to_offset(text, pos(1, 4)).unwrap_err();
+        let error = position_to_offset(text, pos(1, 4), Encoding::Utf16).unwrap_err();
         assert!(
             error.to_string().contains("past the end of line 1"),
             "{error}"
@@ -239,32 +309,59 @@ mod tests {
     fn crlf_is_a_terminator_not_content() {
         let text = "ab\r\ncd";
         // End-of-line positions in both directions; column 2 is the line end.
-        assert_eq!(offset_to_position(text, 2).unwrap(), pos(0, 2));
-        assert_eq!(position_to_offset(text, pos(0, 2)).unwrap(), 2);
+        assert_eq!(
+            offset_to_position(text, 2, Encoding::Utf16).unwrap(),
+            pos(0, 2)
+        );
+        assert_eq!(
+            position_to_offset(text, pos(0, 2), Encoding::Utf16).unwrap(),
+            2
+        );
         // The '\n' of the CRLF is inside a terminator — rejected, never
         // silently read as either end of line 0 or start of line 1.
-        let error = offset_to_position(text, 3).unwrap_err();
+        let error = offset_to_position(text, 3, Encoding::Utf16).unwrap_err();
         assert!(error.to_string().contains("line terminator"), "{error}");
         // A column pointing at the '\r' (column 3 of a 2-unit line) is past
         // the end of the line — the CR is not content.
-        let error = position_to_offset(text, pos(0, 3)).unwrap_err();
+        let error = position_to_offset(text, pos(0, 3), Encoding::Utf16).unwrap_err();
         assert!(
             error.to_string().contains("past the end of line 0"),
             "{error}"
         );
         // The next line starts after the whole terminator.
-        assert_eq!(offset_to_position(text, 4).unwrap(), pos(1, 0));
-        assert_eq!(position_to_offset(text, pos(1, 0)).unwrap(), 4);
-        assert_eq!(position_to_offset(text, pos(1, 1)).unwrap(), 5);
+        assert_eq!(
+            offset_to_position(text, 4, Encoding::Utf16).unwrap(),
+            pos(1, 0)
+        );
+        assert_eq!(
+            position_to_offset(text, pos(1, 0), Encoding::Utf16).unwrap(),
+            4
+        );
+        assert_eq!(
+            position_to_offset(text, pos(1, 1), Encoding::Utf16).unwrap(),
+            5
+        );
     }
 
     #[test]
     fn bare_cr_is_a_terminator_too() {
         let text = "ab\rcd";
-        assert_eq!(offset_to_position(text, 2).unwrap(), pos(0, 2));
-        assert_eq!(offset_to_position(text, 3).unwrap(), pos(1, 0));
-        assert_eq!(position_to_offset(text, pos(1, 0)).unwrap(), 3);
-        assert_eq!(position_to_offset(text, pos(1, 1)).unwrap(), 4);
+        assert_eq!(
+            offset_to_position(text, 2, Encoding::Utf16).unwrap(),
+            pos(0, 2)
+        );
+        assert_eq!(
+            offset_to_position(text, 3, Encoding::Utf16).unwrap(),
+            pos(1, 0)
+        );
+        assert_eq!(
+            position_to_offset(text, pos(1, 0), Encoding::Utf16).unwrap(),
+            3
+        );
+        assert_eq!(
+            position_to_offset(text, pos(1, 1), Encoding::Utf16).unwrap(),
+            4
+        );
     }
 
     #[test]
@@ -273,11 +370,43 @@ mod tests {
         // pair) and boundary 3 (after it) are legitimate; boundary 2, between
         // the two halves, is not a character boundary and is rejected.
         let text = "x😀y";
-        assert_eq!(position_to_offset(text, pos(0, 1)).unwrap(), 1);
-        let error = position_to_offset(text, pos(0, 2)).unwrap_err();
-        assert!(error.to_string().contains("surrogate pair"), "{error}");
-        assert_eq!(position_to_offset(text, pos(0, 3)).unwrap(), 5);
+        assert_eq!(
+            position_to_offset(text, pos(0, 1), Encoding::Utf16).unwrap(),
+            1
+        );
+        let error = position_to_offset(text, pos(0, 2), Encoding::Utf16).unwrap_err();
+        assert!(error.to_string().contains("inside a character"), "{error}");
+        assert_eq!(
+            position_to_offset(text, pos(0, 3), Encoding::Utf16).unwrap(),
+            5
+        );
         // Round trip: the byte offset of 'y' maps back to column 3.
-        assert_eq!(offset_to_position(text, 5).unwrap(), pos(0, 3));
+        assert_eq!(
+            offset_to_position(text, 5, Encoding::Utf16).unwrap(),
+            pos(0, 3)
+        );
+    }
+
+    #[test]
+    fn utf8_columns_count_bytes() {
+        let text = "aÄb中c😀d";
+        assert_eq!(
+            offset_to_position(text, 3, Encoding::Utf8).unwrap(),
+            pos(0, 3)
+        );
+        assert_eq!(
+            offset_to_position(text, 12, Encoding::Utf8).unwrap(),
+            pos(0, 12)
+        );
+        assert_eq!(
+            position_to_offset(text, pos(0, 7), Encoding::Utf8).unwrap(),
+            7
+        );
+        assert_eq!(
+            position_to_offset(text, pos(0, 12), Encoding::Utf8).unwrap(),
+            12
+        );
+        let error = position_to_offset(text, pos(0, 2), Encoding::Utf8).unwrap_err();
+        assert!(error.to_string().contains("inside a character"), "{error}");
     }
 }

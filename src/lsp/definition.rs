@@ -6,7 +6,7 @@
 //! `Location[]`, `LocationLink[]`, `LocationLink`, `null`, `[]` — every shape
 //! the spec allows). The MCP tool layer composes these with the session.
 
-use crate::lsp::positions::position_to_offset;
+use crate::lsp::positions::{Encoding, position_to_offset};
 use anyhow::{Context, Result, bail};
 use lsp_types::{Location, Range, SymbolInformation, Uri};
 use serde_json::Value;
@@ -18,6 +18,9 @@ use std::path::Path;
 /// canonicalized file path used for scope filtering and refreshing.
 #[derive(Clone, Debug)]
 pub struct Candidate {
+    /// The adapter name of the server that reported it; the same server
+    /// answers the definition query.
+    pub server: String,
     pub info: SymbolInformation,
     /// The candidate's file canonicalized when possible. Symlinks resolve to
     /// their real location before any scope check, so a link out of the root
@@ -67,26 +70,63 @@ pub struct Candidates {
     pub out_of_scope: usize,
 }
 
-/// Partition candidates for `symbol` under the canonical workspace root,
-/// optionally narrowed to a canonical scope path inside it.
+/// One server's candidates, partitioned but not yet judged: several servers'
+/// partitions are merged before the resolution is decided.
+#[derive(Debug, Default)]
+pub struct Partition {
+    exact: Vec<Candidate>,
+    fuzzy: Vec<Candidate>,
+    pub out_of_root: usize,
+    pub out_of_scope: usize,
+}
+
+impl Partition {
+    pub fn absorb(&mut self, other: Partition) {
+        self.exact.extend(other.exact);
+        self.fuzzy.extend(other.fuzzy);
+        self.out_of_root += other.out_of_root;
+        self.out_of_scope += other.out_of_scope;
+    }
+
+    pub fn into_candidates(self) -> Candidates {
+        let Partition {
+            mut exact,
+            fuzzy,
+            out_of_root,
+            out_of_scope,
+        } = self;
+        let resolution = match exact.len() {
+            0 if fuzzy.is_empty() => Resolution::NotFound,
+            0 => Resolution::FuzzyOnly(fuzzy),
+            1 => Resolution::ExactOne(Box::new(exact.pop().expect("len 1"))),
+            _ => Resolution::ExactMany(exact),
+        };
+        Candidates {
+            resolution,
+            out_of_root,
+            out_of_scope,
+        }
+    }
+}
+
+/// Partition one server's candidates for `symbol` under the canonical
+/// workspace root, optionally narrowed to a canonical scope path inside it.
 ///
 /// Exactness is name equality on the symbol's own name. `containerName` is
 /// display metadata only — it is not a language-level path and is not used to
 /// validate anything. Each candidate's file is canonicalized before the
 /// checks, so a symlink inside the root that points outside is excluded.
 /// When the file cannot be canonicalized (missing, broken link), the raw
-/// path is used for the check and the candidate cannot be refreshed later —
+/// path is used for the check and the candidate cannot be synced later —
 /// such candidates are never resolvable in practice.
-pub fn resolve(
+pub fn partition(
     symbol: &str,
+    server: &str,
     infos: Vec<SymbolInformation>,
     root: &Path,
     scope: Option<&Path>,
-) -> Candidates {
-    let mut out_of_root = 0usize;
-    let mut out_of_scope = 0usize;
-    let mut exact = Vec::new();
-    let mut fuzzy = Vec::new();
+) -> Partition {
+    let mut out = Partition::default();
     for info in infos {
         let file = candidate_path(&info.location.uri);
         // Canonicalize when the file exists so symlinks resolve to their real
@@ -99,7 +139,7 @@ pub fn resolve(
             .as_ref()
             .is_some_and(|path| path == root || path.starts_with(root));
         if !in_root {
-            out_of_root += 1;
+            out.out_of_root += 1;
             continue;
         }
         if let Some(scope) = scope {
@@ -107,34 +147,35 @@ pub fn resolve(
                 .as_ref()
                 .is_some_and(|path| path == scope || path.starts_with(scope));
             if !in_scope {
-                out_of_scope += 1;
+                out.out_of_scope += 1;
                 continue;
             }
         }
+        let exact = info.name == symbol;
         let candidate = Candidate {
+            server: server.to_string(),
             canonical_path: canonical,
             info,
-            exact: false,
+            exact,
         };
-        if candidate.info.name == symbol {
-            let mut candidate = candidate;
-            candidate.exact = true;
-            exact.push(candidate);
+        if exact {
+            out.exact.push(candidate);
         } else {
-            fuzzy.push(candidate);
+            out.fuzzy.push(candidate);
         }
     }
-    let resolution = match exact.len() {
-        0 if fuzzy.is_empty() => Resolution::NotFound,
-        0 => Resolution::FuzzyOnly(fuzzy),
-        1 => Resolution::ExactOne(Box::new(exact.pop().expect("len 1"))),
-        _ => Resolution::ExactMany(exact),
-    };
-    Candidates {
-        resolution,
-        out_of_root,
-        out_of_scope,
-    }
+    out
+}
+
+/// [`partition`] and judge in one step, for a single server.
+pub fn resolve(
+    symbol: &str,
+    server: &str,
+    infos: Vec<SymbolInformation>,
+    root: &Path,
+    scope: Option<&Path>,
+) -> Candidates {
+    partition(symbol, server, infos, root, scope).into_candidates()
 }
 
 /// Check that `name` is exactly what sits at `range` in `text` — the text
@@ -142,10 +183,10 @@ pub fn resolve(
 /// names the symbol means the answer came from a stale index; the caller
 /// reports that rather than navigating from it. An empty range (a module
 /// declaration resolving to the top of its file) names nothing and passes.
-pub fn verify_name_at(text: &str, range: Range, name: &str) -> Result<()> {
-    let start = position_to_offset(text, range.start)
+pub fn verify_name_at(text: &str, range: Range, name: &str, encoding: Encoding) -> Result<()> {
+    let start = position_to_offset(text, range.start, encoding)
         .context("the reported range starts outside the file as read from disk")?;
-    let end = position_to_offset(text, range.end)
+    let end = position_to_offset(text, range.end, encoding)
         .context("the reported range ends outside the file as read from disk")?;
     if start == end {
         return Ok(());

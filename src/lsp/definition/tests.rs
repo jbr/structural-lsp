@@ -1,4 +1,5 @@
 use super::*;
+use crate::lsp::positions::Encoding;
 use lsp_types::{Position, SymbolKind};
 
 fn symbol_info(name: &str, path: &str, line: u32) -> SymbolInformation {
@@ -20,6 +21,7 @@ fn symbol_info(name: &str, path: &str, line: u32) -> SymbolInformation {
 fn one_exact_match_resolves() {
     let candidates = resolve(
         "make",
+        "rust-analyzer",
         vec![symbol_info("make", "/ws/src/lib.rs", 4)],
         Path::new("/ws"),
         None,
@@ -38,6 +40,7 @@ fn one_exact_match_resolves() {
 fn duplicate_exact_names_are_ambiguous() {
     let candidates = resolve(
         "Config",
+        "rust-analyzer",
         vec![
             symbol_info("Config", "/ws/src/lib.rs", 3),
             symbol_info("Config", "/ws/src/other.rs", 9),
@@ -55,6 +58,7 @@ fn duplicate_exact_names_are_ambiguous() {
 fn fuzzy_only_matches_are_not_resolutions() {
     let candidates = resolve(
         "conf",
+        "rust-analyzer",
         vec![
             symbol_info("Config", "/ws/src/lib.rs", 3),
             symbol_info("configure", "/ws/src/lib.rs", 40),
@@ -73,7 +77,7 @@ fn fuzzy_only_matches_are_not_resolutions() {
 
 #[test]
 fn nothing_reported_is_not_found() {
-    let candidates = resolve("nope", vec![], Path::new("/ws"), None);
+    let candidates = resolve("nope", "rust-analyzer", vec![], Path::new("/ws"), None);
     assert!(matches!(candidates.resolution, Resolution::NotFound));
 }
 
@@ -81,6 +85,7 @@ fn nothing_reported_is_not_found() {
 fn scope_narrows_candidates_and_counts_exclusions() {
     let candidates = resolve(
         "make",
+        "rust-analyzer",
         vec![
             symbol_info("make", "/ws/src/lib.rs", 4),
             symbol_info("make", "/ws/src/gen/other.rs", 7),
@@ -230,6 +235,7 @@ fn no_path_scope_still_excludes_candidates_outside_the_root() {
 
     let candidates = resolve(
         "make",
+        "rust-analyzer",
         vec![
             symbol_info("make", inside.to_str().unwrap(), 0),
             symbol_info("make", outside_file.to_str().unwrap(), 0),
@@ -272,6 +278,7 @@ fn symlink_escape_is_excluded_even_when_the_link_sits_inside_the_root() {
     // canonicalized file does not.
     let candidates = resolve(
         "make",
+        "rust-analyzer",
         vec![symbol_info("make", link.to_str().unwrap(), 0)],
         std::fs::canonicalize(scratch.path()).unwrap().as_path(),
         None,
@@ -292,6 +299,7 @@ fn symlink_to_another_in_root_file_is_kept_with_its_canonical_path() {
 
     let candidates = resolve(
         "make",
+        "rust-analyzer",
         vec![symbol_info("make", link.to_str().unwrap(), 0)],
         std::fs::canonicalize(scratch.path()).unwrap().as_path(),
         None,
@@ -316,20 +324,20 @@ fn verify_name_at_accepts_the_name_and_empty_ranges_only() {
         start: lsp_types::Position::new(sl, sc),
         end: lsp_types::Position::new(el, ec),
     };
-    verify_name_at(text, r(0, 11, 0, 17), "Config").unwrap();
+    verify_name_at(text, r(0, 11, 0, 17), "Config", Encoding::Utf16).unwrap();
     // A module's definition is the top of its file: nothing to check.
-    verify_name_at(text, r(0, 0, 0, 0), "anything").unwrap();
-    let error = verify_name_at(text, r(0, 11, 0, 17), "Settings").unwrap_err();
+    verify_name_at(text, r(0, 0, 0, 0), "anything", Encoding::Utf16).unwrap();
+    let error = verify_name_at(text, r(0, 11, 0, 17), "Settings", Encoding::Utf16).unwrap_err();
     assert!(error.to_string().contains("found `Config`"), "{error}");
     assert!(error.to_string().contains("1:12"), "{error}");
-    let error = verify_name_at(text, r(0, 4, 0, 10), "Config").unwrap_err();
+    let error = verify_name_at(text, r(0, 4, 0, 10), "Config", Encoding::Utf16).unwrap_err();
     assert!(error.to_string().contains("found `struct`"), "{error}");
     assert!(
-        verify_name_at(text, r(9, 0, 9, 6), "Config").is_err(),
+        verify_name_at(text, r(9, 0, 9, 6), "Config", Encoding::Utf16).is_err(),
         "outside the file"
     );
     assert!(
-        verify_name_at(text, r(0, 17, 0, 11), "Config").is_err(),
+        verify_name_at(text, r(0, 17, 0, 11), "Config", Encoding::Utf16).is_err(),
         "inverted"
     );
 }

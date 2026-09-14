@@ -1,4 +1,6 @@
 use super::*;
+use crate::lsp::adapter::rust_analyzer::RustAnalyzer;
+use serde_json::json;
 
 #[test]
 fn path_uri_requires_an_absolute_path() {
@@ -20,7 +22,7 @@ fn scratch_fixture(tag: &str) -> std::path::PathBuf {
     base
 }
 
-fn events_with_method(session: &Session, method: &str) -> Vec<usize> {
+fn events_with_method(session: &LspServer, method: &str) -> Vec<usize> {
     session
         .events()
         .unwrap()
@@ -37,7 +39,7 @@ fn events_with_method(session: &Session, method: &str) -> Vec<usize> {
 #[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
 fn cold_start_waits_for_quiescence() {
     let root = scratch_fixture("cold-start");
-    let mut session = Session::start(&root).unwrap();
+    let mut session = LspServer::start(Box::new(RustAnalyzer), &root).unwrap();
     session
         .wait_ready()
         .expect("the cold start settles within the backstop");
@@ -64,7 +66,7 @@ fn cold_start_waits_for_quiescence() {
 #[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
 fn deleting_an_opened_document_closes_it_on_the_server_and_recovers() {
     let root = scratch_fixture("delete-close");
-    let mut session = Session::start(&root).unwrap();
+    let mut session = LspServer::start(Box::new(RustAnalyzer), &root).unwrap();
     session.wait_ready().expect("cold start reaches quiescence");
 
     let lib_path = root.join("src/lib.rs");

@@ -1,42 +1,35 @@
-//! The rust-analyzer session used by the MCP `show` slice.
+//! One running language server of any kind: spawn, initialize, own
+//! documents, query, shut down. Everything server-specific comes from its
+//! [`Adapter`].
 //!
-//! One server for one fixed workspace root, started eagerly at MCP-server
-//! start (`Session::start` from [`crate::state::State::new`]) on its own
-//! threads ([`ServerHandle`]). Readiness is "no outstanding work": no open
-//! progress token, and rust-analyzer's own quiescence signal agreeing
-//! ([`rust_analyzer::Quiescence`]). A query that arrives before that blocks
-//! until it holds; the only way out is the inactivity backstop, which means
-//! the server is broken, not busy.
+//! Readiness is "no outstanding work": no open progress token, and the
+//! adapter's readiness policy agreeing. A query that arrives before that
+//! blocks until it holds; the only way out is the inactivity backstop, which
+//! means the server is broken, not busy.
 //!
-//! Freshness comes from message ordering, not timing: the session *owns*
+//! Freshness comes from message ordering, not timing: the server *owns*
 //! every file it has touched, pushes the on-disk text with `didOpen` /
-//! `didChange` before querying, and the server must apply those before it
-//! handles any request that follows them on the wire. No settle waits, no
-//! re-queries.
+//! `didChange` before querying, and the language server must apply those
+//! before it handles any request that follows them on the wire. No settle
+//! waits, no re-queries.
 
 use anyhow::{Context, Result, bail};
 use lsp_types::{Position, SymbolInformation};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
-use crate::lsp::adapter::rust_analyzer;
+use crate::lsp::adapter::{Adapter, language_for};
 use crate::lsp::handle::{ServerHandle, Settings, Snapshot};
+use crate::lsp::positions::Encoding;
 
-/// The inactivity backstop for every wait and query: the server must say
-/// *something* this often or it is treated as broken. Per-server
-/// configuration arrives with the registry (slice 2, item 3).
-pub const BACKSTOP: Duration = Duration::from_secs(90);
-
-/// A document the session has opened, with the snapshot the server was last
-/// given.
+/// A document the server has been given, with the snapshot it was last sent.
 struct OpenedDoc {
     version: i32,
     text: String,
 }
 
-/// What [`Session::sync`] pushed: the document's URI, the on-disk text the
+/// What [`LspServer::sync`] pushed: the document's URI, the on-disk text the
 /// server now holds, and whether anything had to be sent.
 #[derive(Debug)]
 pub struct Synced {
@@ -47,35 +40,35 @@ pub struct Synced {
     pub fed: bool,
 }
 
-pub struct Session {
+pub struct LspServer {
+    adapter: Box<dyn Adapter>,
     root: PathBuf,
-    /// `None` only after [`Session::shutdown`].
+    /// `None` only after [`LspServer::shutdown`].
     handle: Option<ServerHandle>,
     /// `serverInfo` from `initialize`, when the server reports one.
     server_info: Option<Value>,
-    /// The position encoding the server negotiated at `initialize` (LSP
-    /// default is UTF-16 when absent).
-    position_encoding: Option<String>,
+    /// The position encoding the server picked from the adapter's offer.
+    encoding: Encoding,
     /// Documents opened with the server, keyed by URI, with the snapshot the
     /// server was last given.
     opened: HashMap<String, OpenedDoc>,
 }
 
-impl Session {
-    /// Spawn rust-analyzer and initialize it against `root`. Returns once
-    /// `initialize` is answered; indexing continues in the background and
-    /// the first query waits for it.
-    pub fn start(root: &Path) -> Result<Self> {
+impl LspServer {
+    /// Spawn the adapter's command and initialize it against `root`. Returns
+    /// once `initialize` is answered; indexing continues in the background
+    /// and the first query waits for it.
+    pub fn start(adapter: Box<dyn Adapter>, root: &Path) -> Result<Self> {
+        let argv = adapter.command();
+        let (command, args) = argv
+            .split_first()
+            .context("an adapter's command must name an executable")?;
         let settings = Settings {
-            backstop: BACKSTOP,
+            backstop: adapter.backstop(),
             ..Settings::default()
         };
-        let handle = ServerHandle::spawn_with(
-            rust_analyzer::COMMAND,
-            &[],
-            settings,
-            Box::new(rust_analyzer::Quiescence::default()),
-        )?;
+        let handle = ServerHandle::spawn_with(command, args, settings, adapter.readiness_policy())
+            .with_context(|| format!("starting {}", adapter.name()))?;
 
         let params = json!({
             "processId": std::process::id(),
@@ -84,56 +77,34 @@ impl Session {
             "rootPath": root.to_string_lossy(),
             "workspaceFolders": [{ "uri": path_uri(root)?, "name": "workspace" }],
             "trace": "off",
-            "initializationOptions": {},
-            "capabilities": {
-                "workspace": {
-                    "configuration": true,
-                    "symbol": { "symbolKind": { "valueSet": (1..=26).collect::<Vec<_>>() } }
-                },
-                "textDocument": {
-                    "synchronization": {
-                        "dynamicRegistration": false,
-                        // Full-text changes: `sync` sends the whole file
-                        // when the disk copy differs.
-                        "didSave": true,
-                        "change": 1
-                    },
-                    "definition": { "linkSupport": false },
-                    "references": {},
-                    "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
-                    "hover": { "contentFormat": ["markdown", "plaintext"] },
-                    "codeAction": {
-                        "dynamicRegistration": false,
-                        "dataSupport": true,
-                        "resolveSupport": { "properties": ["edit"] },
-                        "codeActionLiteralSupport": {
-                            "codeActionKind": {
-                                "valueSet": ["", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports"]
-                            }
-                        }
-                    }
-                },
-                "window": { "workDoneProgress": true, "showMessage": {} },
-                "general": { "positionEncodings": ["utf-16"] },
-                "experimental": rust_analyzer::experimental_capabilities(),
-            }
+            "initializationOptions": adapter.initialization_options(),
+            "capabilities": adapter.client_capabilities(),
         });
-
         let result = handle
             .request("initialize", params)
-            .context("initializing rust-analyzer")?;
+            .with_context(|| format!("initializing {}", adapter.name()))?;
         let server_info = result.get("serverInfo").cloned();
-        let position_encoding = result
+        let encoding = match result
             .pointer("/capabilities/positionEncoding")
             .and_then(Value::as_str)
-            .map(String::from);
+        {
+            None | Some("utf-16") => Encoding::Utf16,
+            Some("utf-8") => Encoding::Utf8,
+            Some(other) => bail!(
+                "{} negotiated the `{other}` position encoding, which this client does not \
+                 convert (offered: {})",
+                adapter.name(),
+                adapter.position_encodings().join(", ")
+            ),
+        };
         handle.notify("initialized", json!({}))?;
 
         Ok(Self {
+            adapter,
             root: root.to_path_buf(),
             handle: Some(handle),
             server_info,
-            position_encoding,
+            encoding,
             opened: HashMap::new(),
         })
     }
@@ -144,22 +115,42 @@ impl Session {
             .expect("the handle is present until shutdown")
     }
 
+    pub fn adapter(&self) -> &dyn Adapter {
+        self.adapter.as_ref()
+    }
+
+    pub fn name(&self) -> &str {
+        self.adapter.name()
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    pub fn encoding(&self) -> Encoding {
+        self.encoding
     }
 
     pub fn server_info(&self) -> Option<&Value> {
         self.server_info.as_ref()
     }
 
-    pub fn position_encoding(&self) -> Option<&str> {
-        self.position_encoding.as_deref()
+    /// `name version` as the server reported it at `initialize`, or the
+    /// adapter's name when it reported nothing (pyright does not).
+    pub fn description(&self) -> String {
+        let reported = self.server_info.as_ref().and_then(|info| {
+            let name = info.get("name").and_then(Value::as_str)?;
+            let version = info.get("version").and_then(Value::as_str).unwrap_or("?");
+            Some(format!("{name} {version}"))
+        });
+        reported.unwrap_or_else(|| format!("{} (serverInfo not reported)", self.name()))
     }
 
     /// Block until the server has no outstanding work. Errors only when the
-    /// server has been silent for [`BACKSTOP`] or the connection failed.
+    /// server has been silent for the adapter's backstop or the connection
+    /// failed.
     pub fn wait_ready(&self) -> Result<()> {
-        self.handle().wait_ready(BACKSTOP)
+        self.handle().wait_ready(self.adapter.backstop())
     }
 
     /// Routine connection metadata (ready flag, open tokens, last message).
@@ -173,9 +164,9 @@ impl Session {
         self.handle().capture_events()
     }
 
-    /// Push the on-disk text of every document the session owns, so the next
-    /// query runs against the server's current view of them. Returns how
-    /// many documents had to be (re)fed.
+    /// Push the on-disk text of every document this server owns, so the
+    /// next query runs against its current view of them. Returns how many
+    /// documents had to be (re)fed.
     pub fn sync_owned(&mut self) -> Result<usize> {
         let paths: Vec<PathBuf> = self
             .opened
@@ -259,12 +250,13 @@ impl Session {
                 true
             }
             None => {
+                let language_id = self.language_id(path);
                 self.handle().notify(
                     "textDocument/didOpen",
                     json!({
                         "textDocument": {
                             "uri": uri,
-                            "languageId": "rust",
+                            "languageId": language_id,
                             "version": 1,
                             "text": text,
                         }
@@ -283,10 +275,22 @@ impl Session {
         Ok(Synced { uri, text, fed })
     }
 
-    /// `workspace/symbol` query, decoded into candidates as the server
-    /// reported them (no completeness claim is made anywhere downstream).
+    /// The LSP language id for `path` per the adapter, falling back to the
+    /// adapter's first language: a file the server itself pointed at is one
+    /// it serves.
+    pub fn language_id(&self, path: &Path) -> String {
+        let languages = self.adapter.languages();
+        language_for(&languages, path)
+            .map(|language| language.id.clone())
+            .or_else(|| languages.first().map(|language| language.id.clone()))
+            .unwrap_or_else(|| "plaintext".to_string())
+    }
+
+    /// `workspace/symbol`, with the adapter's query rewriting, decoded into
+    /// candidates as the server reported them (no completeness claim is
+    /// made anywhere downstream).
     pub fn workspace_symbol(&self, query: &str) -> Result<Vec<SymbolInformation>> {
-        self.check_encoding()?;
+        let query = self.adapter.symbol_query(query);
         let result = self
             .handle()
             .request("workspace/symbol", json!({ "query": query }))?;
@@ -295,10 +299,10 @@ impl Session {
         Ok(infos.unwrap_or_default())
     }
 
-    /// `textDocument/definition` at a position; the raw result is normalized
-    /// by [`crate::lsp::definition::parse_definition_result`].
+    /// `textDocument/definition` at a position (in this server's encoding);
+    /// the raw result is normalized by
+    /// [`crate::lsp::definition::parse_definition_result`].
     pub fn definition(&self, uri: &str, position: Position) -> Result<Value> {
-        self.check_encoding()?;
         self.handle().request(
             "textDocument/definition",
             json!({
@@ -306,18 +310,6 @@ impl Session {
                 "position": position,
             }),
         )
-    }
-
-    /// The negotiated position encoding must be UTF-16: this slice's
-    /// conversions are UTF-16 and the server was asked for UTF-16. A server
-    /// that negotiated otherwise is reported, not silently mishandled.
-    fn check_encoding(&self) -> Result<()> {
-        match self.position_encoding.as_deref() {
-            None | Some("utf-16") => Ok(()),
-            Some(other) => bail!(
-                "server negotiated `{other}` position encoding; this slice supports utf-16 only"
-            ),
-        }
     }
 
     /// Shut the server down (graceful, then kill). Idempotent.
@@ -328,14 +320,14 @@ impl Session {
     }
 }
 
-impl Drop for Session {
+impl Drop for LspServer {
     fn drop(&mut self) {
         self.shutdown();
     }
 }
 
 /// The filesystem path behind a `file:` URI string, for iterating the
-/// session's opened documents.
+/// server's opened documents.
 fn uri_file_path(uri: &str) -> Option<PathBuf> {
     url::Url::parse(uri).ok()?.to_file_path().ok()
 }

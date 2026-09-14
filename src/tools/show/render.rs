@@ -1,7 +1,7 @@
 //! Rendering for `show`: every string the tool returns is built here.
 
 use super::*;
-use crate::lsp::session::Session;
+use crate::lsp::positions::Encoding;
 
 pub(super) fn render_not_found(
     root: &Path,
@@ -31,13 +31,7 @@ pub(super) fn render_fuzzy(
         "No exact match for '{symbol}'. Possible matches (fuzzy, as reported by \
          workspace/symbol; not proven exhaustive):\n"
     );
-    text.push_str(&listed_candidates(
-        root,
-        &fuzzy
-            .iter()
-            .map(|candidate| &candidate.info)
-            .collect::<Vec<_>>(),
-    ));
+    text.push_str(&listed_candidates(root, fuzzy));
     text.push_str("Nothing was resolved; no definition was queried.\n");
     text.push_str(&exclusion_note(out_of_root, out_of_scope));
     text.push_str(&footer(root, server_line));
@@ -57,13 +51,7 @@ pub(super) fn render_ambiguous(
          proven exhaustive):\n",
         exact.len()
     );
-    text.push_str(&listed_candidates(
-        root,
-        &exact
-            .iter()
-            .map(|candidate| &candidate.info)
-            .collect::<Vec<_>>(),
-    ));
+    text.push_str(&listed_candidates(root, exact));
     text.push_str(
         "Nothing was resolved — no candidate was picked for you. Narrow with `path`; \
          qualified-path targeting is not implemented in this slice.\n",
@@ -137,31 +125,22 @@ pub(super) fn render_null_definition(
     )
 }
 
-/// The server's name and version, as reported at `initialize`.
-pub(super) fn server_line(session: &Session) -> String {
-    session
-        .server_info()
-        .and_then(|info| {
-            let name = info.get("name").and_then(Value::as_str)?;
-            let version = info.get("version").and_then(Value::as_str).unwrap_or("?");
-            Some(format!("{name} {version}"))
-        })
-        .unwrap_or_else(|| "rust-analyzer (serverInfo not reported)".to_string())
-}
-
-/// Candidate lines, capped, for the fuzzy and ambiguous listings.
-pub(super) fn listed_candidates(root: &Path, infos: &[&lsp_types::SymbolInformation]) -> String {
+/// Candidate lines, capped, for the fuzzy and ambiguous listings: name,
+/// kind, location, and which server reported it.
+pub(super) fn listed_candidates(root: &Path, candidates: &[Candidate]) -> String {
     let mut text = String::new();
-    for info in infos.iter().take(MAX_LISTED) {
+    for candidate in candidates.iter().take(MAX_LISTED) {
+        let info = &candidate.info;
         text.push_str(&format!(
-            "  - {} ({:?}) · {}\n",
+            "  - {} ({:?}) · {} · {}\n",
             info.name,
             info.kind,
-            selection_line(root, &info.location.uri, info.location.range.start)
+            selection_line(root, &info.location.uri, info.location.range.start),
+            candidate.server
         ));
     }
-    if infos.len() > MAX_LISTED {
-        text.push_str(&format!("  … {} more\n", infos.len() - MAX_LISTED));
+    if candidates.len() > MAX_LISTED {
+        text.push_str(&format!("  … {} more\n", candidates.len() - MAX_LISTED));
     }
     text
 }
@@ -205,15 +184,19 @@ pub(super) fn exclusion_note(out_of_root: usize, out_of_scope: usize) -> String 
 /// a whole. An endpoint of one range is never mixed with an endpoint of the
 /// other (a half-shifted pair would render an invented span); an unusable
 /// range yields nothing.
-pub(super) fn fallback_body(target_text: &str, target: &DefinitionTarget) -> Option<String> {
+pub(super) fn fallback_body(
+    target_text: &str,
+    target: &DefinitionTarget,
+    encoding: Encoding,
+) -> Option<String> {
     let (start, end) = match target.full_range {
         Some(range) => (
-            position_to_offset(target_text, range.start).ok()?,
-            position_to_offset(target_text, range.end).ok()?,
+            position_to_offset(target_text, range.start, encoding).ok()?,
+            position_to_offset(target_text, range.end, encoding).ok()?,
         ),
         None => (
-            position_to_offset(target_text, target.selection_range.start).ok()?,
-            position_to_offset(target_text, target.selection_range.end).ok()?,
+            position_to_offset(target_text, target.selection_range.start, encoding).ok()?,
+            position_to_offset(target_text, target.selection_range.end, encoding).ok()?,
         ),
     };
     if end > start {
@@ -223,14 +206,14 @@ pub(super) fn fallback_body(target_text: &str, target: &DefinitionTarget) -> Opt
     }
 }
 
-/// The honest, concise footer: the fixed root, the one view, the server. The
-/// schema has no `view` field; the default behavior (definition) is
+/// The honest, concise footer: the fixed root, the one view, the servers.
+/// The schema has no `view` field; the default behavior (definition) is
 /// described, and nothing unimplemented is advertised.
-pub(super) fn footer(root: &Path, server_line: &str) -> String {
+pub(super) fn footer(root: &Path, servers_line: &str) -> String {
     format!(
         "\nworkspace root (fixed at server start): {}\nview: definition by default (the only \
          view in this slice; bare-name resolution only — no line:col or anchor input).\n\
-         server: {server_line}\n",
+         servers: {servers_line}\n",
         root.display()
     )
 }

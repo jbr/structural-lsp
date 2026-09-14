@@ -76,7 +76,25 @@ Work in these checkpoints, each independently reviewed before the next:
    `-32000 "server busy"`; after release the blocked call and the sixteen
    queued ones answer in arrival order. Not `--ignored`: it needs only
    `python3`. The real-server smokes pass unchanged on the patched crate.
-4. Items 3 through 8 of `docs/slice-2.md` as written — next.
+4. **Item 3: adapter seam, second server, registry** — done 2026-09-14
+   evening. `Session` became the generic `lsp::server::LspServer`; per-server
+   knowledge is an `adapter::Adapter` (`rust_analyzer`, `pyright`, and
+   `configured` for anything in `structural.toml`). rust-analyzer's adapter
+   sets `all_symbols` and `excludeImports`, so the fixture's `Config` now
+   resolves instead of listing its re-import (item 5's done-when, early),
+   and offers utf-8 first; `positions` takes the negotiated `Encoding`.
+   `State` is a registry: every configured server whose command spawns is
+   started at once; `show` goes to the server for a file scope's language
+   or to all servers, merging candidates, and every candidate line and
+   result names its server. Two new gated tests: both built-ins from one
+   scratch root (ambiguity across languages, directory and file scopes),
+   and gopls through `structural.toml`. Python and Go bodies are the
+   server's range only until item 6. Lesson from the first attempt: do not
+   make `fixtures/` itself a root — rust-analyzer also searches parent
+   directories for a `Cargo.toml` and loads this repository instead.
+5. Items 4 through 8 of `docs/slice-2.md` — next. Item 4 (ownership) and
+   the range checks are already in place from 1B; item 5 still needs the
+   definition-target deduplication of exact matches.
 
 ## Settled design for 1A
 
@@ -233,4 +251,10 @@ behaviour could be compared with this design. Not to copy; to learn from.
 - **Reference output is compact**: `file: line:col` per hit, grouped by
   file, no context lines. Good token economy; but with no snippet an agent
   has to open every file to learn anything, so `uses` should carry one line
-  of context per hit.
+  of context per hit. jbr's reaction on seeing it: "that doesn't seem very
+  useful at all."
+- **Diagnostics arrive mid-edit.** During item 3 the pushed diagnostics
+  flagged "file not found for module `pyright`" for a module written seconds
+  later, and errors in files half-way through a multi-file change. Reading
+  them cost more than it saved; the useful moment for diagnostics is after a
+  logical unit of work, on request, not after every write.

@@ -10,15 +10,18 @@
 //! mark omissions.
 //!
 //! Correctness order: every owned document is synced from disk, then the
-//! call waits until the server has no outstanding work, then queries. Each
-//! file the answer depends on is synced before the query that reads it, and
-//! every range the server returns is checked against the text just read —
-//! the symbol's name must sit there. A mismatch is an error, never a retry
-//! and never a body served from a stale range.
+//! call waits until each queried server has no outstanding work, then
+//! queries. Each file the answer depends on is synced before the query that
+//! reads it, and every range a server returns is checked against the text
+//! just read — the symbol's name must sit there. A mismatch is an error,
+//! never a retry and never a body served from a stale range.
+//!
+//! Servers: a `path` naming a file goes to the server for its language;
+//! otherwise every running server is asked and the candidates are merged.
 
 use crate::lsp::definition::{
-    Candidate, DefinitionSet, DefinitionTarget, NavigationProvenance, Resolution,
-    parse_definition_result, resolve, verify_name_at,
+    Candidate, DefinitionSet, DefinitionTarget, NavigationProvenance, Partition, Resolution,
+    parse_definition_result, partition, verify_name_at,
 };
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::shape;
@@ -30,7 +33,6 @@ use mcplease::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 mod render;
@@ -50,8 +52,9 @@ const MAX_LISTED: usize = 20;
 /// names the server only fuzzy-matches are listed as possible matches and
 /// never silently resolved. Optional `path` narrows candidates to a file or
 /// directory under the workspace root fixed at server start (candidates
-/// outside the root are always excluded, symlink or not). The call waits for
-/// the server to finish any outstanding work before answering.
+/// outside the root are always excluded, symlink or not) and, for a file,
+/// picks the language server for it. The call waits for the servers to
+/// finish any outstanding work before answering.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "show")]
 #[group(skip)]
@@ -62,7 +65,7 @@ pub struct Show {
     pub symbol: String,
 
     /// Optional scope: a file or directory under the workspace root, relative
-    /// to it. Narrows `workspace/symbol` candidates; never changes the
+    /// to it. Narrows `workspace/symbol` candidates; never changes a
     /// server's root. Not supported in this slice: `anchor`/`focus`
     /// targeting and line:col input.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -104,19 +107,32 @@ impl Tool<State> for Show {
             .as_deref()
             .map(|user_path| resolve_scope(&root, user_path))
             .transpose()?;
+        let selected = state.select(scope.as_deref())?;
+        let servers_line = state.descriptions();
 
-        let session = state.session()?;
-        let server_line = server_line(session);
+        // Push disk state for every file the servers delegate to us, then
+        // wait until nothing is outstanding on any of them. The wait is
+        // unbounded except by the inactivity backstop: a busy server is
+        // waited for, a silent one is an error.
+        for &index in &selected {
+            let server = state.server_mut(index);
+            server.sync_owned()?;
+            server.wait_ready()?;
+        }
 
-        // Push disk state for every file the server delegates to us, then
-        // wait until nothing is outstanding. The wait is unbounded except by
-        // the inactivity backstop: a busy server is waited for, a silent one
-        // is an error.
-        session.sync_owned()?;
-        session.wait_ready()?;
-
-        let infos = session.workspace_symbol(&symbol)?;
-        let candidates = resolve(&symbol, infos, &root, scope.as_deref());
+        let mut merged = Partition::default();
+        for &index in &selected {
+            let server = state.server(index);
+            let infos = server.workspace_symbol(&symbol)?;
+            merged.absorb(partition(
+                &symbol,
+                server.name(),
+                infos,
+                &root,
+                scope.as_deref(),
+            ));
+        }
+        let candidates = merged.into_candidates();
         let (out_of_root, out_of_scope) = (candidates.out_of_root, candidates.out_of_scope);
         let candidate = match candidates.resolution {
             Resolution::NotFound => {
@@ -125,7 +141,7 @@ impl Tool<State> for Show {
                     &symbol,
                     out_of_root,
                     out_of_scope,
-                    &server_line,
+                    &servers_line,
                 ));
             }
             Resolution::FuzzyOnly(fuzzy) => {
@@ -135,7 +151,7 @@ impl Tool<State> for Show {
                     &fuzzy,
                     out_of_root,
                     out_of_scope,
-                    &server_line,
+                    &servers_line,
                 ));
             }
             Resolution::ExactMany(exact) => {
@@ -145,7 +161,7 @@ impl Tool<State> for Show {
                     &exact,
                     out_of_root,
                     out_of_scope,
-                    &server_line,
+                    &servers_line,
                 ));
             }
             Resolution::ExactOne(candidate) => candidate,
@@ -156,6 +172,11 @@ impl Tool<State> for Show {
             candidate,
         };
         let candidate = &discovery.candidate;
+        let index = state
+            .index_of(&candidate.server)
+            .with_context(|| format!("{} is no longer running", candidate.server))?;
+        let server = state.server_mut(index);
+        let encoding = server.encoding();
 
         // Own the candidate's file, then check the index's range against the
         // text just read before navigating from it: a range that no longer
@@ -165,29 +186,31 @@ impl Tool<State> for Show {
             .clone()
             .ok_or_else(|| anyhow::anyhow!("candidate URI is not a readable file path"))?;
         let candidate_range = candidate.info.location.range;
-        let synced = session.sync(&candidate_file)?;
-        verify_name_at(&synced.text, candidate_range, &symbol).with_context(|| {
+        let synced = server.sync(&candidate_file)?;
+        verify_name_at(&synced.text, candidate_range, &symbol, encoding).with_context(|| {
             format!(
-                "the index's location for '{symbol}' ({}) does not match the file on disk; \
-                 the server's view was stale — retry after it re-indexes",
+                "{}'s location for '{symbol}' ({}) does not match the file on disk; the \
+                 server's view was stale — retry after it re-indexes",
+                candidate.server,
                 selection_line(&root, &candidate.info.location.uri, candidate_range.start)
             )
         })?;
 
         // The didOpen/didChange above precedes this request on the wire, so
         // the server answers against the text we read. Wait for no
-        // outstanding work again: the sync may have started one.
-        session.wait_ready()?;
-        let raw = session.definition(&synced.uri, candidate_range.start)?;
-        let set = parse_definition_result(raw)
-            .context("rust-analyzer returned an unrecognizable definition result")?;
+        // outstanding work again: the sync may have started some.
+        server.wait_ready()?;
+        let raw = server.definition(&synced.uri, candidate_range.start)?;
+        let set = parse_definition_result(raw).with_context(|| {
+            format!("{} returned an unrecognizable definition result", candidate.server)
+        })?;
         let target = match set {
             DefinitionSet::None => {
                 return Ok(render_null_definition(
                     &root,
                     &symbol,
                     &discovery,
-                    &server_line,
+                    &servers_line,
                 ));
             }
             DefinitionSet::Many(targets) => {
@@ -196,7 +219,7 @@ impl Tool<State> for Show {
                     &symbol,
                     &discovery,
                     &targets,
-                    &server_line,
+                    &servers_line,
                 ));
             }
             DefinitionSet::One(target) => target,
@@ -205,21 +228,32 @@ impl Tool<State> for Show {
         // Own the target's file and check its range the same way.
         let raw_path = candidate_path_of(&target)?;
         let target_path = std::fs::canonicalize(&raw_path).unwrap_or(raw_path);
-        let target_text = session.sync(&target_path)?.text;
-        verify_name_at(&target_text, target.selection_range, &symbol).with_context(|| {
-            format!(
-                "the definition target for '{symbol}' ({}) does not match the file on disk; \
-                 the server's view was stale — retry after it re-indexes",
-                selection_line(&root, &target.uri, target.selection_range.start)
-            )
-        })?;
-        let target_offset = position_to_offset(&target_text, target.selection_range.start)
-            .context("definition target range is not inside the target file as read from disk")?;
+        let target_text = server.sync(&target_path)?.text;
+        verify_name_at(&target_text, target.selection_range, &symbol, encoding).with_context(
+            || {
+                format!(
+                    "{}'s definition target for '{symbol}' ({}) does not match the file on \
+                     disk; the server's view was stale — retry after it re-indexes",
+                    candidate.server,
+                    selection_line(&root, &target.uri, target.selection_range.start)
+                )
+            },
+        )?;
+        let target_offset =
+            position_to_offset(&target_text, target.selection_range.start, encoding)
+                .context("definition target range is not inside the target file as read from disk")?;
+        let language = server.language_id(&target_path);
 
-        // Shaping: the decorated item containing the navigation point; an
-        // unresolved shape falls back to the server's own range explicitly,
-        // never to a guessed item.
-        let (body, body_provenance) = match shape::item_at(&target_text, target_offset)? {
+        // Shaping: the decorated item containing the navigation point, for
+        // languages with a grammar (Rust only in this slice); otherwise, or
+        // when the shape is unresolved, the server's own range explicitly —
+        // never a guessed item.
+        let shaped = if language == "rust" {
+            shape::item_at(&target_text, target_offset)?
+        } else {
+            None
+        };
+        let (body, body_provenance) = match shaped {
             Some(item) => {
                 let header = match &item.name {
                     Some(name) => format!("{} {name}", item.display_kind),
@@ -231,25 +265,30 @@ impl Tool<State> for Show {
                 )
             }
             None => {
-                let fallback = fallback_body(&target_text, &target).unwrap_or_else(|| {
-                    "<no body could be extracted: the server's range did \
-                                         not resolve inside the target file; nothing was guessed>"
-                        .to_string()
-                });
+                let fallback =
+                    fallback_body(&target_text, &target, encoding).unwrap_or_else(|| {
+                        "<no body could be extracted: the server's range did not resolve inside \
+                         the target file; nothing was guessed>"
+                            .to_string()
+                    });
+                let why = if language == "rust" {
+                    "shaping unavailable for this position".to_string()
+                } else {
+                    format!("no shaping grammar for {language} in this slice")
+                };
                 (
                     fallback,
-                    "shaping unavailable for this position — server range shown as-is, no item \
-                     was guessed"
-                        .to_string(),
+                    format!("{why} — server range shown as-is, no item was guessed"),
                 )
             }
         };
 
         let mut text = String::new();
         text.push_str(&format!(
-            "Resolved: '{symbol}' — {} · {}\n",
+            "Resolved: '{symbol}' — {} · {} · {}\n",
             candidate.info.name,
-            selection_line(&root, &candidate.info.location.uri, candidate_range.start)
+            selection_line(&root, &candidate.info.location.uri, candidate_range.start),
+            candidate.server,
         ));
         let provenance_line = match target.provenance {
             NavigationProvenance::LocationRange => "navigation point from Location.range",
@@ -279,7 +318,7 @@ impl Tool<State> for Show {
             discovery.out_of_root,
             discovery.out_of_scope,
         ));
-        text.push_str(&footer(&root, &server_line));
+        text.push_str(&footer(&root, &servers_line));
         Ok(text)
     }
 }
@@ -314,7 +353,7 @@ fn validate_symbol(symbol: &str) -> Result<String> {
 }
 
 /// Canonicalize a user scope under the fixed root: it must exist and stay
-/// inside the root. Never changes the server's root.
+/// inside the root. Never changes a server's root.
 fn resolve_scope(root: &Path, user_path: &str) -> Result<PathBuf> {
     let joined = root.join(user_path);
     let canonical = joined.canonicalize().with_context(|| {

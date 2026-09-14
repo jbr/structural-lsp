@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use structural::lsp::adapter::{ReadinessPolicy, StandardIdle, rust_analyzer::Quiescence};
+use structural::lsp::adapter::{Adapter, pyright::Pyright, rust_analyzer::RustAnalyzer};
 use structural::lsp::handle::{ServerHandle, Settings};
 
 mod annotations;
@@ -50,17 +50,11 @@ impl Server {
         }
     }
 
-    fn language_id(self) -> &'static str {
+    /// The adapter that knows this server: command, capabilities, readiness.
+    fn adapter(self) -> Box<dyn Adapter> {
         match self {
-            Self::Rust => "rust",
-            Self::Python => "python",
-        }
-    }
-
-    fn command(self) -> (&'static str, Vec<String>) {
-        match self {
-            Self::Rust => ("rust-analyzer", Vec::new()),
-            Self::Python => ("pyright-langserver", vec!["--stdio".to_string()]),
+            Self::Rust => Box::new(RustAnalyzer),
+            Self::Python => Box::new(Pyright),
         }
     }
 
@@ -128,7 +122,10 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
         bail!("fixture directory missing: {}", fixture.display());
     }
 
-    let (command, args) = server.command();
+    let adapter = server.adapter();
+    let argv = adapter.command();
+    let (command, args) = argv.split_first().expect("an executable");
+    let language_id = adapter.languages()[0].id.clone();
     eprintln!(
         "=== {}: spawning `{command} {}`",
         server.slug(),
@@ -141,19 +138,17 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
         event_cap: 1_000_000,
         ..Settings::default()
     };
-    let policy: Box<dyn ReadinessPolicy> = match server {
-        Server::Rust => Box::new(Quiescence::default()),
-        Server::Python => Box::new(StandardIdle),
-    };
-    let handle = ServerHandle::spawn_with(command, &args, settings, policy)?;
+    let handle = ServerHandle::spawn_with(command, args, settings, adapter.readiness_policy())?;
 
     let root_uri = url::Url::from_directory_path(&fixture)
         .map_err(|_| anyhow!("invalid fixture path {}", fixture.display()))?
         .to_string();
 
     let started = Instant::now();
-    let initialize =
-        handle.request("initialize", initialize_params(&root_uri, &fixture, server))?;
+    let initialize = handle.request(
+        "initialize",
+        initialize_params(&root_uri, &fixture, server, adapter.as_ref()),
+    )?;
     // Captured immediately: this is initialize latency, not whole-run time.
     let initialize_elapsed_ms = started.elapsed().as_millis();
     let server_info = initialize.get("serverInfo").cloned().unwrap_or(Value::Null);
@@ -184,7 +179,7 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
             json!({
                 "textDocument": {
                     "uri": uri,
-                    "languageId": server.language_id(),
+                    "languageId": language_id,
                     "version": 1,
                     "text": text,
                 }

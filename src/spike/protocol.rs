@@ -2,7 +2,13 @@
 
 use super::*;
 
-pub(super) fn initialize_params(root_uri: &str, root: &Path, server: Server) -> Value {
+/// The adapter's capabilities and options, with the spike's own client name.
+pub(super) fn initialize_params(
+    root_uri: &str,
+    root: &Path,
+    server: Server,
+    adapter: &dyn Adapter,
+) -> Value {
     json!({
         "processId": std::process::id(),
         "clientInfo": { "name": "structural-spike", "version": env!("CARGO_PKG_VERSION") },
@@ -10,57 +16,8 @@ pub(super) fn initialize_params(root_uri: &str, root: &Path, server: Server) -> 
         "rootPath": root.to_string_lossy(),
         "workspaceFolders": [{ "uri": root_uri, "name": server.slug() }],
         "trace": "off",
-        "initializationOptions": {},
-        "capabilities": {
-            "workspace": {
-                // `workspaceFolders: true` is deliberately NOT advertised.
-                // Observed association (not a proven mechanism): with this
-                // capability plus the rich textDocument set below, pyright
-                // 1.1.403 never logs "Found 2 source files" and never answers
-                // textDocument/definition|references|codeAction; dropping this
-                // one capability restores answers in ~2.4 s (two reps each).
-                // pyright never sent the server-initiated
-                // `workspace/workspaceFolders` request in any trace, so this is
-                // an observed association, not proof that workspace loading
-                // stops or that the rich textDocument block interacts.
-                // The transport *does* answer that request correctly (the
-                // obligation is implemented); it is simply never exercised.
-                // We still send workspaceFolders in the initialize params.
-                "configuration": true,
-                "symbol": {
-                    "symbolKind": {
-                        "valueSet": (1..=26).collect::<Vec<_>>()
-                    }
-                                }
-            },
-            "textDocument": {
-                "synchronization": { "dynamicRegistration": false, "didSave": true },
-                "definition": { "linkSupport": false },
-                "references": {},
-                "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
-                "hover": { "contentFormat": ["markdown", "plaintext"] },
-                "codeAction": {
-                    "dynamicRegistration": false,
-                    "isPreferredSupport": true,
-                    "disabledSupport": true,
-                    // `dataSupport` + `resolveSupport` are what let a server
-                    // defer expensive edits behind `codeAction/resolve`; without
-                    // them the menu can be silently thinner than it should be.
-                    "dataSupport": true,
-                    "resolveSupport": { "properties": ["edit"] },
-                    "codeActionLiteralSupport": {
-                        "codeActionKind": {
-                            "valueSet": ["", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports"]
-                        }
-                    }
-                }
-            },
-            "window": { "workDoneProgress": true, "showMessage": {} },
-            "general": { "positionEncodings": ["utf-16"] },
-            // rust-analyzer sends `experimental/serverStatus` only when the
-            // client advertises this.
-            "experimental": { "serverStatusNotification": true }
-        }
+        "initializationOptions": adapter.initialization_options(),
+        "capabilities": adapter.client_capabilities(),
     })
 }
 

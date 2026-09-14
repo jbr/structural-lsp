@@ -7,7 +7,9 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+mod configured;
 mod responsive;
+mod servers;
 mod stdio_server;
 use stdio_server::Server;
 
@@ -42,20 +44,17 @@ fn in_process_show_resolves_the_fixture_struct() {
     .expect("scoped show succeeds");
     assert!(scoped.contains("Resolved: 'choose'"), "{scoped}");
 
-    // The fixture's bare `Config` is genuinely ambiguous (declaration plus
-    // the tests-module import): the tool must list the duplicates and resolve
-    // nothing — the designed exact-duplicate behavior.
-    let ambiguous = structural::tools::Show {
+    // The fixture's `Config` is declared once and re-imported in its tests
+    // module; the adapter asks rust-analyzer to exclude imports from the
+    // symbol search, so the bare name resolves to the struct.
+    let config = structural::tools::Show {
         symbol: "Config".to_string(),
         path: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
-    .expect("ambiguity is a stated result, not an error");
-    assert!(
-        ambiguous.contains("Ambiguous: 2 exact matches for 'Config'"),
-        "{ambiguous}"
-    );
-    assert!(ambiguous.contains("Nothing was resolved"), "{ambiguous}");
+    .expect("show Config succeeds");
+    assert!(config.contains("Resolved: 'Config'"), "{config}");
+    assert!(config.contains("pub struct Config"), "{config}");
     // Honest footer: fixed root stated, definition is the only view.
     assert!(output.contains("workspace root (fixed at server start): "));
     assert!(output.contains("view: definition by default (the only view in this slice"));
@@ -91,7 +90,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     .execute(&mut state, &mcplease::types::RequestContext::default());
     assert!(escaping.is_err(), "an out-of-root scope must be rejected");
 
-    state.session().expect("session alive").shutdown();
+    drop(state);
 }
 
 /// Without rust-analyzer on PATH the server must still come up, answer
@@ -165,12 +164,16 @@ fn stdio_mcp_serves_and_reports_actionable_error_without_rust_analyzer() {
         .and_then(Value::as_str)
         .unwrap_or_default();
     assert!(
-        text.contains("rust-analyzer is not running"),
+        text.contains("no language server is running"),
         "actionable error expected: {text}"
     );
     assert!(
         text.contains("rustup component add rust-analyzer"),
         "the error must name the fix: {text}"
+    );
+    assert!(
+        text.contains("pyright"),
+        "every configured server is accounted for: {text}"
     );
 
     let _ = writeln!(stdin, r#"{{"jsonrpc":"2.0","method":"exit"}}"#);
@@ -233,21 +236,18 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
     assert!(text.contains("Resolved: 'choose'"), "{text}");
     assert!(text.contains("pub fn choose"), "{text}");
 
-    // The ambiguous name comes back as a successful non-error result that
-    // lists both exact matches and resolves nothing.
-    let ambiguous = server.request(
+    // The re-imported struct resolves once: imports are excluded from the
+    // symbol search by the adapter.
+    let config = server.request(
         "tools/call",
         json!({ "name": "show", "arguments": { "symbol": "Config" } }),
     );
-    let text = ambiguous
+    let text = config
         .pointer("/result/content/0/text")
         .and_then(Value::as_str)
         .expect("tool text content");
-    assert!(
-        text.contains("Ambiguous: 2 exact matches for 'Config'"),
-        "{text}"
-    );
-    assert!(text.contains("Nothing was resolved"), "{text}");
+    assert!(text.contains("Resolved: 'Config'"), "{text}");
+    assert!(text.contains("pub struct Config"), "{text}");
 
     // Same call through the qualified name is an actionable error, not a crash.
     let qualified = server.request(
@@ -441,6 +441,6 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
         "the stale body must not be served: {helper_second}"
     );
 
-    state.session().expect("session alive").shutdown();
+    drop(state);
     let _ = std::fs::remove_dir_all(&scratch);
 }
