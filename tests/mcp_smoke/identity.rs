@@ -28,23 +28,24 @@ fn exact_hits_are_deduplicated_by_definition_target() {
     // friends fuzzy-match it (the adapter asks for all symbols, not types
     // first), and it is one thing.
     let resolve = show(&mut state, "resolve");
-    assert!(resolve.contains("Resolved: 'resolve'"), "{resolve}");
-    assert!(resolve.contains("src/lsp/definition.rs"), "{resolve}");
+    assert!(
+        resolve.starts_with("fn resolve · src/lsp/definition.rs:"),
+        "{resolve}"
+    );
     assert!(resolve.contains("pub fn resolve("), "{resolve}");
 
     // `Server` is two things: the spike's enum and the smoke tests' struct.
     // Two exact hits, two distinct targets, listed with kinds and paths.
     let server = show(&mut state, "Server");
     assert!(
-        server.contains("Ambiguous: 2 exact matches for 'Server'"),
+        server.starts_with("ambiguous: 2 definitions of 'Server'"),
         "{server}"
     );
-    assert!(server.contains("Server (Enum) · src/spike.rs"), "{server}");
+    assert!(server.contains("enum Server · src/spike.rs:"), "{server}");
     assert!(
-        server.contains("Server (Struct) · tests/mcp_smoke/stdio_server.rs"),
+        server.contains("struct Server · tests/mcp_smoke/stdio_server.rs:"),
         "{server}"
     );
-    assert!(server.contains("Nothing was resolved"), "{server}");
 
     drop(state);
 }

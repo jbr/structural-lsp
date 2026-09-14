@@ -1,146 +1,140 @@
 //! Rendering for `show`: every string the tool returns is built here.
+//!
+//! Every byte is paid for on every call. The happy path is one header line
+//! and the body; notes appear only when something is degraded, one line
+//! each; listings are one line per entry. The caveats (fuzzy index, fixed
+//! root, bare names) live in the tool description and the server's
+//! instructions, once, not in every result.
 
 use super::*;
+use crate::lsp::definition::Candidate;
 use crate::lsp::positions::Encoding;
+use lsp_types::SymbolKind;
 
-pub(super) fn render_not_found(
+/// The happy path: `kind name · path:line`, the body, then any notes.
+pub(super) fn render_resolved(
     root: &Path,
-    symbol: &str,
-    exclusions: Exclusions,
-    servers_line: &str,
+    kind_label: &str,
+    name: &str,
+    location: &lsp_types::Location,
+    body: &str,
+    notes: &[String],
 ) -> String {
-    format!(
-        "No symbol named '{symbol}' was reported by workspace/symbol.\n\
-         This is the server's fuzzy index queried with the bare name; the result is not \
-         proven exhaustive.\nNo definition was queried.\n{exclusions}{footer}",
-        exclusions = exclusion_note(exclusions),
-        footer = footer(root, servers_line),
-    )
+    let mut text = format!(
+        "{kind_label} {name} · {}\n{body}\n",
+        location_line(root, &location.uri, location.range.start)
+    );
+    for note in notes {
+        text.push_str(&format!("note: {note}\n"));
+    }
+    text
 }
 
+pub(super) fn render_not_found(symbol: &str, exclusions: Exclusions) -> String {
+    format!("no symbol named '{symbol}'\n{}", exclusion_notes(exclusions))
+}
+
+/// Fuzzy hits only: listed, never resolved. No definition was queried, so
+/// there is no signature to give.
 pub(super) fn render_fuzzy(
     root: &Path,
     symbol: &str,
     fuzzy: &[Candidate],
+    labels: &dyn Fn(&str, SymbolKind) -> &'static str,
     exclusions: Exclusions,
-    servers_line: &str,
 ) -> String {
-    let mut text = format!(
-        "No exact match for '{symbol}'. Possible matches (fuzzy, as reported by \
-         workspace/symbol; not proven exhaustive):\n"
-    );
-    text.push_str(&listed_candidates(root, fuzzy));
-    text.push_str("Nothing was resolved; no definition was queried.\n");
-    text.push_str(&exclusion_note(exclusions));
-    text.push_str(&footer(root, servers_line));
+    let mut text = format!("no exact match for '{symbol}'; similar:\n");
+    for candidate in fuzzy.iter().take(MAX_LISTED) {
+        let info = &candidate.info;
+        text.push_str(&format!(
+            "{} {} · {}\n",
+            labels(&candidate.server, info.kind),
+            info.name,
+            location_line(root, &info.location.uri, info.location.range.start)
+        ));
+    }
+    if fuzzy.len() > MAX_LISTED {
+        text.push_str(&format!("… {} more\n", fuzzy.len() - MAX_LISTED));
+    }
+    text.push_str(&exclusion_notes(exclusions));
     text
 }
 
-/// Several distinct definition targets: all are listed (bounded) with their
-/// kinds and paths, none is picked, and no body is rendered — an arbitrary
-/// first pick would present a choice the caller never made.
+/// One line per distinct definition, with its signature when the server's
+/// outline gave one. Nothing is picked. The server is named only when the
+/// definitions span more than one.
 pub(super) fn render_ambiguous(
     root: &Path,
     symbol: &str,
-    identities: &[Identity],
+    entries: &[AmbiguousEntry],
     exclusions: Exclusions,
-    servers_line: &str,
 ) -> String {
-    let mut text = format!(
-        "Ambiguous: {} exact matches for '{symbol}' (distinct definitions, as reported by \
-         workspace/symbol and textDocument/definition; not proven exhaustive):\n",
-        identities.len()
-    );
-    for identity in identities.iter().take(MAX_LISTED) {
-        let origin = &identity.candidates[0];
-        let location = match &identity.target {
-            Some(target) => selection_line(root, &target.uri, target.selection_range.start),
-            None => format!(
-                "{} (no definition reported)",
-                selection_line(
-                    root,
-                    &origin.info.location.uri,
-                    origin.info.location.range.start
-                )
-            ),
-        };
+    let servers: std::collections::BTreeSet<&str> =
+        entries.iter().map(|entry| entry.server.as_str()).collect();
+    let mut text = format!("ambiguous: {} definitions of '{symbol}'\n", entries.len());
+    for entry in entries.iter().take(MAX_LISTED) {
         text.push_str(&format!(
-            "  - {} ({:?}) · {location} · {}\n",
-            identity.name(),
-            identity.kind(),
-            identity.server
+            "{} {} · {}",
+            entry.kind_label,
+            entry.name,
+            location_line(root, &entry.location.uri, entry.location.range.start)
         ));
+        if let Some(signature) = &entry.signature {
+            text.push_str(&format!(" · {signature}"));
+        }
+        if servers.len() > 1 {
+            text.push_str(&format!(" · {}", entry.server));
+        }
+        text.push('\n');
     }
-    if identities.len() > MAX_LISTED {
-        text.push_str(&format!("  … {} more\n", identities.len() - MAX_LISTED));
+    if entries.len() > MAX_LISTED {
+        text.push_str(&format!("… {} more\n", entries.len() - MAX_LISTED));
     }
-    text.push_str(
-        "Nothing was resolved — no definition was picked for you. Narrow with `path`; \
-         qualified-path targeting is not implemented in this slice.\n",
-    );
-    text.push_str(&exclusion_note(exclusions));
-    text.push_str(&footer(root, servers_line));
+    text.push_str(&exclusion_notes(exclusions));
     text
+}
+
+/// One entry of the ambiguous listing, already resolved to display data.
+pub(super) struct AmbiguousEntry {
+    pub kind_label: &'static str,
+    pub name: String,
+    pub server: String,
+    /// The definition target, or the symbol's own location when the server
+    /// reported no definition.
+    pub location: lsp_types::Location,
+    pub signature: Option<String>,
 }
 
 pub(super) fn render_null_definition(
     root: &Path,
     symbol: &str,
-    identity: &Identity,
-    servers_line: &str,
+    server: &str,
+    location: &lsp_types::Location,
 ) -> String {
-    let origin = &identity.candidates[0];
     format!(
-        "{} reports no definition for '{symbol}' at {} (null/empty \
-         textDocument/definition result).\n{footer}",
-        identity.server,
-        selection_line(
-            root,
-            &origin.info.location.uri,
-            origin.info.location.range.start
-        ),
-        footer = footer(root, servers_line),
+        "no definition reported for '{symbol}' ({server}, from {})\n",
+        location_line(root, &location.uri, location.range.start)
     )
 }
 
-/// Candidate lines, capped, for the fuzzy and ambiguous listings: name,
-/// kind, location, and which server reported it.
-pub(super) fn listed_candidates(root: &Path, candidates: &[Candidate]) -> String {
-    let mut text = String::new();
-    for candidate in candidates.iter().take(MAX_LISTED) {
-        let info = &candidate.info;
-        text.push_str(&format!(
-            "  - {} ({:?}) · {} · {}\n",
-            info.name,
-            info.kind,
-            selection_line(root, &info.location.uri, info.location.range.start),
-            candidate.server
-        ));
-    }
-    if candidates.len() > MAX_LISTED {
-        text.push_str(&format!("  … {} more\n", candidates.len() - MAX_LISTED));
-    }
-    text
+/// `path:line`, 1-based, relative to the root when inside it.
+pub(super) fn location_line(root: &Path, uri: &lsp_types::Uri, position: lsp_types::Position) -> String {
+    format!("{}:{}", relative_path(root, uri), position.line + 1)
 }
 
-/// `path:line:col`, 1-based, relative to the root when inside it.
-pub(super) fn selection_line(
-    root: &Path,
-    uri: &lsp_types::Uri,
-    position: lsp_types::Position,
-) -> String {
-    let path = crate::lsp::definition::candidate_path(uri)
+pub(super) fn relative_path(root: &Path, uri: &lsp_types::Uri) -> String {
+    crate::lsp::definition::candidate_path(uri)
         .map(|path| {
             path.strip_prefix(root)
                 .map(|relative| relative.display().to_string())
                 .unwrap_or_else(|_| path.display().to_string())
         })
-        .unwrap_or_else(|| uri.to_string());
-    format!("{}:{}:{}", path, position.line + 1, position.character + 1)
+        .unwrap_or_else(|| uri.to_string())
 }
 
-/// What the filters excluded, named rather than silently dropped.
-pub(super) fn exclusion_note(exclusions: Exclusions) -> String {
+/// What the filters excluded, when they excluded anything: the answer may
+/// be there.
+pub(super) fn exclusion_notes(exclusions: Exclusions) -> String {
     let Exclusions {
         out_of_root,
         out_of_scope,
@@ -148,14 +142,12 @@ pub(super) fn exclusion_note(exclusions: Exclusions) -> String {
     let mut note = String::new();
     if out_of_root > 0 {
         note.push_str(&format!(
-            "{out_of_root} candidate(s) outside the workspace root were excluded (the root is \
-             fixed at server start).\n"
+            "note: {out_of_root} candidate(s) outside the workspace root were excluded\n"
         ));
     }
     if out_of_scope > 0 {
         note.push_str(&format!(
-            "{out_of_scope} candidate(s) inside the root but outside the requested scope were \
-             excluded (not silently dropped).\n"
+            "note: {out_of_scope} candidate(s) outside the `path` scope were excluded\n"
         ));
     }
     note
@@ -182,37 +174,27 @@ pub(super) fn fallback_body(
         ),
     };
     if end > start {
-        Some(budget(&target_text[start..end]))
+        Some(target_text[start..end].to_string())
     } else {
         None
     }
 }
 
-/// The honest, concise footer: the fixed root, the one view, the servers.
-/// The schema has no `view` field; the default behavior (definition) is
-/// described, and nothing unimplemented is advertised.
-pub(super) fn footer(root: &Path, servers_line: &str) -> String {
-    format!(
-        "\nworkspace root (fixed at server start): {}\nview: definition by default (the only \
-         view in this slice; bare-name resolution only — no line:col or anchor input).\n\
-         servers: {servers_line}\n",
-        root.display()
-    )
-}
-
-/// Trim a body to the budget, on a character boundary, marking the omission.
-pub(super) fn budget(body: &str) -> String {
+/// Trim a body to the budget on a character boundary. The note says what was
+/// cut; the body itself carries no marker.
+pub(super) fn budget(body: &str) -> (String, Option<String>) {
     if body.len() <= BODY_BUDGET_BYTES {
-        return body.to_string();
+        return (body.to_string(), None);
     }
     let mut end = BODY_BUDGET_BYTES;
     while !body.is_char_boundary(end) {
         end -= 1;
     }
-    format!(
-        "{}\n… truncated: showing the first {end} of {} bytes of this item (result budget); \
-         pagination is not implemented in this slice",
-        &body[..end],
-        body.len()
+    (
+        body[..end].to_string(),
+        Some(format!(
+            "truncated after {end} of {} bytes (result budget)",
+            body.len()
+        )),
     )
 }

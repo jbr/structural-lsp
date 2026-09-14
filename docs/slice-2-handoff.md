@@ -111,10 +111,25 @@ Work in these checkpoints, each independently reviewed before the next:
    item for gopls. `item_at` remains only as the Rust fallback when a server
    gives no extent, and the `body:` note appears only on a fallback path.
    Python and Go bodies are now complete functions in the gated tests.
-7. Items 7 and 8 of `docs/slice-2.md` — next: the output rewrite (the
-   smoke tests assert on the current wrapper phrases and will change with
-   it) and CLI/crate hygiene (`--root` becomes cwd plus `STRUCTURAL_ROOT`;
-   the mounted `structural-dev` MCP command will need re-adding).
+7. **Item 7: output trimmed to what the agent needs** — done 2026-09-14
+   evening. Happy path is `kind name · path:line`, the body, and `note:`
+   lines only when something is degraded (truncation, fallback shaping,
+   definition outside the root). Kind words come from the adapter
+   (`fn`/`trait`/`mod` for rust-analyzer, `def` for pyright, neutral words
+   otherwise). Listings are one line per entry; the ambiguous listing adds
+   the outline's `detail` (rust-analyzer's signature) or the item's first
+   line, and names servers only when entries span more than one. Exclusion
+   counts appear as notes on listings only. The caveats live once in the
+   tool description and the MCP `instructions`. The fixture `show choose`
+   is exactly one header line plus the item text from the file; that is
+   211 bytes because rust-analyzer's extent includes the fixture's `//
+   @decl` comment, so the test asserts equality with the file rather than
+   the plan's "under 200 bytes" (27 bytes of wrapper meets the "under 150
+   beyond the body" target).
+8. Item 8 of `docs/slice-2.md` — next: mcplease owns argv (`--root`
+   becomes cwd plus `STRUCTURAL_ROOT`; the mounted `structural-dev` MCP
+   command will need re-adding), the spike moves to `src/bin/spike`, the
+   crate-wide `allow(dead_code)` goes, `show`'s `execute` under 80 lines.
 
 ## Settled design for 1A
 

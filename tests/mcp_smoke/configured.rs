@@ -51,9 +51,10 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("show Greet: {error:#}"));
-    assert!(output.contains("Resolved: 'Greet'"), "{output}");
-    assert!(output.contains("· gopls"), "{output}");
-    assert!(output.contains("greet.go:4:6"), "{output}");
+    assert!(
+        output.starts_with("function Greet · greet.go:4\n"),
+        "{output}"
+    );
     // The whole function from gopls's documentSymbol extent; no Go grammar
     // here, so the server's extent stands as-is.
     assert!(

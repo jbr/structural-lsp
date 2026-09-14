@@ -84,4 +84,11 @@ impl Adapter for Configured {
     fn backstop(&self) -> Duration {
         self.backstop
     }
+
+    fn kind_label(&self, kind: lsp_types::SymbolKind) -> &'static str {
+        match &self.base {
+            Some(base) => base.kind_label(kind),
+            None => super::default_kind_label(kind),
+        }
+    }
 }

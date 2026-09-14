@@ -63,23 +63,25 @@ fn both_servers_answer_from_one_root() {
     // asked, and the merge is honestly ambiguous, naming each server.
     let both = show(&mut state, "choose", None);
     assert!(
-        both.contains("Ambiguous: 2 exact matches for 'choose'"),
+        both.starts_with("ambiguous: 2 definitions of 'choose'"),
         "{both}"
     );
+    assert!(both.contains("fn choose · rust/src/lib.rs:"), "{both}");
+    assert!(both.contains("def choose · python/helper.py:"), "{both}");
     assert!(both.contains("· rust-analyzer"), "{both}");
     assert!(both.contains("· pyright"), "{both}");
 
     // A directory scope narrows the merged candidates to one server's.
     let rust = show(&mut state, "choose", Some("rust"));
-    assert!(rust.contains("Resolved: 'choose'"), "{rust}");
-    assert!(rust.contains("· rust-analyzer"), "{rust}");
+    assert!(rust.starts_with("fn choose · rust/src/lib.rs:"), "{rust}");
     assert!(rust.contains("pub fn choose"), "{rust}");
     assert!(rust.contains("match mode"), "{rust}");
 
     let python = show(&mut state, "choose", Some("python"));
-    assert!(python.contains("Resolved: 'choose'"), "{python}");
-    assert!(python.contains("· pyright"), "{python}");
-    assert!(python.contains("python/helper.py"), "{python}");
+    assert!(
+        python.starts_with("def choose · python/helper.py:"),
+        "{python}"
+    );
     // The whole function, from pyright's documentSymbol extent.
     assert!(
         python.contains("def choose(flag: bool) -> int:"),
@@ -87,29 +89,29 @@ fn both_servers_answer_from_one_root() {
     );
     assert!(python.contains("return 1 if flag else 2"), "{python}");
     assert!(
-        !python.contains("body:"),
-        "no fallback note on the normal path: {python}"
+        !python.contains("note:"),
+        "no note on the normal path: {python}"
     );
 
     // A file scope picks the server for its language outright.
     let by_file = show(&mut state, "make", Some("python/main.py"));
-    assert!(by_file.contains("Resolved: 'make'"), "{by_file}");
-    assert!(by_file.contains("· pyright"), "{by_file}");
+    assert!(
+        by_file.starts_with("def make · python/main.py:"),
+        "{by_file}"
+    );
 
     // A name only one language has resolves without a scope.
     let rust_only = show(&mut state, "Mode", None);
-    assert!(rust_only.contains("Resolved: 'Mode'"), "{rust_only}");
+    assert!(
+        rust_only.starts_with("enum Mode · rust/src/lib.rs:"),
+        "{rust_only}"
+    );
     assert!(rust_only.contains("pub enum Mode"), "{rust_only}");
     let python_only = show(&mut state, "DEFAULT_LIMIT", None);
     assert!(
-        python_only.contains("Resolved: 'DEFAULT_LIMIT'"),
+        python_only.contains(" DEFAULT_LIMIT · python/helper.py:"),
         "{python_only}"
     );
-    assert!(python_only.contains("· pyright"), "{python_only}");
-
-    // The footer names both.
-    assert!(rust_only.contains("servers: rust-analyzer"), "{rust_only}");
-    assert!(rust_only.contains("pyright"), "{rust_only}");
 
     drop(state);
     let _ = std::fs::remove_dir_all(&root);

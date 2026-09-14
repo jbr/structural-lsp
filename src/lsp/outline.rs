@@ -18,6 +18,9 @@ pub struct Extent {
     pub kind: SymbolKind,
     /// The whole item, as the server sees it.
     pub range: Range,
+    /// The server's one-line detail (rust-analyzer: the signature), when
+    /// the result shape carries one.
+    pub detail: Option<String>,
 }
 
 /// The innermost symbol whose range contains `position`, or `None` when no
@@ -64,6 +67,7 @@ fn innermost_hierarchical(symbols: &[DocumentSymbol], position: Position) -> Opt
         name: symbol.name.clone(),
         kind: symbol.kind,
         range: symbol.range,
+        detail: symbol.detail.clone(),
     }))
 }
 
@@ -82,6 +86,7 @@ fn innermost_flat(symbols: &[SymbolInformation], position: Position) -> Option<E
             name: symbol.name.clone(),
             kind: symbol.kind,
             range: symbol.location.range,
+            detail: None,
         })
 }
 

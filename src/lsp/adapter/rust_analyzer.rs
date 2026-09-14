@@ -1,6 +1,7 @@
 //! rust-analyzer: everything the generic transport must not know about it.
 
-use super::{Adapter, Language, ReadinessPolicy};
+use super::{Adapter, Language, ReadinessPolicy, default_kind_label};
+use lsp_types::SymbolKind;
 use serde_json::{Value, json};
 
 pub struct RustAnalyzer;
@@ -50,6 +51,20 @@ impl Adapter for RustAnalyzer {
 
     fn readiness_policy(&self) -> Box<dyn ReadinessPolicy> {
         Box::new(Quiescence::default())
+    }
+
+    fn kind_label(&self, kind: SymbolKind) -> &'static str {
+        match kind {
+            SymbolKind::FUNCTION | SymbolKind::METHOD => "fn",
+            SymbolKind::INTERFACE => "trait",
+            SymbolKind::MODULE => "mod",
+            SymbolKind::CONSTANT => "const",
+            SymbolKind::VARIABLE => "static",
+            SymbolKind::ENUM_MEMBER => "variant",
+            SymbolKind::TYPE_PARAMETER => "type",
+            SymbolKind::OBJECT => "impl",
+            other => default_kind_label(other),
+        }
     }
 }
 

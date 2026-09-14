@@ -29,11 +29,23 @@ fn in_process_show_resolves_the_fixture_struct() {
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("show choose succeeds");
-    assert!(output.contains("Resolved: 'choose'"), "{output}");
+    assert!(output.starts_with("fn choose · src/lib.rs:"), "{output}");
     assert!(output.contains("pub fn choose"), "{output}");
     assert!(
         output.contains("match mode"),
         "the fn body is included: {output}"
+    );
+    // Every byte is paid for: exactly one header line, then the item as it
+    // sits in the file (rust-analyzer's extent includes the leading
+    // annotation comment), and nothing else.
+    let lib = std::fs::read_to_string(rust_fixture_root().join("src/lib.rs")).unwrap();
+    let start = lib.find("// @decl choose | choose").unwrap();
+    let end = start + lib[start..].find("\n}\n").unwrap() + 2;
+    let line = lib[..lib.find("pub fn choose").unwrap()].lines().count() + 1;
+    assert_eq!(
+        output,
+        format!("fn choose · src/lib.rs:{line}\n{}\n", &lib[start..end]),
+        "one header line, the body, nothing else"
     );
 
     // A `path` scope narrows to the fixture file and still resolves.
@@ -43,7 +55,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("scoped show succeeds");
-    assert!(scoped.contains("Resolved: 'choose'"), "{scoped}");
+    assert!(scoped.starts_with("fn choose · src/lib.rs:"), "{scoped}");
 
     // The fixture's `Config` is declared once and re-imported in its tests
     // module; the adapter asks rust-analyzer to exclude imports from the
@@ -54,12 +66,15 @@ fn in_process_show_resolves_the_fixture_struct() {
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("show Config succeeds");
-    assert!(config.contains("Resolved: 'Config'"), "{config}");
+    assert!(
+        config.starts_with("struct Config · src/lib.rs:"),
+        "{config}"
+    );
     assert!(config.contains("pub struct Config"), "{config}");
-    // Honest footer: fixed root stated, definition is the only view.
-    assert!(output.contains("workspace root (fixed at server start): "));
-    assert!(output.contains("view: definition by default (the only view in this slice"));
-    assert!(!output.contains("Available reads: uses"));
+    assert!(
+        config.contains("#[derive(Debug, Clone)]"),
+        "the attribute decorates the body: {config}"
+    );
 
     // A missing name is a stated result, not an invented candidate.
     let missing = structural::tools::Show {
@@ -69,10 +84,9 @@ fn in_process_show_resolves_the_fixture_struct() {
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .unwrap();
     assert!(
-        missing.contains("No symbol named 'definitely_not_here'"),
+        missing.starts_with("no symbol named 'definitely_not_here'"),
         "{missing}"
     );
-    assert!(missing.contains("not proven exhaustive"), "{missing}");
 
     // A qualified path is rejected with guidance, never falsely resolved.
     let qualified = structural::tools::Show {
@@ -234,7 +248,7 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
         call.pointer("/result/isError") != Some(&json!(true)),
         "the successful show call must not be an error: {call}"
     );
-    assert!(text.contains("Resolved: 'choose'"), "{text}");
+    assert!(text.starts_with("fn choose · src/lib.rs:"), "{text}");
     assert!(text.contains("pub fn choose"), "{text}");
 
     // The re-imported struct resolves once: imports are excluded from the
@@ -247,7 +261,7 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
         .pointer("/result/content/0/text")
         .and_then(Value::as_str)
         .expect("tool text content");
-    assert!(text.contains("Resolved: 'Config'"), "{text}");
+    assert!(text.starts_with("struct Config · src/lib.rs:"), "{text}");
     assert!(text.contains("pub struct Config"), "{text}");
 
     // Same call through the qualified name is an actionable error, not a crash.
@@ -420,10 +434,11 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
     // The renamed symbol may come back as a fuzzy near-match, but the exact
     // name must not resolve: nothing was resolved, no definition was queried.
     assert!(
-        third.contains("Nothing was resolved; no definition was queried."),
+        third.starts_with("no exact match for 'choose'")
+            || third.starts_with("no symbol named 'choose'"),
         "a renamed symbol must not resolve from a stale index: {third}"
     );
-    assert!(!third.contains("Resolved: 'choose'"), "{third}");
+    assert!(!third.starts_with("fn choose"), "{third}");
 
     // Edit 3: change the previously opened second module; the next query must
     // serve the new text (the doc was opened in the helper call above).

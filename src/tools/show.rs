@@ -1,19 +1,11 @@
 //! `show` — resolve a symbol by bare name and return its definition's
 //! decorated source, not just a location.
 //!
-//! Slice boundary (deliberate): bare exact symbol names only, one fixed
-//! workspace root, definition only. No anchor/focus targeting, no line:col
-//! input, no qualified paths (rejected with guidance — a bare-name exact
-//! match is the only resolution that can be honestly validated), no other
-//! views. Results separate exact from fuzzy candidates without claiming
-//! search completeness, report the resolved selection before the body, and
-//! mark omissions.
-//!
 //! Identity, not names: `workspace/symbol` only *nominates*. Every exact
 //! candidate is sent to `textDocument/definition`, and the results are
 //! deduplicated by target — hits that navigate to the same place are one
 //! thing; hits that navigate to different places are listed as ambiguous,
-//! with their kinds and paths, and nothing is picked.
+//! with their kinds, paths and signatures, and nothing is picked.
 //!
 //! Correctness order: every owned document is synced from disk, then the
 //! call waits until each queried server has no outstanding work, then
@@ -24,17 +16,20 @@
 //!
 //! Servers: a `path` naming a file goes to the server for its language;
 //! otherwise every running server is asked and the candidates are merged.
+//! Bodies come from the server's `documentSymbol` extent, widened over
+//! leading decorations by tree-sitter where a grammar exists.
 
 use crate::lsp::definition::{
-    Candidate, DefinitionSet, DefinitionTarget, Identity, NavigationProvenance, Partition,
-    Resolution, group_by_target, parse_definition_result, partition, verify_name_at,
+    Candidate, DefinitionSet, DefinitionTarget, Identity, Partition, Resolution, group_by_target,
+    parse_definition_result, partition, verify_name_at,
 };
-use crate::lsp::outline;
+use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::lsp::shape;
 use crate::state::State;
 use anyhow::{Context, Result, bail};
+use lsp_types::{Location, SymbolKind};
 use mcplease::{
     traits::{Tool, ToolMeta},
     types::{RequestContext, ToolAnnotations},
@@ -46,36 +41,32 @@ use std::path::{Path, PathBuf};
 mod render;
 use render::*;
 
-/// Upper bound on the returned item body. Omission is marked, never silent;
+/// Upper bound on the returned item body. Omission is noted, never silent;
 /// pagination is not implemented in this slice.
 const BODY_BUDGET_BYTES: usize = 12_000;
 
-/// Candidates and definition locations listed before "… N more".
+/// Entries listed before "… N more".
 const MAX_LISTED: usize = 20;
 
-/// Resolve a code definition by symbol name; returns the definition's source
-/// and documentation, not just a location
+/// Show a code definition by its bare name: the item's source, including
+/// its doc comments and attributes, not just a location.
 ///
-/// `symbol` must be a bare name (e.g. `Config`, `doubled`) matched exactly;
-/// names the server only fuzzy-matches are listed as possible matches and
-/// never silently resolved. Optional `path` narrows candidates to a file or
-/// directory under the workspace root fixed at server start (candidates
-/// outside the root are always excluded, symlink or not) and, for a file,
-/// picks the language server for it. The call waits for the servers to
-/// finish any outstanding work before answering.
+/// Candidates come from the language servers' fuzzy symbol index (not
+/// proven exhaustive); only exact-name matches resolve, and several distinct
+/// definitions are listed rather than picked. The answer is current: owned
+/// files are re-synced from disk and the servers are waited for before every
+/// query. `path` scopes to a file or directory under the workspace root,
+/// which is fixed at server start.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "show")]
 #[group(skip)]
 pub struct Show {
-    /// Exact bare symbol name (e.g. `Config`). Qualified paths
-    /// (`Config::new`) are rejected: they cannot be validated by bare-name
-    /// matching in this slice.
+    /// Exact bare symbol name (e.g. `Config`, `choose`). Qualified paths
+    /// (`Config::new`) are rejected; pass the bare name.
     pub symbol: String,
 
-    /// Optional scope: a file or directory under the workspace root, relative
-    /// to it. Narrows `workspace/symbol` candidates; never changes a
-    /// server's root. Not supported in this slice: `anchor`/`focus`
-    /// targeting and line:col input.
+    /// A file or directory under the workspace root, relative to it, to
+    /// narrow candidates to. A file also picks the language server for it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 }
@@ -97,7 +88,7 @@ impl ToolMeta for Show {
     }
 }
 
-/// What the filters excluded, carried to every rendering.
+/// What the filters excluded, carried to the listings.
 #[derive(Clone, Copy)]
 struct Exclusions {
     out_of_root: usize,
@@ -116,51 +107,17 @@ impl Tool<State> for Show {
             .map(|user_path| resolve_scope(&root, user_path))
             .transpose()?;
         let selected = state.select(scope.as_deref())?;
-        let servers_line = state.descriptions();
 
-        // Push disk state for every file the servers delegate to us, then
-        // wait until nothing is outstanding on any of them. The wait is
-        // unbounded except by the inactivity backstop: a busy server is
-        // waited for, a silent one is an error.
-        for &index in &selected {
-            let server = state.server_mut(index);
-            server.sync_owned()?;
-            server.wait_ready()?;
+        let (exact, fuzzy, exclusions) =
+            discover(state, &selected, &symbol, &root, scope.as_deref())?;
+        if exact.is_empty() {
+            return Ok(if fuzzy.is_empty() {
+                render_not_found(&symbol, exclusions)
+            } else {
+                let labels = |server: &str, kind: SymbolKind| kind_label(state, server, kind);
+                render_fuzzy(&root, &symbol, &fuzzy, &labels, exclusions)
+            });
         }
-
-        let mut merged = Partition::default();
-        for &index in &selected {
-            let server = state.server(index);
-            let infos = server.workspace_symbol(&symbol)?;
-            merged.absorb(partition(
-                &symbol,
-                server.name(),
-                infos,
-                &root,
-                scope.as_deref(),
-            ));
-        }
-        let candidates = merged.into_candidates();
-        let exclusions = Exclusions {
-            out_of_root: candidates.out_of_root,
-            out_of_scope: candidates.out_of_scope,
-        };
-        let exact = match candidates.resolution {
-            Resolution::NotFound => {
-                return Ok(render_not_found(&root, &symbol, exclusions, &servers_line));
-            }
-            Resolution::FuzzyOnly(fuzzy) => {
-                return Ok(render_fuzzy(
-                    &root,
-                    &symbol,
-                    &fuzzy,
-                    exclusions,
-                    &servers_line,
-                ));
-            }
-            Resolution::ExactOne(candidate) => vec![*candidate],
-            Resolution::ExactMany(exact) => exact,
-        };
 
         // Nomination is not identity: ask each exact candidate's server where
         // it actually goes, then group by destination.
@@ -171,93 +128,57 @@ impl Tool<State> for Show {
         }
         let mut identities = group_by_target(found);
         if identities.len() != 1 {
-            return Ok(render_ambiguous(
-                &root,
-                &symbol,
-                &identities,
-                exclusions,
-                &servers_line,
-            ));
+            let entries = ambiguous_entries(state, &identities);
+            return Ok(render_ambiguous(&root, &symbol, &entries, exclusions));
         }
         let identity = identities.pop().expect("exactly one");
-        let Some(target) = identity.target.clone() else {
-            return Ok(render_null_definition(
+        match identity.target.clone() {
+            Some(target) => render_definition(state, &root, &symbol, &identity, &target),
+            None => Ok(render_null_definition(
                 &root,
                 &symbol,
-                &identity,
-                &servers_line,
-            ));
-        };
-
-        let index = state
-            .index_of(&identity.server)
-            .with_context(|| format!("{} is no longer running", identity.server))?;
-        let server = state.server_mut(index);
-        let encoding = server.encoding();
-
-        // Own the target's file and check its range the same way the
-        // candidates were checked.
-        let raw_path = candidate_path_of(&target)?;
-        let target_path = std::fs::canonicalize(&raw_path).unwrap_or(raw_path);
-        let synced = server.sync(&target_path)?;
-        let target_text = synced.text;
-        verify_name_at(&target_text, target.selection_range, &symbol, encoding).with_context(
-            || {
-                format!(
-                    "{}'s definition target for '{symbol}' ({}) does not match the file on \
-                     disk; the server's view was stale — retry after it re-indexes",
-                    identity.server,
-                    selection_line(&root, &target.uri, target.selection_range.start)
-                )
-            },
-        )?;
-        let language = server.language_id(&target_path);
-        let (body, fallback_note) = shape_body(server, &synced.uri, &target_text, &target, &language)?;
-
-        let origin = &identity.candidates[0];
-        let mut text = String::new();
-        text.push_str(&format!(
-            "Resolved: '{symbol}' — {} · {} · {}\n",
-            origin.info.name,
-            selection_line(&root, &origin.info.location.uri, origin.info.location.range.start),
-            identity.server,
-        ));
-        if identity.candidates.len() > 1 {
-            text.push_str(&format!(
-                "{} symbol entries navigate to this one definition.\n",
-                identity.candidates.len()
-            ));
+                &identity.server,
+                &identity.candidates[0].info.location,
+            )),
         }
-        let provenance_line = match target.provenance {
-            NavigationProvenance::LocationRange => "navigation point from Location.range",
-            NavigationProvenance::LinkSelectionRange => {
-                "navigation point from LocationLink.targetSelectionRange"
-            }
-            NavigationProvenance::LinkTargetRange => {
-                "navigation point fell back to LocationLink.targetRange (no targetSelectionRange)"
-            }
-        };
-        text.push_str(&format!(
-            "Definition: {} ({provenance_line})\n",
-            selection_line(&root, &target.uri, target.selection_range.start),
-        ));
-        if !target_path.starts_with(&root) {
-            text.push_str(&format!(
-                "Definition target is outside the workspace root ({}): dependency \
-                 destinations are shown read-only.\n",
-                root.display()
-            ));
-        }
-        text.push('\n');
-        text.push_str(&body);
-        text.push('\n');
-        if let Some(note) = fallback_note {
-            text.push_str(&format!("body: {note}\n"));
-        }
-        text.push_str(&exclusion_note(exclusions));
-        text.push_str(&footer(&root, &servers_line));
-        Ok(text)
     }
+}
+
+/// Sync every selected server's owned documents, wait for each, and merge
+/// their `workspace/symbol` candidates: exact matches, fuzzy matches, and
+/// what the root and scope filters excluded.
+fn discover(
+    state: &mut State,
+    selected: &[usize],
+    symbol: &str,
+    root: &Path,
+    scope: Option<&Path>,
+) -> Result<(Vec<Candidate>, Vec<Candidate>, Exclusions)> {
+    // The wait is unbounded except by the inactivity backstop: a busy server
+    // is waited for, a silent one is an error.
+    for &index in selected {
+        let server = state.server_mut(index);
+        server.sync_owned()?;
+        server.wait_ready()?;
+    }
+    let mut merged = Partition::default();
+    for &index in selected {
+        let server = state.server(index);
+        let infos = server.workspace_symbol(symbol)?;
+        merged.absorb(partition(symbol, server.name(), infos, root, scope));
+    }
+    let candidates = merged.into_candidates();
+    let exclusions = Exclusions {
+        out_of_root: candidates.out_of_root,
+        out_of_scope: candidates.out_of_scope,
+    };
+    let (exact, fuzzy) = match candidates.resolution {
+        Resolution::NotFound => (Vec::new(), Vec::new()),
+        Resolution::FuzzyOnly(fuzzy) => (Vec::new(), fuzzy),
+        Resolution::ExactOne(candidate) => (vec![*candidate], Vec::new()),
+        Resolution::ExactMany(exact) => (exact, Vec::new()),
+    };
+    Ok((exact, fuzzy, exclusions))
 }
 
 /// Own the candidate's file, check the index's range against the text just
@@ -270,10 +191,7 @@ fn definition_of(
     symbol: &str,
     candidate: &Candidate,
 ) -> Result<DefinitionSet> {
-    let index = state
-        .index_of(&candidate.server)
-        .with_context(|| format!("{} is no longer running", candidate.server))?;
-    let server: &mut LspServer = state.server_mut(index);
+    let server = server_named(state, &candidate.server)?;
     let file = candidate
         .canonical_path
         .clone()
@@ -285,7 +203,7 @@ fn definition_of(
             "{}'s location for '{symbol}' ({}) does not match the file on disk; the server's \
              view was stale — retry after it re-indexes",
             candidate.server,
-            selection_line(root, &candidate.info.location.uri, range.start)
+            location_line(root, &candidate.info.location.uri, range.start)
         )
     })?;
     // The didOpen/didChange above precedes this request on the wire, so the
@@ -301,70 +219,194 @@ fn definition_of(
     })
 }
 
-/// The item's body, and a note only when it did not come the normal way.
+/// The single identity's body: own the target's file, check its range,
+/// shape, and render with any notes.
+fn render_definition(
+    state: &mut State,
+    root: &Path,
+    symbol: &str,
+    identity: &Identity,
+    target: &DefinitionTarget,
+) -> Result<String> {
+    let server = server_named(state, &identity.server)?;
+    let encoding = server.encoding();
+    let raw_path = candidate_path_of(target)?;
+    let target_path = std::fs::canonicalize(&raw_path).unwrap_or(raw_path);
+    let synced = server.sync(&target_path)?;
+    let text = synced.text;
+    verify_name_at(&text, target.selection_range, symbol, encoding).with_context(|| {
+        format!(
+            "{}'s definition target for '{symbol}' ({}) does not match the file on disk; the \
+             server's view was stale — retry after it re-indexes",
+            identity.server,
+            location_line(root, &target.uri, target.selection_range.start)
+        )
+    })?;
+    let language = server.language_id(&target_path);
+    let (extent, body, mut notes) = shape_body(server, &synced.uri, &text, target, &language)?;
+    if !target_path.starts_with(root) {
+        notes.push(format!(
+            "definition is outside the workspace root: {}",
+            target_path.display()
+        ));
+    }
+    let origin = &identity.candidates[0];
+    let kind = extent.as_ref().map_or(origin.info.kind, |extent| extent.kind);
+    let name = extent
+        .as_ref()
+        .map_or(origin.info.name.as_str(), |extent| extent.name.as_str());
+    let location = Location {
+        uri: target.uri.clone(),
+        range: target.selection_range,
+    };
+    Ok(render_resolved(
+        root,
+        server.adapter().kind_label(kind),
+        name,
+        &location,
+        &body,
+        &notes,
+    ))
+}
+
+/// The item's extent and body, and notes only when it did not come the
+/// normal way.
 ///
 /// Normal: the server's `documentSymbol` gives the extent of the innermost
 /// symbol at the definition, and tree-sitter widens its start over the
 /// leading doc comments, attributes or decorators the language keeps
 /// outside the item (nothing, for a language without a grammar here).
-/// Fallback, said in the note: with no extent from the server, the Rust
+/// Fallback, said in a note: with no extent from the server, the Rust
 /// grammar's own item search, or else the server's definition range as-is.
 /// Never a guessed item.
 fn shape_body(
     server: &LspServer,
     uri: &str,
-    target_text: &str,
+    text: &str,
     target: &DefinitionTarget,
     language: &str,
-) -> Result<(String, Option<String>)> {
+) -> Result<(Option<Extent>, String, Vec<String>)> {
     let encoding = server.encoding();
     // Ordered after the sync that precedes this call, so the outline is of
     // the text we read.
     let outline = server.document_symbol(uri)?;
     let extent = match &outline {
         Some(result) => outline::innermost_at(result, target.selection_range.start)
-            .with_context(|| format!("{} returned an unusable documentSymbol result", server.name()))?,
+            .with_context(|| {
+                format!(
+                    "{} returned an unusable documentSymbol result",
+                    server.name()
+                )
+            })?,
         None => None,
     };
     if let Some(extent) = extent {
-        let start = position_to_offset(target_text, extent.range.start, encoding)
+        let start = position_to_offset(text, extent.range.start, encoding)
             .context("the documentSymbol range starts outside the file as read from disk")?;
-        let end = position_to_offset(target_text, extent.range.end, encoding)
+        let end = position_to_offset(text, extent.range.end, encoding)
             .context("the documentSymbol range ends outside the file as read from disk")?;
         if start <= end {
-            let start = shape::extend_start(language, target_text, start)?;
-            return Ok((budget(&target_text[start..end]), None));
+            let start = shape::extend_start(language, text, start)?;
+            let (body, truncated) = budget(&text[start..end]);
+            return Ok((Some(extent), body, truncated.into_iter().collect()));
         }
     }
 
     let why = match outline {
         None => format!("{} does not support documentSymbol", server.name()),
-        Some(_) => format!("{}'s documentSymbol has no symbol at the definition", server.name()),
+        Some(_) => format!(
+            "{}'s documentSymbol has no symbol at the definition",
+            server.name()
+        ),
     };
-    let target_offset = position_to_offset(target_text, target.selection_range.start, encoding)
+    let offset = position_to_offset(text, target.selection_range.start, encoding)
         .context("definition target range is not inside the target file as read from disk")?;
     let shaped = if language == "rust" {
-        shape::item_at(target_text, target_offset)?
+        shape::item_at(text, offset)?
     } else {
         None
     };
-    Ok(match shaped {
+    let (raw, how) = match shaped {
         Some(item) => (
-            budget(item.decorated_text(target_text)),
-            Some(format!("{why}; item found by the Rust grammar instead")),
+            item.decorated_text(text).to_string(),
+            "item found by the Rust grammar instead",
         ),
-        None => {
-            let fallback = fallback_body(target_text, target, encoding).unwrap_or_else(|| {
-                "<no body could be extracted: the server's range did not resolve inside the \
-                 target file; nothing was guessed>"
-                    .to_string()
-            });
-            (
-                fallback,
-                Some(format!("{why}; the server's definition range is shown as-is")),
-            )
-        }
-    })
+        None => (
+            fallback_body(text, target, encoding).unwrap_or_default(),
+            "the server's definition range is shown as-is",
+        ),
+    };
+    let (body, truncated) = budget(&raw);
+    let mut notes = vec![format!("{why}; {how}")];
+    notes.extend(truncated);
+    Ok((None, body, notes))
+}
+
+/// Display data for each distinct definition: kind, name, location, and the
+/// signature its server's outline gives (best effort — a listing is not
+/// worth failing over a signature).
+fn ambiguous_entries(state: &mut State, identities: &[Identity]) -> Vec<AmbiguousEntry> {
+    identities
+        .iter()
+        .map(|identity| {
+            let origin = &identity.candidates[0];
+            let (location, signature) = match &identity.target {
+                Some(target) => (
+                    Location {
+                        uri: target.uri.clone(),
+                        range: target.selection_range,
+                    },
+                    signature_of(state, &identity.server, target),
+                ),
+                None => (origin.info.location.clone(), None),
+            };
+            AmbiguousEntry {
+                kind_label: kind_label(state, &identity.server, origin.info.kind),
+                name: origin.info.name.clone(),
+                server: identity.server.clone(),
+                location,
+                signature,
+            }
+        })
+        .collect()
+}
+
+/// The outline's `detail` for the symbol at `target`, else the first line of
+/// its extent. `None` when anything on the way fails.
+fn signature_of(state: &mut State, server: &str, target: &DefinitionTarget) -> Option<String> {
+    let server = server_named(state, server).ok()?;
+    let path = candidate_path_of(target).ok()?;
+    let synced = server.sync(&path).ok()?;
+    let outline = server.document_symbol(&synced.uri).ok()??;
+    let extent = outline::innermost_at(&outline, target.selection_range.start).ok()??;
+    if let Some(detail) = extent
+        .detail
+        .as_deref()
+        .map(str::trim)
+        .filter(|detail| !detail.is_empty())
+    {
+        return Some(detail.to_string());
+    }
+    let start = position_to_offset(&synced.text, extent.range.start, server.encoding()).ok()?;
+    synced.text[start..]
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
+}
+
+fn server_named<'a>(state: &'a mut State, name: &str) -> Result<&'a mut LspServer> {
+    let index = state
+        .index_of(name)
+        .with_context(|| format!("{name} is no longer running"))?;
+    Ok(state.server_mut(index))
+}
+
+fn kind_label(state: &State, server: &str, kind: SymbolKind) -> &'static str {
+    match state.index_of(server) {
+        Some(index) => state.server(index).adapter().kind_label(kind),
+        None => crate::lsp::adapter::default_kind_label(kind),
+    }
 }
 
 /// The filesystem path of a definition target, for reading and syncing.
@@ -388,9 +430,8 @@ fn validate_symbol(symbol: &str) -> Result<String> {
     }
     if trimmed.contains("::") || trimmed.contains('.') || trimmed.contains('/') {
         bail!(
-            "qualified paths (`{trimmed}`) are not supported in this slice: only bare symbol \
-             names are accepted and matched exactly. Pass the bare name — e.g. `new` for \
-             `Config::new`. This restriction is stated rather than silently relaxed."
+            "qualified paths (`{trimmed}`) are not supported: only bare symbol names are \
+             matched. Pass the bare name — e.g. `new` for `Config::new`."
         );
     }
     Ok(trimmed.to_string())
@@ -405,8 +446,8 @@ fn resolve_scope(root: &Path, user_path: &str) -> Result<PathBuf> {
     })?;
     if !(canonical == root || canonical.starts_with(root)) {
         bail!(
-            "scope path `{user_path}` escapes the workspace root ({}); the root is fixed at \
-             server start and `path` is only a scope inside it",
+            "scope path `{user_path}` escapes the workspace root ({}); `path` is only a scope \
+             inside it",
             root.display()
         );
     }

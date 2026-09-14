@@ -38,9 +38,12 @@ fn main() -> anyhow::Result<()> {
         }
         let mut state = state::State::new(root);
         let instructions = "\
-show resolves a symbol by bare name to its definition's source. Bare exact \
-names only in this slice; qualified paths are rejected, `path` only scopes \
-candidates under the server's fixed root.";
+show resolves a bare symbol name to its definition's decorated source. \
+Candidates come from the language servers' fuzzy symbol index and are not \
+proven exhaustive; only exact names resolve, and several distinct definitions \
+are listed rather than picked. Every answer is current: owned files are \
+re-synced from disk and the servers are waited for before each query. The \
+workspace root is fixed at server start; `path` only scopes inside it.";
         return mcplease::run::<tools::Tools, _>(
             &mut state,
             mcplease::ServerConfig::new(mcplease::server_info!()).with_instructions(instructions),

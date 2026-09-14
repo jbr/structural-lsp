@@ -143,6 +143,41 @@ pub trait Adapter: Send + Sync {
     fn extra_views(&self) -> Vec<&'static str> {
         Vec::new()
     }
+
+    /// The short word for a symbol kind in this server's language, for
+    /// result headers and listings: `fn`, `struct`, `def`, `class`…
+    fn kind_label(&self, kind: lsp_types::SymbolKind) -> &'static str {
+        default_kind_label(kind)
+    }
+}
+
+/// Language-neutral kind words; adapters override the ones their language
+/// spells differently.
+pub fn default_kind_label(kind: lsp_types::SymbolKind) -> &'static str {
+    use lsp_types::SymbolKind as K;
+    match kind {
+        K::FILE => "file",
+        K::MODULE => "module",
+        K::NAMESPACE => "namespace",
+        K::PACKAGE => "package",
+        K::CLASS => "class",
+        K::METHOD => "method",
+        K::PROPERTY => "property",
+        K::FIELD => "field",
+        K::CONSTRUCTOR => "constructor",
+        K::ENUM => "enum",
+        K::INTERFACE => "interface",
+        K::FUNCTION => "function",
+        K::VARIABLE => "variable",
+        K::CONSTANT => "constant",
+        K::STRING | K::NUMBER | K::BOOLEAN | K::ARRAY | K::OBJECT | K::KEY | K::NULL => "value",
+        K::ENUM_MEMBER => "enum member",
+        K::STRUCT => "struct",
+        K::EVENT => "event",
+        K::OPERATOR => "operator",
+        K::TYPE_PARAMETER => "type parameter",
+        _ => "symbol",
+    }
 }
 
 /// The honest capability set: what this client actually handles. Every

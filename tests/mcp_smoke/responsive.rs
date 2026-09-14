@@ -183,11 +183,7 @@ fn ping_and_overflow_are_answered_while_show_is_blocked() {
             .pointer("/result/content/0/text")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        assert!(text.contains("No symbol named"), "{text}");
-        assert!(
-            text.contains("fake-rust-analyzer 0"),
-            "the shim served it: {text}"
-        );
+        assert!(text.starts_with("no symbol named"), "{text}");
     }
 
     // Still responsive afterwards, and the direct path is untouched.
