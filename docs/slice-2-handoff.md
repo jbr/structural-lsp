@@ -102,7 +102,19 @@ Work in these checkpoints, each independently reviewed before the next:
    `show resolve` finds the function, `show Server` lists the spike's enum
    and the smoke tests' struct. (The plan's `Readiness` example is stale:
    that enum was deleted in 1B.) Item 4 was already in place from 1B.
-6. Items 6 through 8 of `docs/slice-2.md` — next.
+6. **Item 6: extents from `documentSymbol`, tree-sitter for decoration** —
+   done 2026-09-14 evening. `lsp::outline::innermost_at` reads either
+   result shape and picks the innermost symbol containing the definition;
+   `shape::extend_start` widens its start over Rust doc comments and
+   attributes or Python decorators (`tree-sitter-python` added); a language
+   without a grammar keeps the server's extent, which is already the whole
+   item for gopls. `item_at` remains only as the Rust fallback when a server
+   gives no extent, and the `body:` note appears only on a fallback path.
+   Python and Go bodies are now complete functions in the gated tests.
+7. Items 7 and 8 of `docs/slice-2.md` — next: the output rewrite (the
+   smoke tests assert on the current wrapper phrases and will change with
+   it) and CLI/crate hygiene (`--root` becomes cwd plus `STRUCTURAL_ROOT`;
+   the mounted `structural-dev` MCP command will need re-adding).
 
 ## Settled design for 1A
 

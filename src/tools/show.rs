@@ -29,7 +29,8 @@ use crate::lsp::definition::{
     Candidate, DefinitionSet, DefinitionTarget, Identity, NavigationProvenance, Partition,
     Resolution, group_by_target, parse_definition_result, partition, verify_name_at,
 };
-use crate::lsp::positions::{Encoding, position_to_offset};
+use crate::lsp::outline;
+use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::lsp::shape;
 use crate::state::State;
@@ -198,7 +199,8 @@ impl Tool<State> for Show {
         // candidates were checked.
         let raw_path = candidate_path_of(&target)?;
         let target_path = std::fs::canonicalize(&raw_path).unwrap_or(raw_path);
-        let target_text = server.sync(&target_path)?.text;
+        let synced = server.sync(&target_path)?;
+        let target_text = synced.text;
         verify_name_at(&target_text, target.selection_range, &symbol, encoding).with_context(
             || {
                 format!(
@@ -209,11 +211,8 @@ impl Tool<State> for Show {
                 )
             },
         )?;
-        let target_offset =
-            position_to_offset(&target_text, target.selection_range.start, encoding)
-                .context("definition target range is not inside the target file as read from disk")?;
         let language = server.language_id(&target_path);
-        let (body, body_provenance) = shape_body(&target_text, target_offset, &target, &language, encoding)?;
+        let (body, fallback_note) = shape_body(server, &synced.uri, &target_text, &target, &language)?;
 
         let origin = &identity.candidates[0];
         let mut text = String::new();
@@ -252,7 +251,9 @@ impl Tool<State> for Show {
         text.push('\n');
         text.push_str(&body);
         text.push('\n');
-        text.push_str(&format!("body: {body_provenance}\n"));
+        if let Some(note) = fallback_note {
+            text.push_str(&format!("body: {note}\n"));
+        }
         text.push_str(&exclusion_note(exclusions));
         text.push_str(&footer(&root, &servers_line));
         Ok(text)
@@ -300,46 +301,67 @@ fn definition_of(
     })
 }
 
-/// The decorated item containing the navigation point, for languages with a
-/// grammar (Rust only in this slice); otherwise, or when the shape is
-/// unresolved, the server's own range explicitly — never a guessed item.
+/// The item's body, and a note only when it did not come the normal way.
+///
+/// Normal: the server's `documentSymbol` gives the extent of the innermost
+/// symbol at the definition, and tree-sitter widens its start over the
+/// leading doc comments, attributes or decorators the language keeps
+/// outside the item (nothing, for a language without a grammar here).
+/// Fallback, said in the note: with no extent from the server, the Rust
+/// grammar's own item search, or else the server's definition range as-is.
+/// Never a guessed item.
 fn shape_body(
+    server: &LspServer,
+    uri: &str,
     target_text: &str,
-    target_offset: usize,
     target: &DefinitionTarget,
     language: &str,
-    encoding: Encoding,
-) -> Result<(String, String)> {
+) -> Result<(String, Option<String>)> {
+    let encoding = server.encoding();
+    // Ordered after the sync that precedes this call, so the outline is of
+    // the text we read.
+    let outline = server.document_symbol(uri)?;
+    let extent = match &outline {
+        Some(result) => outline::innermost_at(result, target.selection_range.start)
+            .with_context(|| format!("{} returned an unusable documentSymbol result", server.name()))?,
+        None => None,
+    };
+    if let Some(extent) = extent {
+        let start = position_to_offset(target_text, extent.range.start, encoding)
+            .context("the documentSymbol range starts outside the file as read from disk")?;
+        let end = position_to_offset(target_text, extent.range.end, encoding)
+            .context("the documentSymbol range ends outside the file as read from disk")?;
+        if start <= end {
+            let start = shape::extend_start(language, target_text, start)?;
+            return Ok((budget(&target_text[start..end]), None));
+        }
+    }
+
+    let why = match outline {
+        None => format!("{} does not support documentSymbol", server.name()),
+        Some(_) => format!("{}'s documentSymbol has no symbol at the definition", server.name()),
+    };
+    let target_offset = position_to_offset(target_text, target.selection_range.start, encoding)
+        .context("definition target range is not inside the target file as read from disk")?;
     let shaped = if language == "rust" {
         shape::item_at(target_text, target_offset)?
     } else {
         None
     };
     Ok(match shaped {
-        Some(item) => {
-            let header = match &item.name {
-                Some(name) => format!("{} {name}", item.display_kind),
-                None => item.header(target_text),
-            };
-            (
-                budget(item.decorated_text(target_text)),
-                format!("item body from tree-sitter shaping ({header})"),
-            )
-        }
+        Some(item) => (
+            budget(item.decorated_text(target_text)),
+            Some(format!("{why}; item found by the Rust grammar instead")),
+        ),
         None => {
             let fallback = fallback_body(target_text, target, encoding).unwrap_or_else(|| {
                 "<no body could be extracted: the server's range did not resolve inside the \
                  target file; nothing was guessed>"
                     .to_string()
             });
-            let why = if language == "rust" {
-                "shaping unavailable for this position".to_string()
-            } else {
-                format!("no shaping grammar for {language} in this slice")
-            };
             (
                 fallback,
-                format!("{why} — server range shown as-is, no item was guessed"),
+                Some(format!("{why}; the server's definition range is shown as-is")),
             )
         }
     })

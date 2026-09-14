@@ -1,11 +1,15 @@
-//! Tree-sitter shaping: the decorated Rust item containing a position.
+//! Tree-sitter shaping: decorating an item's extent, and finding the Rust
+//! item containing a position when the server gives no extent.
 //!
 //! This is the syntax half of the design's "LSP resolves, tree-sitter
-//! shapes": the language server says *where* a definition is; this module
-//! says *what the item there is* — its full text including the leading doc
-//! comments and outer attributes that belong to it (the same decorated-unit
+//! shapes". The item's *extent* normally comes from the server's
+//! `documentSymbol` ([`crate::lsp::outline`]); [`extend_start`] then widens
+//! its start backwards over the leading doc comments and outer attributes
+//! (Rust) or decorators (Python) that belong to it — the same decorated-unit
 //! rule as semantic-edit-mcp's `item.rs`, borrowed as an approach, not
-//! extracted as a shared crate).
+//! extracted as a shared crate. A language without a grammar keeps the
+//! server's extent. [`item_at`] is the fallback when a Rust server gives no
+//! extent at all.
 //!
 //! Selection semantics: the *smallest* enclosing named item wins. A position
 //! inside a method's signature or body yields the method, not its `impl`
@@ -79,6 +83,51 @@ impl Item {
     }
 }
 
+/// A grammar for a language id, when this crate carries one.
+fn grammar(language: &str) -> Option<tree_sitter::Language> {
+    match language {
+        "rust" => Some(tree_sitter_rust::LANGUAGE.into()),
+        "python" => Some(tree_sitter_python::LANGUAGE.into()),
+        _ => None,
+    }
+}
+
+/// Widen an item's start backwards over its leading decorations: outer doc
+/// comments and outer attributes in Rust, decorators in Python. `start` is
+/// the byte offset where the server says the item begins; the result is the
+/// same offset when nothing decorates it, when the server already included
+/// the decorations, or when the language has no grammar here.
+pub fn extend_start(language: &str, source: &str, start: usize) -> Result<usize> {
+    let Some(grammar) = grammar(language) else {
+        return Ok(start);
+    };
+    if start > source.len() || !source.is_char_boundary(start) {
+        anyhow::bail!(
+            "shaping offset {start} is not inside the {len}-byte source",
+            len = source.len()
+        );
+    }
+    let mut parser = Parser::new();
+    parser
+        .set_language(&grammar)
+        .with_context(|| format!("loading the {language} tree-sitter grammar"))?;
+    let tree = parser
+        .parse(source, None)
+        .context("parsing for shaping failed")?;
+    let Some(mut node) = tree.root_node().descendant_for_byte_range(start, start) else {
+        return Ok(start);
+    };
+    // The outermost node that begins exactly here: from the first token up
+    // to the item it starts.
+    while let Some(parent) = node.parent() {
+        if parent.start_byte() != start {
+            break;
+        }
+        node = parent;
+    }
+    Ok(decoration_start(language, source, node))
+}
+
 /// Find the smallest decorated item containing `byte_offset`.
 ///
 /// Returns `Ok(None)` when no item contains the position — a real answer,
@@ -117,7 +166,7 @@ pub fn item_at(source: &str, byte_offset: usize) -> Result<Option<Item>> {
     let name = node
         .child_by_field_name("name")
         .map(|name_node| source[name_node.start_byte()..name_node.end_byte()].to_string());
-    let decorated_start = decoration_start(source, node);
+    let decorated_start = decoration_start("rust", source, node);
     Ok(Some(Item {
         kind,
         display_kind: display,
@@ -127,26 +176,32 @@ pub fn item_at(source: &str, byte_offset: usize) -> Result<Option<Item>> {
     }))
 }
 
-/// Whether a sibling is part of the item's decoration: an outer attribute,
-/// or an *outer* doc comment (`///`, `/**`). Inner docs (`//!`, `/*!`) belong
-/// to the enclosing item and plain comments are not decoration, so both stop
-/// the run.
-fn is_outer_decoration(kind: &str, text: &str) -> bool {
-    match kind {
-        "line_comment" => text.starts_with("///") && !text.starts_with("////"),
-        "block_comment" => text.starts_with("/**") && !text.starts_with("/**!"),
-        "attribute_item" => true,
+/// Whether a sibling is part of the item's decoration. Rust: an outer
+/// attribute, or an *outer* doc comment (`///`, `/**`) — inner docs (`//!`,
+/// `/*!`) belong to the enclosing item and plain comments are not
+/// decoration, so both stop the run. Python: a decorator (the docstring is
+/// inside the body already).
+fn is_outer_decoration(language: &str, kind: &str, text: &str) -> bool {
+    match (language, kind) {
+        ("rust", "line_comment") => text.starts_with("///") && !text.starts_with("////"),
+        ("rust", "block_comment") => text.starts_with("/**") && !text.starts_with("/**!"),
+        ("rust", "attribute_item") => true,
+        ("python", "decorator") => true,
         _ => false,
     }
 }
 
-/// Walk backwards over the contiguous run of outer doc comments and outer
-/// attributes that decorate this item, returning the decorated start.
-fn decoration_start(source: &str, node: Node<'_>) -> usize {
+/// Walk backwards over the contiguous run of decorations that belong to this
+/// item, returning the decorated start.
+fn decoration_start(language: &str, source: &str, node: Node<'_>) -> usize {
     let mut start = node.start_byte();
     let mut sibling = node.prev_sibling();
     while let Some(prev) = sibling {
-        if is_outer_decoration(prev.kind(), &source[prev.start_byte()..prev.end_byte()]) {
+        if is_outer_decoration(
+            language,
+            prev.kind(),
+            &source[prev.start_byte()..prev.end_byte()],
+        ) {
             start = prev.start_byte();
             sibling = prev.prev_sibling();
         } else {
@@ -283,5 +338,49 @@ impl Config {
             .unwrap()
             .unwrap();
         assert!(module.decorated_text(source).contains("//! Inner doc."));
+    }
+
+    #[test]
+    fn extend_start_widens_over_rust_docs_and_attributes() {
+        let start = SOURCE.find("pub struct Config").unwrap();
+        let extended = extend_start("rust", SOURCE, start).unwrap();
+        assert!(
+            SOURCE[extended..].starts_with("/// Settings for a session."),
+            "{}",
+            &SOURCE[extended..extended + 40]
+        );
+        // Already at the decoration: unchanged.
+        assert_eq!(extend_start("rust", SOURCE, extended).unwrap(), extended);
+        // A documented method: widened to its doc comment, which then runs
+        // straight into the signature.
+        let doubled = SOURCE.find("pub fn doubled").unwrap();
+        let extended = extend_start("rust", SOURCE, doubled).unwrap();
+        assert!(extended < doubled, "widened");
+        assert!(
+            SOURCE[extended..].starts_with("///"),
+            "{}",
+            &SOURCE[extended..doubled]
+        );
+        assert!(
+            !SOURCE[extended..doubled].contains("\n\n"),
+            "contiguous decoration"
+        );
+    }
+
+    #[test]
+    fn extend_start_widens_over_python_decorators_and_leaves_other_languages_alone() {
+        let source =
+            "import functools\n\n@functools.cache\n@other\ndef choose(flag):\n    return 1\n";
+        let start = source.find("def choose").unwrap();
+        let extended = extend_start("python", source, start).unwrap();
+        assert!(
+            source[extended..].starts_with("@functools.cache"),
+            "{}",
+            &source[extended..]
+        );
+        // Starting at the first decorator already: unchanged.
+        assert_eq!(extend_start("python", source, extended).unwrap(), extended);
+        // No grammar: the server's start stands.
+        assert_eq!(extend_start("go", "func Greet() {}", 0).unwrap(), 0);
     }
 }

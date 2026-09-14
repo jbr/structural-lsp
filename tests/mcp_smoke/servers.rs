@@ -80,8 +80,16 @@ fn both_servers_answer_from_one_root() {
     assert!(python.contains("Resolved: 'choose'"), "{python}");
     assert!(python.contains("· pyright"), "{python}");
     assert!(python.contains("python/helper.py"), "{python}");
-    // No grammar for Python in this slice: the server's range, stated.
-    assert!(python.contains("no shaping grammar for python"), "{python}");
+    // The whole function, from pyright's documentSymbol extent.
+    assert!(
+        python.contains("def choose(flag: bool) -> int:"),
+        "{python}"
+    );
+    assert!(python.contains("return 1 if flag else 2"), "{python}");
+    assert!(
+        !python.contains("body:"),
+        "no fallback note on the normal path: {python}"
+    );
 
     // A file scope picks the server for its language outright.
     let by_file = show(&mut state, "make", Some("python/main.py"));

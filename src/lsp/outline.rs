@@ -1,0 +1,165 @@
+//! `textDocument/documentSymbol` as an outline: the innermost symbol whose
+//! range contains a position gives an item's extent and kind, for any
+//! server, without a grammar.
+//!
+//! Both result shapes are handled: the hierarchical `DocumentSymbol[]`
+//! (children nested, which is what every server here returns given
+//! `hierarchicalDocumentSymbolSupport`) and the flat `SymbolInformation[]`
+//! (no nesting; the smallest containing range wins).
+
+use anyhow::{Context, Result};
+use lsp_types::{DocumentSymbol, Position, Range, SymbolInformation, SymbolKind};
+use serde_json::Value;
+
+/// One symbol's extent from the outline.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Extent {
+    pub name: String,
+    pub kind: SymbolKind,
+    /// The whole item, as the server sees it.
+    pub range: Range,
+}
+
+/// The innermost symbol whose range contains `position`, or `None` when no
+/// symbol does (a position between items, or an empty outline). `Err` only
+/// for a result that is neither shape.
+pub fn innermost_at(result: &Value, position: Position) -> Result<Option<Extent>> {
+    if result.is_null() {
+        return Ok(None);
+    }
+    let Some(items) = result.as_array() else {
+        anyhow::bail!("documentSymbol result is neither null nor an array: {result}");
+    };
+    if items.is_empty() {
+        return Ok(None);
+    }
+    // `DocumentSymbol` has `range`; `SymbolInformation` has `location`.
+    if items[0].get("range").is_some() {
+        let symbols: Vec<DocumentSymbol> =
+            serde_json::from_value(result.clone()).context("parsing DocumentSymbol[]")?;
+        Ok(innermost_hierarchical(&symbols, position))
+    } else {
+        let symbols: Vec<SymbolInformation> =
+            serde_json::from_value(result.clone()).context("parsing SymbolInformation[]")?;
+        Ok(innermost_flat(&symbols, position))
+    }
+}
+
+fn contains(range: Range, position: Position) -> bool {
+    let after_start =
+        (position.line, position.character) >= (range.start.line, range.start.character);
+    let before_end = (position.line, position.character) <= (range.end.line, range.end.character);
+    after_start && before_end
+}
+
+fn innermost_hierarchical(symbols: &[DocumentSymbol], position: Position) -> Option<Extent> {
+    let symbol = symbols
+        .iter()
+        .find(|symbol| contains(symbol.range, position))?;
+    let deeper = symbol
+        .children
+        .as_deref()
+        .and_then(|children| innermost_hierarchical(children, position));
+    Some(deeper.unwrap_or_else(|| Extent {
+        name: symbol.name.clone(),
+        kind: symbol.kind,
+        range: symbol.range,
+    }))
+}
+
+fn innermost_flat(symbols: &[SymbolInformation], position: Position) -> Option<Extent> {
+    symbols
+        .iter()
+        .filter(|symbol| contains(symbol.location.range, position))
+        .min_by_key(|symbol| {
+            let range = symbol.location.range;
+            (
+                range.end.line - range.start.line,
+                range.end.character.wrapping_sub(range.start.character),
+            )
+        })
+        .map(|symbol| Extent {
+            name: symbol.name.clone(),
+            kind: symbol.kind,
+            range: symbol.location.range,
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn range(sl: u32, sc: u32, el: u32, ec: u32) -> Value {
+        json!({ "start": { "line": sl, "character": sc }, "end": { "line": el, "character": ec } })
+    }
+
+    #[test]
+    fn hierarchical_picks_the_innermost_containing_symbol() {
+        let outline = json!([
+            {
+                "name": "Config", "kind": 23,
+                "range": range(3, 0, 20, 1), "selectionRange": range(4, 11, 4, 17),
+                "children": [
+                    { "name": "limit", "kind": 8, "range": range(6, 4, 6, 20), "selectionRange": range(6, 8, 6, 13) },
+                    { "name": "new", "kind": 6, "range": range(9, 4, 12, 5), "selectionRange": range(10, 11, 10, 14) }
+                ]
+            },
+            { "name": "choose", "kind": 12, "range": range(22, 0, 25, 1), "selectionRange": range(23, 7, 23, 13) }
+        ]);
+        let inside_new = innermost_at(&outline, Position::new(10, 11))
+            .unwrap()
+            .unwrap();
+        assert_eq!(inside_new.name, "new");
+        assert_eq!(inside_new.kind, SymbolKind::METHOD);
+        assert_eq!(inside_new.range.start.line, 9);
+        // In the struct but in no child: the struct.
+        let on_struct = innermost_at(&outline, Position::new(4, 11))
+            .unwrap()
+            .unwrap();
+        assert_eq!(on_struct.name, "Config");
+        // Range ends are inclusive.
+        let at_end = innermost_at(&outline, Position::new(25, 1))
+            .unwrap()
+            .unwrap();
+        assert_eq!(at_end.name, "choose");
+        // Between items: nothing.
+        assert!(
+            innermost_at(&outline, Position::new(21, 0))
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn flat_picks_the_smallest_containing_symbol() {
+        let uri = "file:///ws/a.py";
+        let outline = json!([
+            { "name": "Config", "kind": 5, "location": { "uri": uri, "range": range(3, 0, 20, 1) } },
+            { "name": "doubled", "kind": 6, "location": { "uri": uri, "range": range(9, 4, 12, 5) } }
+        ]);
+        let extent = innermost_at(&outline, Position::new(10, 0))
+            .unwrap()
+            .unwrap();
+        assert_eq!(extent.name, "doubled");
+        let extent = innermost_at(&outline, Position::new(4, 0))
+            .unwrap()
+            .unwrap();
+        assert_eq!(extent.name, "Config");
+    }
+
+    #[test]
+    fn empty_or_null_outlines_are_none_and_garbage_is_an_error() {
+        assert!(
+            innermost_at(&Value::Null, Position::new(0, 0))
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            innermost_at(&json!([]), Position::new(0, 0))
+                .unwrap()
+                .is_none()
+        );
+        assert!(innermost_at(&json!({"x": 1}), Position::new(0, 0)).is_err());
+    }
+}

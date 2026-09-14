@@ -49,6 +49,8 @@ pub struct LspServer {
     server_info: Option<Value>,
     /// The position encoding the server picked from the adapter's offer.
     encoding: Encoding,
+    /// Whether the server advertised `documentSymbolProvider`.
+    document_symbols: bool,
     /// Documents opened with the server, keyed by URI, with the snapshot the
     /// server was last given.
     opened: HashMap<String, OpenedDoc>,
@@ -97,6 +99,10 @@ impl LspServer {
                 adapter.position_encodings().join(", ")
             ),
         };
+        let document_symbols = match result.pointer("/capabilities/documentSymbolProvider") {
+            None | Some(Value::Null) | Some(Value::Bool(false)) => false,
+            Some(_) => true,
+        };
         handle.notify("initialized", json!({}))?;
 
         Ok(Self {
@@ -105,6 +111,7 @@ impl LspServer {
             handle: Some(handle),
             server_info,
             encoding,
+            document_symbols,
             opened: HashMap::new(),
         })
     }
@@ -310,6 +317,21 @@ impl LspServer {
                 "position": position,
             }),
         )
+    }
+
+    /// `textDocument/documentSymbol` for an owned document, or `None` when
+    /// the server did not advertise the capability. The raw result is read
+    /// by [`crate::lsp::outline::innermost_at`].
+    pub fn document_symbol(&self, uri: &str) -> Result<Option<Value>> {
+        if !self.document_symbols {
+            return Ok(None);
+        }
+        self.handle()
+            .request(
+                "textDocument/documentSymbol",
+                json!({ "textDocument": { "uri": uri } }),
+            )
+            .map(Some)
     }
 
     /// Shut the server down (graceful, then kill). Idempotent.

@@ -54,7 +54,13 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     assert!(output.contains("Resolved: 'Greet'"), "{output}");
     assert!(output.contains("· gopls"), "{output}");
     assert!(output.contains("greet.go:4:6"), "{output}");
-    assert!(output.contains("no shaping grammar for go"), "{output}");
+    // The whole function from gopls's documentSymbol extent; no Go grammar
+    // here, so the server's extent stands as-is.
+    assert!(
+        output.contains("func Greet(name string) string {"),
+        "{output}"
+    );
+    assert!(output.contains("return \"hello \" + name"), "{output}");
 
     drop(state);
     let _ = std::fs::remove_dir_all(&root);
