@@ -341,3 +341,101 @@ fn verify_name_at_accepts_the_name_and_empty_ranges_only() {
         "inverted"
     );
 }
+
+fn candidate(server: &str, name: &str, path: &str, line: u32) -> Candidate {
+    Candidate {
+        server: server.to_string(),
+        canonical_path: Some(std::path::PathBuf::from(path)),
+        info: symbol_info(name, path, line),
+        exact: true,
+    }
+}
+
+fn target_at(path: &str, line: u32) -> DefinitionTarget {
+    DefinitionTarget {
+        uri: format!("file://{path}").parse().unwrap(),
+        selection_range: lsp_types::Range {
+            start: lsp_types::Position::new(line, 4),
+            end: lsp_types::Position::new(line, 10),
+        },
+        full_range: None,
+        provenance: NavigationProvenance::LocationRange,
+    }
+}
+
+#[test]
+fn candidates_with_one_definition_target_are_one_identity() {
+    // Two hits for `Config` (a declaration and, say, a re-export the server
+    // did not exclude) both navigate to the declaration: one identity, both
+    // candidates kept, the first one first.
+    let found = vec![
+        (
+            candidate("rust-analyzer", "Config", "/ws/src/lib.rs", 4),
+            DefinitionSet::One(target_at("/ws/src/lib.rs", 4)),
+        ),
+        (
+            candidate("rust-analyzer", "Config", "/ws/src/tests.rs", 9),
+            DefinitionSet::One(target_at("/ws/src/lib.rs", 4)),
+        ),
+    ];
+    let identities = group_by_target(found);
+    assert_eq!(identities.len(), 1);
+    assert_eq!(identities[0].candidates.len(), 2);
+    assert_eq!(
+        identities[0].candidates[0].info.location.range.start.line,
+        4
+    );
+    assert!(identities[0].target.is_some());
+}
+
+#[test]
+fn distinct_targets_stay_distinct_and_none_is_listed_not_dropped() {
+    let found = vec![
+        (
+            candidate("rust-analyzer", "Server", "/ws/src/spike.rs", 30),
+            DefinitionSet::One(target_at("/ws/src/spike.rs", 30)),
+        ),
+        (
+            candidate("rust-analyzer", "Server", "/ws/tests/stdio.rs", 7),
+            DefinitionSet::One(target_at("/ws/tests/stdio.rs", 7)),
+        ),
+        (
+            candidate("pyright", "Server", "/ws/py/server.py", 1),
+            DefinitionSet::None,
+        ),
+        // The same place, reached from another server, is not the same
+        // identity: identity is per server.
+        (
+            candidate("gopls", "Server", "/ws/src/spike.rs", 30),
+            DefinitionSet::Many(vec![
+                target_at("/ws/src/spike.rs", 30),
+                target_at("/ws/src/other.rs", 2),
+            ]),
+        ),
+    ];
+    let identities = group_by_target(found);
+    let summary: Vec<(String, Option<u32>)> = identities
+        .iter()
+        .map(|identity| {
+            (
+                identity.server.clone(),
+                identity
+                    .target
+                    .as_ref()
+                    .map(|target| target.selection_range.start.line),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("rust-analyzer".to_string(), Some(30)),
+            ("rust-analyzer".to_string(), Some(7)),
+            ("pyright".to_string(), None),
+            ("gopls".to_string(), Some(30)),
+            ("gopls".to_string(), Some(2)),
+        ]
+    );
+    assert_eq!(identities[2].kind(), identities[2].candidates[0].info.kind);
+    assert_eq!(identities[2].name(), "Server");
+}

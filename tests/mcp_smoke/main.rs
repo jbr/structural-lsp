@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 mod configured;
+mod identity;
 mod responsive;
 mod servers;
 mod stdio_server;

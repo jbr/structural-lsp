@@ -178,6 +178,70 @@ pub fn resolve(
     partition(symbol, server, infos, root, scope).into_candidates()
 }
 
+/// One *definition target* that exact-named candidates lead to: the unit of
+/// identity. Several `workspace/symbol` hits that navigate to the same place
+/// are one thing; hits that navigate to different places are different
+/// things, whatever their names.
+#[derive(Debug)]
+pub struct Identity {
+    pub server: String,
+    /// Where `textDocument/definition` went from the candidate(s), or `None`
+    /// when the server reported no definition for them.
+    pub target: Option<DefinitionTarget>,
+    /// Every exact candidate that led here, in discovery order. The first is
+    /// the one reported as the resolution's origin.
+    pub candidates: Vec<Candidate>,
+}
+
+impl Identity {
+    /// The kind of the first candidate that led here, for listings.
+    pub fn kind(&self) -> lsp_types::SymbolKind {
+        self.candidates[0].info.kind
+    }
+
+    pub fn name(&self) -> &str {
+        &self.candidates[0].info.name
+    }
+}
+
+/// Group each candidate's definition result by target. A candidate whose
+/// server reported several targets contributes to each; one with no target
+/// is its own identity, keyed by its own location, so it is listed rather
+/// than dropped. Order is first appearance.
+pub fn group_by_target(found: Vec<(Candidate, DefinitionSet)>) -> Vec<Identity> {
+    let mut identities: Vec<Identity> = Vec::new();
+    let mut place = |candidate: Candidate, target: Option<DefinitionTarget>| {
+        let key = |identity: &Identity| -> bool {
+            identity.server == candidate.server
+                && match (&identity.target, &target) {
+                    (Some(a), Some(b)) => a.uri == b.uri && a.selection_range == b.selection_range,
+                    (None, None) => identity.candidates[0].info.location == candidate.info.location,
+                    _ => false,
+                }
+        };
+        match identities.iter_mut().find(|identity| key(identity)) {
+            Some(identity) => identity.candidates.push(candidate),
+            None => identities.push(Identity {
+                server: candidate.server.clone(),
+                target,
+                candidates: vec![candidate],
+            }),
+        }
+    };
+    for (candidate, set) in found {
+        match set {
+            DefinitionSet::None => place(candidate, None),
+            DefinitionSet::One(target) => place(candidate, Some(target)),
+            DefinitionSet::Many(targets) => {
+                for target in targets {
+                    place(candidate.clone(), Some(target));
+                }
+            }
+        }
+    }
+    identities
+}
+
 /// Check that `name` is exactly what sits at `range` in `text` — the text
 /// the server was just given for that file. A server range that no longer
 /// names the symbol means the answer came from a stale index; the caller

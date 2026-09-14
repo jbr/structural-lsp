@@ -92,9 +92,17 @@ Work in these checkpoints, each independently reviewed before the next:
    server's range only until item 6. Lesson from the first attempt: do not
    make `fixtures/` itself a root — rust-analyzer also searches parent
    directories for a `Cargo.toml` and loads this repository instead.
-5. Items 4 through 8 of `docs/slice-2.md` — next. Item 4 (ownership) and
-   the range checks are already in place from 1B; item 5 still needs the
-   definition-target deduplication of exact matches.
+5. **Item 5: identity, not names** — done 2026-09-14 evening. Every exact
+   `workspace/symbol` hit is synced, range-checked, and sent to
+   `textDocument/definition`; `definition::group_by_target` folds the
+   results into `Identity` values keyed by server and target (a hit with no
+   definition is its own identity, listed not dropped). One identity is the
+   resolution; several are the ambiguous listing with kinds, target paths
+   and servers. `tests/mcp_smoke/identity.rs` runs against this repository:
+   `show resolve` finds the function, `show Server` lists the spike's enum
+   and the smoke tests' struct. (The plan's `Readiness` example is stale:
+   that enum was deleted in 1B.) Item 4 was already in place from 1B.
+6. Items 6 through 8 of `docs/slice-2.md` — next.
 
 ## Settled design for 1A
 

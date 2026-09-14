@@ -6,16 +6,15 @@ use crate::lsp::positions::Encoding;
 pub(super) fn render_not_found(
     root: &Path,
     symbol: &str,
-    out_of_root: usize,
-    out_of_scope: usize,
-    server_line: &str,
+    exclusions: Exclusions,
+    servers_line: &str,
 ) -> String {
     format!(
         "No symbol named '{symbol}' was reported by workspace/symbol.\n\
          This is the server's fuzzy index queried with the bare name; the result is not \
          proven exhaustive.\nNo definition was queried.\n{exclusions}{footer}",
-        exclusions = exclusion_note(out_of_root, out_of_scope),
-        footer = footer(root, server_line),
+        exclusions = exclusion_note(exclusions),
+        footer = footer(root, servers_line),
     )
 }
 
@@ -23,9 +22,8 @@ pub(super) fn render_fuzzy(
     root: &Path,
     symbol: &str,
     fuzzy: &[Candidate],
-    out_of_root: usize,
-    out_of_scope: usize,
-    server_line: &str,
+    exclusions: Exclusions,
+    servers_line: &str,
 ) -> String {
     let mut text = format!(
         "No exact match for '{symbol}'. Possible matches (fuzzy, as reported by \
@@ -33,95 +31,75 @@ pub(super) fn render_fuzzy(
     );
     text.push_str(&listed_candidates(root, fuzzy));
     text.push_str("Nothing was resolved; no definition was queried.\n");
-    text.push_str(&exclusion_note(out_of_root, out_of_scope));
-    text.push_str(&footer(root, server_line));
+    text.push_str(&exclusion_note(exclusions));
+    text.push_str(&footer(root, servers_line));
     text
 }
 
+/// Several distinct definition targets: all are listed (bounded) with their
+/// kinds and paths, none is picked, and no body is rendered — an arbitrary
+/// first pick would present a choice the caller never made.
 pub(super) fn render_ambiguous(
     root: &Path,
     symbol: &str,
-    exact: &[Candidate],
-    out_of_root: usize,
-    out_of_scope: usize,
-    server_line: &str,
+    identities: &[Identity],
+    exclusions: Exclusions,
+    servers_line: &str,
 ) -> String {
     let mut text = format!(
-        "Ambiguous: {} exact matches for '{symbol}' (as reported by workspace/symbol; not \
-         proven exhaustive):\n",
-        exact.len()
+        "Ambiguous: {} exact matches for '{symbol}' (distinct definitions, as reported by \
+         workspace/symbol and textDocument/definition; not proven exhaustive):\n",
+        identities.len()
     );
-    text.push_str(&listed_candidates(root, exact));
-    text.push_str(
-        "Nothing was resolved — no candidate was picked for you. Narrow with `path`; \
-         qualified-path targeting is not implemented in this slice.\n",
-    );
-    text.push_str(&exclusion_note(out_of_root, out_of_scope));
-    text.push_str(&footer(root, server_line));
-    text
-}
-
-/// More than one definition destination: all are listed (bounded), none is
-/// picked, and no body is rendered — an arbitrary first pick would present a
-/// choice the caller never made.
-pub(super) fn render_multiple_definitions(
-    root: &Path,
-    symbol: &str,
-    discovery: &Discovery,
-    targets: &[DefinitionTarget],
-    server_line: &str,
-) -> String {
-    let mut text = format!(
-        "The server reports {} definition locations for '{symbol}' (queried at {}):\n",
-        targets.len(),
-        selection_line(
-            root,
-            &discovery.candidate.info.location.uri,
-            discovery.candidate.info.location.range.start
-        )
-    );
-    for target in targets.iter().take(MAX_LISTED) {
+    for identity in identities.iter().take(MAX_LISTED) {
+        let origin = &identity.candidates[0];
+        let location = match &identity.target {
+            Some(target) => selection_line(root, &target.uri, target.selection_range.start),
+            None => format!(
+                "{} (no definition reported)",
+                selection_line(
+                    root,
+                    &origin.info.location.uri,
+                    origin.info.location.range.start
+                )
+            ),
+        };
         text.push_str(&format!(
-            "  - {} · {}\n",
-            selection_line(root, &target.uri, target.selection_range.start),
-            match target.provenance {
-                NavigationProvenance::LocationRange => "Location.range",
-                NavigationProvenance::LinkSelectionRange => "LocationLink.targetSelectionRange",
-                NavigationProvenance::LinkTargetRange => "LocationLink.targetRange fallback",
-            }
+            "  - {} ({:?}) · {location} · {}\n",
+            identity.name(),
+            identity.kind(),
+            identity.server
         ));
     }
-    if targets.len() > MAX_LISTED {
-        text.push_str(&format!("  … {} more\n", targets.len() - MAX_LISTED));
+    if identities.len() > MAX_LISTED {
+        text.push_str(&format!("  … {} more\n", identities.len() - MAX_LISTED));
     }
     text.push_str(
-        "No single body was rendered — the destinations were not picked for you. Narrow the \
-         query (a more specific bare name, or a `path` scope); qualified-path targeting is \
-         not implemented in this slice.\n",
+        "Nothing was resolved — no definition was picked for you. Narrow with `path`; \
+         qualified-path targeting is not implemented in this slice.\n",
     );
-    text.push_str(&exclusion_note(
-        discovery.out_of_root,
-        discovery.out_of_scope,
-    ));
-    text.push_str(&footer(root, server_line));
+    text.push_str(&exclusion_note(exclusions));
+    text.push_str(&footer(root, servers_line));
     text
 }
 
 pub(super) fn render_null_definition(
     root: &Path,
     symbol: &str,
-    discovery: &Discovery,
-    server_line: &str,
+    identity: &Identity,
+    servers_line: &str,
 ) -> String {
+    let origin = &identity.candidates[0];
     format!(
-        "The server reports no definition for '{symbol}' at {} (null/empty \
+        "{} reports no definition for '{symbol}' at {} (null/empty \
          textDocument/definition result).\n{footer}",
+        identity.server,
         selection_line(
             root,
-            &discovery.candidate.info.location.uri,
-            discovery.candidate.info.location.range.start
+            &origin.info.location.uri,
+            origin.info.location.range.start
         ),
-        footer = footer(root, server_line),
+        footer = footer(root, servers_line),
     )
 }
 
@@ -162,7 +140,11 @@ pub(super) fn selection_line(
 }
 
 /// What the filters excluded, named rather than silently dropped.
-pub(super) fn exclusion_note(out_of_root: usize, out_of_scope: usize) -> String {
+pub(super) fn exclusion_note(exclusions: Exclusions) -> String {
+    let Exclusions {
+        out_of_root,
+        out_of_scope,
+    } = exclusions;
     let mut note = String::new();
     if out_of_root > 0 {
         note.push_str(&format!(
