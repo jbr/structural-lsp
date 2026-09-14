@@ -45,8 +45,15 @@ pub(super) fn writer_loop(
 ) {
     let mut broken: Option<String> = None;
     for job in jobs {
+        let done = |inbox: &SyncSender<OwnerMsg>| {
+            if let Some(id) = job.tracked {
+                // Nonblocking, best effort: see `OwnerMsg::Written`.
+                let _ = inbox.try_send(OwnerMsg::Written(id));
+            }
+        };
         if let Some(reason) = &broken {
             acknowledge(job.ack, Err(anyhow!("frame not written: {reason}")));
+            done(&inbox);
             continue;
         }
         if terminating.load(Ordering::SeqCst) {
@@ -56,13 +63,18 @@ pub(super) fn writer_loop(
                     "connection terminated before the frame was written"
                 )),
             );
+            done(&inbox);
             continue;
         }
         match write_frame(&mut stdin, &job.frame) {
-            Ok(()) => acknowledge(job.ack, Ok(())),
+            Ok(()) => {
+                acknowledge(job.ack, Ok(()));
+                done(&inbox);
+            }
             Err(error) => {
                 let reason = format!("writing to the server failed: {error}");
                 acknowledge(job.ack, Err(anyhow!("{reason}")));
+                done(&inbox);
                 // Nonblocking: if the inbox is full the owner is draining it
                 // and will learn of the death from the reader's EOF instead.
                 let _ = inbox.try_send(OwnerMsg::WriteFailed(reason.clone()));

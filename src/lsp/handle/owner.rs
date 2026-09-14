@@ -19,6 +19,8 @@ pub(super) struct Owner {
     pub(super) next_id: i64,
     pub(super) pending: HashMap<RequestId, PendingRequest>,
     pub(super) waiters: Vec<Waiter>,
+    pub(super) writes: HashMap<u64, PendingWrite>,
+    pub(super) next_write: u64,
     pub(super) progress: ProgressTokens,
     pub(super) events: VecDeque<Value>,
     pub(super) last_incoming: Option<Instant>,
@@ -72,7 +74,9 @@ impl Owner {
             match self.inbox.recv_timeout(CONTROL_TICK) {
                 Ok(OwnerMsg::Admit(Command::Shutdown)) => return,
                 Ok(OwnerMsg::Admit(command)) => self.admit(command),
-                Ok(OwnerMsg::FromServer(_)) | Ok(OwnerMsg::WriteFailed(_)) => {}
+                Ok(OwnerMsg::FromServer(_))
+                | Ok(OwnerMsg::Written(_))
+                | Ok(OwnerMsg::WriteFailed(_)) => {}
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => return,
             }
@@ -93,6 +97,9 @@ impl Owner {
         match message {
             OwnerMsg::FromServer(incoming) => self.on_incoming(incoming),
             OwnerMsg::Admit(command) => self.admit(command),
+            OwnerMsg::Written(id) => {
+                self.writes.remove(&id);
+            }
             OwnerMsg::WriteFailed(reason) => self.fail(reason),
         }
     }
@@ -155,6 +162,7 @@ impl Owner {
                 let _ = self.enqueue(
                     &JsonRpcMessage::Notification(JsonRpcNotification::new("exit", None)),
                     None,
+                    None,
                 );
             }
             None => {}
@@ -200,7 +208,7 @@ impl Owner {
         };
         // A required frame: the server is waiting on it. Not queueable means
         // the connection cannot be kept coherent.
-        if let Err(reason) = self.enqueue(&JsonRpcMessage::Response(response), None) {
+        if let Err(reason) = self.enqueue(&JsonRpcMessage::Response(response), None, None) {
             self.fail(format!(
                 "could not queue the reply to server request {}: {reason}",
                 request.method
@@ -259,7 +267,7 @@ impl Owner {
                         backstop: self.settings.backstop,
                     },
                 );
-                if let Err(reason) = self.enqueue(&frame, None) {
+                if let Err(reason) = self.enqueue(&frame, None, None) {
                     self.pending.remove(&id);
                     let _ = reply.send(Err(anyhow!("{}: {method} not sent: {reason}", self.label)));
                 }
@@ -268,17 +276,39 @@ impl Owner {
                 method,
                 params,
                 ack,
-                admitted_at: _,
+                admitted_at,
             } => {
                 if let Some(reason) = self.refusal() {
                     let _ = ack.send(Err(anyhow!("{reason}")));
+                    return;
+                }
+                if self.operations() >= self.settings.pending_cap {
+                    let _ = ack.send(Err(anyhow!(
+                        "{}: {} operations already pending (cap); {method} not admitted",
+                        self.label,
+                        self.settings.pending_cap
+                    )));
                     return;
                 }
                 let frame = JsonRpcMessage::Notification(JsonRpcNotification::new(
                     method.as_str(),
                     Some(params),
                 ));
-                if let Err(reason) = self.enqueue(&frame, Some(ack.clone())) {
+                // Tracked so the backstop can fail a caller whose write is
+                // stuck behind a server that stopped reading.
+                let id = self.next_write;
+                self.next_write += 1;
+                self.writes.insert(
+                    id,
+                    PendingWrite {
+                        method: method.clone(),
+                        ack: ack.clone(),
+                        admitted_at,
+                        backstop: self.settings.backstop,
+                    },
+                );
+                if let Err(reason) = self.enqueue(&frame, Some(ack.clone()), Some(id)) {
+                    self.writes.remove(&id);
                     let _ = ack.send(Err(anyhow!("{}: {method} not sent: {reason}", self.label)));
                 }
             }
@@ -330,7 +360,7 @@ impl Owner {
     }
 
     pub(super) fn operations(&self) -> usize {
-        self.pending.len() + self.waiters.len()
+        self.pending.len() + self.waiters.len() + self.writes.len()
     }
 
     pub(super) fn ready(&self) -> bool {
@@ -366,12 +396,17 @@ impl Owner {
         &mut self,
         message: &JsonRpcMessage,
         ack: Option<Sender<Result<()>>>,
+        tracked: Option<u64>,
     ) -> Result<(), String> {
         let frame = serde_json::to_vec(message).map_err(|e| format!("serializing frame: {e}"))?;
         let Some(writer) = &self.writer_tx else {
             return Err("writer already released".to_string());
         };
-        match writer.try_send(WriterJob { frame, ack }) {
+        match writer.try_send(WriterJob {
+            frame,
+            ack,
+            tracked,
+        }) {
             Ok(()) => {
                 if self.debug {
                     eprintln!("[lsp>] {}", truncated(message));

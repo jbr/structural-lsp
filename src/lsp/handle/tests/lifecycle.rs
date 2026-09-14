@@ -62,6 +62,7 @@ fn shutdown_is_prompt_with_the_writer_genuinely_blocked() {
         error.to_string().contains("not written")
             || error.to_string().contains("failed")
             || error.to_string().contains("closed")
+            || error.to_string().contains("shut down")
             || error.to_string().contains("shutting down"),
         "{error}"
     );
@@ -200,5 +201,37 @@ fn a_notification_flood_between_calls_is_consumed_and_bounded() {
     );
     // The owner is healthy afterwards.
     assert_eq!(handle.request("test/echo", json!({})).unwrap(), json!("ok"));
+    handle.shutdown().unwrap();
+}
+
+#[test]
+fn a_blocked_notification_trips_the_backstop_on_its_own() {
+    needs_python!();
+    let mock = Mock::new("blocked-notify");
+    let settings = Settings {
+        backstop: Duration::from_secs(1),
+        ..test_settings()
+    };
+    let handle = mock.spawn(settings, Box::new(StandardIdle));
+    initialize(&handle);
+    handle.request("test/stop-reading", json!({})).unwrap();
+
+    // Nothing else is pending: only the notification's own backstop can
+    // fail it, and it must — a caller is never left hanging on a server
+    // that stopped reading.
+    let big = "x".repeat(600 * 1024);
+    let started = Instant::now();
+    let error = handle
+        .notify("test/big", json!({ "payload": big }))
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("inactivity backstop") && error.to_string().contains("test/big"),
+        "{error}"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "failed after {:?}",
+        started.elapsed()
+    );
     handle.shutdown().unwrap();
 }

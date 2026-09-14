@@ -56,7 +56,6 @@ pub struct Item {
     /// The grammar's own node kind (e.g. `struct_item`). Owned: the node
     /// borrows the parse tree, which does not outlive this function. Read by
     /// the shaping tests; `display_kind` carries the same fact for the tool.
-    #[allow(dead_code)]
     pub kind: String,
     /// Display kind (e.g. `struct`).
     pub display_kind: &'static str,

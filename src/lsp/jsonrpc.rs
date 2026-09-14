@@ -74,7 +74,6 @@ pub fn response_result(
 /// so the serialized frame carries `"result": null` (present, never omitted).
 /// Used by the null-reply serialization test; the client's reply path goes
 /// through `JsonRpcResponse::success` directly.
-#[allow(dead_code)]
 pub fn null_success(id: RequestId) -> JsonRpcResponse {
     JsonRpcResponse::success(id, Value::Null)
 }

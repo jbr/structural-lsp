@@ -126,10 +126,20 @@ Work in these checkpoints, each independently reviewed before the next:
    @decl` comment, so the test asserts equality with the file rather than
    the plan's "under 200 bytes" (27 bytes of wrapper meets the "under 150
    beyond the body" target).
-8. Item 8 of `docs/slice-2.md` — next: mcplease owns argv (`--root`
-   becomes cwd plus `STRUCTURAL_ROOT`; the mounted `structural-dev` MCP
-   command will need re-adding), the spike moves to `src/bin/spike`, the
-   crate-wide `allow(dead_code)` goes, `show`'s `execute` under 80 lines.
+8. **Item 8: CLI and crate hygiene** — done 2026-09-14 evening. `main.rs`
+   is the root lookup (cwd, or `STRUCTURAL_ROOT`) plus `mcplease::run`, so
+   `structural serve` and `structural show choose` both work and the
+   fixture's direct call prints the one-header result. The spike is
+   `src/bin/spike` (`cargo run --bin spike`). The crate-wide and per-item
+   `allow(dead_code)` are gone; the one thing they hid was real: a
+   notification's `admitted_at` was never read, so a `notify` blocked
+   behind a server that stopped reading had no backstop of its own. The
+   owner now tracks pending writes and expires them like requests (the
+   writer reports completion best-effort; a lost report lingers until its
+   backstop, harmlessly), with a test. `execute` is 43 lines.
+
+Slice 2 is complete. The mounted `structural-dev` MCP command must become
+`structural serve` with `STRUCTURAL_ROOT` set (or the project dir as cwd).
 
 ## Settled design for 1A
 

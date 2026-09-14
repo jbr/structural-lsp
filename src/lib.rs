@@ -2,8 +2,6 @@
 //! serves, without `mcplease::run`'s stdio ownership. Mirrors
 //! semantic-edit-mcp's `lib.rs` pattern.
 
-#![allow(dead_code)]
-
 pub mod config;
 pub mod lsp;
 pub mod state;

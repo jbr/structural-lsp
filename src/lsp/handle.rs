@@ -229,6 +229,8 @@ impl ServerHandle {
             next_id: 1,
             pending: HashMap::new(),
             waiters: Vec::new(),
+            writes: HashMap::new(),
+            next_write: 0,
             progress,
             events: VecDeque::new(),
             last_incoming: None,
@@ -382,6 +384,10 @@ impl Drop for ServerHandle {
 enum OwnerMsg {
     FromServer(Incoming),
     Admit(Command),
+    /// The writer wrote (or acknowledged) this tracked frame; the owner may
+    /// forget it. Best effort: a full inbox loses it, and the entry then
+    /// lingers until its backstop, harmlessly.
+    Written(u64),
     /// The writer could not write a frame; the connection is dead.
     WriteFailed(String),
 }
@@ -418,6 +424,18 @@ struct WriterJob {
     /// Present for notifications: the caller is told the real outcome of
     /// the write. Requests carry none — their outcome is the response.
     ack: Option<Sender<Result<()>>>,
+    /// The owner's id for a tracked write, reported back once done.
+    tracked: Option<u64>,
+}
+
+/// A notification handed to the writer whose caller is still waiting for
+/// the ack: the inactivity backstop applies to it as to a request, so a
+/// write blocked on a wedged server fails its caller instead of hanging.
+struct PendingWrite {
+    method: String,
+    ack: Sender<Result<()>>,
+    admitted_at: Instant,
+    backstop: Duration,
 }
 
 struct PendingRequest {

@@ -1,4 +1,5 @@
-//! The throwaway raw-LSP spike (design.md "First step", experiments C and F).
+//! The throwaway raw-LSP spike (design.md "First step", experiments C and F),
+//! as its own binary: `cargo run --bin spike -- --server rust`.
 //!
 //! It starts one or both language servers, waits as long as it reasonably can
 //! for readiness, opens the annotated fixture files, and dumps the raw
@@ -22,9 +23,11 @@ use structural::lsp::adapter::{Adapter, pyright::Pyright, rust_analyzer::RustAna
 use structural::lsp::handle::{ServerHandle, Settings};
 
 mod annotations;
+mod cli;
 mod protocol;
 mod report;
 use annotations::*;
+use cli::{print_usage, run_spike};
 use protocol::*;
 use report::*;
 
@@ -439,6 +442,17 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
         events: manifest["events"].as_array().map(Vec::len).unwrap_or(0),
         dir,
     })
+}
+
+fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.first().map(String::as_str) {
+        Some("-h" | "--help" | "help") => {
+            print_usage();
+            Ok(())
+        }
+        _ => run_spike(&args),
+    }
 }
 
 #[cfg(test)]

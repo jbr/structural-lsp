@@ -20,7 +20,7 @@ impl Server {
     /// scripted `rust-analyzer` first.
     pub fn start_with_env(root: &str, env: &[(&str, String)]) -> Self {
         let mut command = Command::new(env!("CARGO_BIN_EXE_structural"));
-        command.args(["serve", "--root", root]);
+        command.arg("serve").env("STRUCTURAL_ROOT", root);
         for (name, value) in env {
             command.env(name, value);
         }

@@ -66,7 +66,6 @@ fn terminator_len(text: &str, index: usize) -> Option<usize> {
 /// Convert a byte offset to an LSP position. The reverse half of
 /// [`position_to_offset`]; the tool path only needs the reverse conversion —
 /// this direction is exercised by the round-trip tests.
-#[allow(dead_code)]
 pub fn offset_to_position(text: &str, offset: usize, encoding: Encoding) -> Result<Position> {
     if offset > text.len() {
         bail!(

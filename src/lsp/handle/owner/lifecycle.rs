@@ -26,7 +26,15 @@ impl Owner {
             .waiters
             .iter()
             .map(|w| self.deadline_for(w.admitted_at, w.backstop));
-        pending.chain(waiters).chain(self.shutting_down).min()
+        let writes = self
+            .writes
+            .values()
+            .map(|w| self.deadline_for(w.admitted_at, w.backstop));
+        pending
+            .chain(waiters)
+            .chain(writes)
+            .chain(self.shutting_down)
+            .min()
     }
 
     pub(super) fn expire_overdue(&mut self) {
@@ -57,6 +65,21 @@ impl Owner {
             } else {
                 self.waiters.push(waiter);
             }
+        }
+        let overdue: Vec<u64> = self
+            .writes
+            .iter()
+            .filter(|(_, w)| now >= self.deadline_for(w.admitted_at, w.backstop))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in overdue {
+            let write = self.writes.remove(&id).expect("collected above");
+            let error = self.inactivity_error(
+                &format!("{} (a notification write)", write.method),
+                write.admitted_at,
+                write.backstop,
+            );
+            let _ = write.ack.send(Err(error));
         }
     }
 
@@ -102,7 +125,7 @@ impl Owner {
             },
         );
         let frame = JsonRpcMessage::Request(JsonRpcRequest::new(id.clone(), "shutdown", None));
-        if self.enqueue(&frame, None).is_err() {
+        if self.enqueue(&frame, None, None).is_err() {
             // Best effort only; the kill at the end of the window is the
             // guarantee.
             self.pending.remove(&id);
@@ -130,6 +153,12 @@ impl Owner {
             let _ = waiter
                 .reply
                 .send(Err(anyhow!("{reason} (readiness wait was pending)")));
+        }
+        for (_, write) in self.writes.drain() {
+            let _ = write.ack.send(Err(anyhow!(
+                "{reason} ({} was being written)",
+                write.method
+            )));
         }
     }
 

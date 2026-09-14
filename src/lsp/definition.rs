@@ -33,7 +33,6 @@ pub struct Candidate {
     /// matches are resolvable; fuzzy matches are shown as possible matches,
     /// never silently resolved. Read by the resolution tests; the Resolution
     /// variant carries the same fact for the tool layer.
-    #[allow(dead_code)]
     pub exact: bool,
 }
 

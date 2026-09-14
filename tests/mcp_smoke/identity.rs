@@ -34,14 +34,17 @@ fn exact_hits_are_deduplicated_by_definition_target() {
     );
     assert!(resolve.contains("pub fn resolve("), "{resolve}");
 
-    // `Server` is two things: the spike's enum and the smoke tests' struct.
+    // `Server` is two things: the spike binary's enum and the smoke tests' struct.
     // Two exact hits, two distinct targets, listed with kinds and paths.
     let server = show(&mut state, "Server");
     assert!(
         server.starts_with("ambiguous: 2 definitions of 'Server'"),
         "{server}"
     );
-    assert!(server.contains("enum Server · src/spike.rs:"), "{server}");
+    assert!(
+        server.contains("enum Server · src/bin/spike/main.rs:"),
+        "{server}"
+    );
     assert!(
         server.contains("struct Server · tests/mcp_smoke/stdio_server.rs:"),
         "{server}"

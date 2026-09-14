@@ -115,7 +115,8 @@ fn in_process_show_resolves_the_fixture_struct() {
 #[test]
 fn stdio_mcp_serves_and_reports_actionable_error_without_rust_analyzer() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_structural"))
-        .args(["serve", "--root", rust_fixture_root().to_str().unwrap()])
+        .arg("serve")
+        .env("STRUCTURAL_ROOT", rust_fixture_root())
         .env("PATH", "")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
