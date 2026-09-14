@@ -561,8 +561,6 @@ dependencies = [
 [[package]]
 name = "mcplease"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac6b4fdeb3dfcd998219a3f9cc95b0d11f0ae203a89f5e6912921ed7f25a3ec0"
 dependencies = [
  "anyhow",
  "clap",

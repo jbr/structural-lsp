@@ -7,6 +7,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+mod responsive;
 mod stdio_server;
 use stdio_server::Server;
 

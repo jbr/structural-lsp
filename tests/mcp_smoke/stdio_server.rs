@@ -13,8 +13,18 @@ pub struct Server {
 
 impl Server {
     pub fn start(root: &str) -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_structural"))
-            .args(["serve", "--root", root])
+        Self::start_with_env(root, &[])
+    }
+
+    /// Start with extra environment variables, e.g. a `PATH` that puts a
+    /// scripted `rust-analyzer` first.
+    pub fn start_with_env(root: &str, env: &[(&str, String)]) -> Self {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_structural"));
+        command.args(["serve", "--root", root]);
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -30,12 +40,29 @@ impl Server {
     }
 
     pub fn request(&mut self, method: &str, params: Value) -> Value {
+        let id = self.send(method, params);
+        self.wait_for(id)
+    }
+
+    /// Write a request and return its id without waiting for the response.
+    pub fn send(&mut self, method: &str, params: Value) -> u64 {
         self.next_id += 1;
         let id = self.next_id;
         let frame = json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
         writeln!(self.stdin, "{frame}").expect("writing the request");
         self.stdin.flush().unwrap();
-        self.wait_for(id)
+        id
+    }
+
+    /// The next response line, whatever its id.
+    pub fn next_response(&mut self) -> Value {
+        let mut line = String::new();
+        let bytes = self
+            .stdout
+            .read_line(&mut line)
+            .expect("reading the response line");
+        assert!(bytes > 0, "server closed stdout");
+        serde_json::from_str(&line).expect("a JSON line")
     }
 
     pub fn notify(&mut self, method: &str, params: Value) {

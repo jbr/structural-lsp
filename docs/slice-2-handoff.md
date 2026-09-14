@@ -66,8 +66,17 @@ Work in these checkpoints, each independently reviewed before the next:
    so the check is exact equality. All six real-server tests pass with no
    retries. Output wording is unchanged pending item 7; the readiness
    evidence lines are simply gone.
-3. **MCP integration** against the patched mcplease (see above) — next.
-4. Items 3 through 8 of `docs/slice-2.md` as written.
+3. **MCP integration** against the patched mcplease — done 2026-09-14
+   evening. `Cargo.toml` carries `[patch.crates-io] mcplease = { path =
+   "../mcplease" }` (remove it, and bump the dependency, when mcplease is
+   released). `tests/mcp_smoke/responsive.rs` proves the contract with a
+   scripted `rust-analyzer` shim on `PATH` that stays not-ready until a
+   release file appears: a `ping` sent behind a blocked `show` is answered
+   first; sixteen further calls queue; four more are refused at once with
+   `-32000 "server busy"`; after release the blocked call and the sixteen
+   queued ones answer in arrival order. Not `--ignored`: it needs only
+   `python3`. The real-server smokes pass unchanged on the patched crate.
+4. Items 3 through 8 of `docs/slice-2.md` as written — next.
 
 ## Settled design for 1A
 
