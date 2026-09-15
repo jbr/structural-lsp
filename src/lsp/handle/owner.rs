@@ -31,6 +31,8 @@ pub(super) struct Owner {
     /// The graceful window's deadline once shutdown has begun.
     pub(super) shutting_down: Option<Instant>,
     pub(super) shutdown_acknowledged: bool,
+    /// A liveness probe has been sent and not yet answered.
+    pub(super) probe_outstanding: bool,
     pub(super) debug: bool,
 }
 
@@ -57,6 +59,7 @@ impl Owner {
             // After every wake, message or not, so continuous traffic
             // cannot starve the backstop.
             self.expire_overdue();
+            self.probe_if_silent();
         }
         self.teardown();
         self.serve_refusals();
@@ -156,6 +159,12 @@ impl Owner {
         match pending.reply {
             Some(reply) => {
                 let _ = reply.send(outcome);
+            }
+            None if pending.method == PROBE_METHOD => {
+                // Any answer, and `MethodNotFound` is the expected one, is
+                // the liveness the probe asked for; `touch` already counted
+                // it. Nothing else to do with it.
+                self.probe_outstanding = false;
             }
             None if pending.method == "shutdown" => {
                 self.shutdown_acknowledged = true;

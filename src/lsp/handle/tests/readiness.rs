@@ -187,3 +187,60 @@ fn a_long_idle_connection_accepts_a_new_request() {
     assert_eq!(handle.request("test/echo", json!({})).unwrap(), json!("ok"));
     handle.shutdown().unwrap();
 }
+
+#[test]
+fn a_quiet_server_that_answers_probes_is_waited_for() {
+    needs_python!();
+    let mock = Mock::new("quiet");
+    let settings = Settings {
+        backstop: Duration::from_secs(1),
+        probe_after: Duration::from_millis(300),
+        ..test_settings()
+    };
+    let handle = mock.spawn(settings, Box::new(StandardIdle));
+    initialize(&handle);
+    // Three seconds of silence inside an open token, against a one-second
+    // backstop: only the probes keep the wait alive, and they must.
+    handle
+        .request("test/quiet-work", json!({ "secs": 3 }))
+        .unwrap();
+    let started = Instant::now();
+    handle.wait_ready(Duration::from_secs(1)).unwrap();
+    assert!(
+        started.elapsed() >= Duration::from_millis(2500),
+        "{:?}",
+        started.elapsed()
+    );
+    let events = handle.capture_events().unwrap();
+    let probes = events
+        .iter()
+        .filter(|e| e["method"] == crate::lsp::handle::PROBE_METHOD)
+        .count();
+    assert!(probes >= 3, "probes sent during the silence: {probes}");
+    handle.shutdown().unwrap();
+}
+
+#[test]
+fn a_deaf_server_trips_the_backstop_with_the_probe_named() {
+    needs_python!();
+    let mock = Mock::new("deaf");
+    let settings = Settings {
+        backstop: Duration::from_secs(1),
+        probe_after: Duration::from_millis(300),
+        ..test_settings()
+    };
+    let handle = mock.spawn(settings, Box::new(StandardIdle));
+    initialize(&handle);
+    handle.request("test/deaf-work", json!({})).unwrap();
+    let started = Instant::now();
+    let error = handle.wait_ready(Duration::from_secs(1)).unwrap_err();
+    let text = error.to_string();
+    assert!(text.contains("inactivity backstop"), "{text}");
+    assert!(text.contains("liveness probe went unanswered"), "{text}");
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "{:?}",
+        started.elapsed()
+    );
+    handle.shutdown().unwrap();
+}

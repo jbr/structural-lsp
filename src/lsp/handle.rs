@@ -20,6 +20,17 @@
 //! server sends (progress reports included), and trips only when the server
 //! has said nothing for that long. A busy server is not a broken one.
 //!
+//! A busy server can also be a *quiet* one: rust-analyzer says nothing for
+//! minutes while cargo builds proc-macros, with a progress token open. So
+//! while work is pending and the server has been silent for
+//! [`Settings::probe_after`], the owner sends a **liveness probe** — a
+//! request with a `$/`-prefixed method the server does not implement, which
+//! the LSP spec obliges it to answer with `MethodNotFound`. The answer is
+//! activity like any other and extends every deadline. The backstop thus
+//! means "silent *and* not answering probes for this long". A server that
+//! answers probes but never finishes is alive and stuck, which no timer can
+//! tell from slow; that boundary is deliberate.
+//!
 //! # Bounds
 //!
 //! Every queue is bounded and admission never blocks a caller: the owner's
@@ -80,6 +91,10 @@ mod tests;
 /// not on a tick.
 pub const CONTROL_TICK: Duration = Duration::from_millis(250);
 
+/// The liveness probe: a method no server implements, chosen under the `$/`
+/// prefix so the spec's `MethodNotFound` obligation applies.
+pub const PROBE_METHOD: &str = "$/structural/ping";
+
 /// How long teardown polls a worker thread before detaching it. A reader
 /// can be stranded by a grandchild that inherited the server's stdout; the
 /// process is exiting anyway and the thread holds nothing but a dead pipe.
@@ -102,6 +117,9 @@ pub struct Settings {
     pub event_cap: usize,
     /// The inactivity backstop for requests and notifications.
     pub backstop: Duration,
+    /// Silence, with work pending, before a liveness probe is sent. One
+    /// probe is outstanding at a time; the next follows another silence.
+    pub probe_after: Duration,
     /// How long a graceful `shutdown`/`exit` may take before the child is
     /// killed regardless.
     pub shutdown_grace: Duration,
@@ -116,6 +134,7 @@ impl Default for Settings {
             progress_token_cap: 4096,
             event_cap: 2000,
             backstop: Duration::from_secs(90),
+            probe_after: Duration::from_secs(20),
             shutdown_grace: Duration::from_secs(5),
         }
     }
@@ -239,6 +258,7 @@ impl ServerHandle {
             failed: None,
             shutting_down: None,
             shutdown_acknowledged: false,
+            probe_outstanding: false,
             debug: wire_debug_enabled(),
         };
         let owner = thread::Builder::new()

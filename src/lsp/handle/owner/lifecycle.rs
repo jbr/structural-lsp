@@ -17,6 +17,57 @@ impl Owner {
         since + backstop
     }
 
+    /// When the next liveness probe is due: `probe_after` past the last
+    /// server message (or the earliest admission, if the server has not
+    /// spoken since), while caller work is pending and no probe is out.
+    fn probe_due(&self) -> Option<Instant> {
+        if self.probe_outstanding || self.failed.is_some() || self.shutting_down.is_some() {
+            return None;
+        }
+        let earliest_admission = self
+            .pending
+            .values()
+            .filter(|p| p.reply.is_some())
+            .map(|p| p.admitted_at)
+            .chain(self.waiters.iter().map(|w| w.admitted_at))
+            .chain(self.writes.values().map(|w| w.admitted_at))
+            .min()?;
+        let since = match self.last_incoming {
+            Some(last) if last > earliest_admission => last,
+            _ => earliest_admission,
+        };
+        Some(since + self.settings.probe_after)
+    }
+
+    /// Send the liveness probe when it is due. Best effort: an overloaded
+    /// writer just means the next wake tries again.
+    pub(super) fn probe_if_silent(&mut self) {
+        let Some(due) = self.probe_due() else {
+            return;
+        };
+        if Instant::now() < due {
+            return;
+        }
+        let id = RequestId::Integer(self.next_id);
+        self.next_id += 1;
+        let frame = JsonRpcMessage::Request(JsonRpcRequest::new(id.clone(), PROBE_METHOD, None));
+        self.pending.insert(
+            id.clone(),
+            PendingRequest {
+                method: PROBE_METHOD.to_string(),
+                reply: None,
+                admitted_at: Instant::now(),
+                backstop: self.settings.backstop,
+            },
+        );
+        match self.enqueue(&frame, None, None) {
+            Ok(()) => self.probe_outstanding = true,
+            Err(_) => {
+                self.pending.remove(&id);
+            }
+        }
+    }
+
     pub(super) fn next_deadline(&self) -> Option<Instant> {
         let pending = self
             .pending
@@ -34,6 +85,7 @@ impl Owner {
             .chain(waiters)
             .chain(writes)
             .chain(self.shutting_down)
+            .chain(self.probe_due())
             .min()
     }
 
@@ -50,6 +102,10 @@ impl Owner {
             .collect();
         for id in overdue {
             let pending = self.pending.remove(&id).expect("collected above");
+            if pending.method == PROBE_METHOD {
+                self.probe_outstanding = false;
+                continue;
+            }
             let error =
                 self.inactivity_error(&pending.method, pending.admitted_at, pending.backstop);
             if let Some(reply) = pending.reply {
@@ -93,8 +149,13 @@ impl Owner {
             Some(last) if last > admitted_at => last,
             _ => admitted_at,
         };
+        let probed = if self.probe_outstanding {
+            "; a liveness probe went unanswered"
+        } else {
+            ""
+        };
         anyhow!(
-            "no message from {} for {:.1?} (inactivity backstop {:?}) while {what} was pending, admitted {:.1?} ago; last message: {}",
+            "no message from {} for {:.1?} (inactivity backstop {:?}) while {what} was pending, admitted {:.1?} ago; last message: {}{probed}",
             self.label,
             since.elapsed(),
             backstop,

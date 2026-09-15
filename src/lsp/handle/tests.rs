@@ -34,6 +34,7 @@ fn python() -> Option<String> {
 /// only the tests that set their own can trip it.
 fn test_settings() -> Settings {
     Settings {
+        probe_after: Duration::from_secs(60),
         inbound_cap: 64,
         writer_cap: 8,
         pending_cap: 8,
@@ -143,7 +144,7 @@ impl ServerHandle {
 
 /// The scripted server behind every test above.
 const MOCK_PY: &str = r#"
-import json, sys, time
+import json, sys, threading, time
 
 def read_headers():
     length = None
@@ -163,10 +164,13 @@ def read_msg():
         return None
     return json.loads(sys.stdin.buffer.read(length))
 
+lock = threading.Lock()
+
 def send(obj):
     data = json.dumps(obj).encode()
-    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(data) + data)
-    sys.stdout.buffer.flush()
+    with lock:
+        sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(data) + data)
+        sys.stdout.buffer.flush()
 
 def reply(msg, result):
     send({"jsonrpc": "2.0", "id": msg["id"], "result": result})
@@ -231,6 +235,21 @@ while True:
             for i in range(int(params["n"])):
                 notify("test/noise", {"i": i})
             progress(token, "end")
+        elif method == "test/quiet-work":
+            # Work in progress and nothing said for a while, but the loop
+            # keeps answering requests (a probe gets the default reply).
+            progress("quiet", "begin")
+            reply(msg, "working")
+            def finish(secs):
+                time.sleep(secs)
+                progress("quiet", "end")
+            threading.Thread(target=finish, args=(params["secs"],), daemon=True).start()
+        elif method == "test/deaf-work":
+            # Work in progress, then the loop stops answering anything.
+            progress("deaf", "begin")
+            reply(msg, "working")
+            while True:
+                time.sleep(3600)
         elif method == "test/stop-reading":
             reply(msg, "stopped")
             while True:

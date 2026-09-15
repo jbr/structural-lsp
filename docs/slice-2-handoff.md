@@ -141,16 +141,18 @@ Work in these checkpoints, each independently reviewed before the next:
 Slice 2 is complete. The mounted `structural-dev` MCP command is
 `structural serve` with the project dir as cwd (or `STRUCTURAL_ROOT`).
 
-**Open after the efference check** (numbers in `docs/slice-2.md`,
+**Resolved after the efference check** (numbers in `docs/slice-2.md`,
 "Verification"): rust-analyzer goes silent for 196 s and 229 s during
 efference's cold index while a progress token is open, so the 90 s
-inactivity backstop trips a healthy server. Proposed and not yet decided:
-on silence with work pending, send a `$/structural/ping` request, which
-the spec obliges the server to answer with `MethodNotFound`; the backstop
-then means "silent *and* not answering a ping for N seconds", and
-rust-analyzer's adapter default rises. A server that answers pings but
-never finishes is "alive but stuck", which no timer can tell from slow
-without a total bound the design rejects.
+inactivity backstop alone tripped a healthy server. The transport now
+sends a liveness probe, `$/structural/ping`, after 20 s of silence with
+work pending (`handle::PROBE_METHOD`, `Settings::probe_after`); the
+spec-mandated `MethodNotFound` answer is activity. Two mock tests cover
+it: a quiet server that answers probes is waited through a one-second
+backstop, and a deaf one trips it with the probe named in the error. The
+90 s default stands. What the probe cannot tell apart is a server that
+answers but never finishes; that is alive and stuck, and no timer can
+separate it from slow without a total bound the design rejects.
 
 ## Settled design for 1A
 

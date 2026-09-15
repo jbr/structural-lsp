@@ -11,8 +11,9 @@ An MCP server that gives coding agents LSP-backed code intelligence. Design in
   go in a sibling module (`foo.rs` + `foo/tests.rs`), rendering apart from
   logic, helpers apart from the flow that uses them.
 - Correct and current beats fast. No settle sleeps, retry loops, or partial
-  answers on a timer; the only timer is the inactivity backstop
-  (`docs/slice-2.md`, "Governing rule").
+  answers on a timer; the only timer is the inactivity backstop, and a
+  silent server is probed with `$/structural/ping` before it can trip
+  (`docs/slice-2.md`, "Governing rule" and "Verification").
 - Server-specific strings and methods live in `src/lsp/adapter/`, never in
   the generic transport or server. Adding a server means adding an adapter
   there or a `[servers.<name>]` entry in `structural.toml`.

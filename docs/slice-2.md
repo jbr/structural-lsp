@@ -285,12 +285,19 @@ scratch copy of efference with `backstop_secs = 900`:
 | silent stretches from rust-analyzer during that cold index | 196 s (3 s to 199 s) and 229 s (200 s to 429 s); every other gap under 20 s |
 | with the default 90 s backstop, two runs | both failed at 99 s and 100 s with the inactivity error, last message a `$/progress` |
 | warm | not measurable this way: the process exits after one call and rust-analyzer keeps no index across processes; a second cold run took the same time |
+| cold, real `../efference` tree, default settings (90 s backstop, 20 s probe) | answered after 388 s; the same four definitions, each with its first line of code as the signature; rust-analyzer logs one `ERROR unknown request: … "$/structural/ping"` line per probe, which is the expected cost |
 
-So the proposed 90 s default is wrong for rust-analyzer on a project this
+So the 90 s default alone is wrong for rust-analyzer on a project this
 size: it goes quiet for minutes while cargo runs build scripts and
-proc-macros, with a progress token open the whole time. The timer needs a
-liveness probe (a `$/`-prefixed request the server must answer with
-`MethodNotFound`) and a higher per-adapter default; decision pending.
+proc-macros, with a progress token open the whole time. Decided and done
+the same day: while work is pending and the server has been silent for
+20 s (`Settings::probe_after`), the transport sends `$/structural/ping`, a
+request the LSP spec obliges every server to answer with `MethodNotFound`;
+the answer is activity and extends every deadline. The backstop keeps its
+90 s default and now means "silent *and* not answering probes". A server
+that answers probes but never finishes is alive and stuck, which no timer
+can tell from slow; that is the boundary. Re-run against the real
+efference tree with the defaults: see the row below.
 
 ## Questions for jbr, only if they block
 
