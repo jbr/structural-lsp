@@ -10,7 +10,7 @@ fn repo_root() -> PathBuf {
     std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap()
 }
 
-fn show(state: &mut structural::state::State, symbol: &str) -> String {
+fn show(state: &mut structural::session::Session, symbol: &str) -> String {
     structural::tools::Show {
         symbol: Some(symbol.to_string()),
         path: None,
@@ -25,7 +25,7 @@ fn show(state: &mut structural::state::State, symbol: &str) -> String {
 #[test]
 #[ignore = "spawns rust-analyzer on this repository; run explicitly with -- --ignored"]
 fn exact_hits_are_deduplicated_by_definition_target() {
-    let mut state = structural::state::State::new(repo_root());
+    let mut state = structural::session::Session::new(repo_root());
 
     // `resolve` the function is reachable even though `Resolution` and
     // friends fuzzy-match it (the adapter asks for all symbols, not types

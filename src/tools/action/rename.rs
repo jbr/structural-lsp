@@ -4,7 +4,7 @@
 use super::Mode;
 use super::render::{FileChange, Prepared, render_applied, render_preview};
 use crate::lsp::edits::{self, FileRename, Located, Plan};
-use crate::state::State;
+use crate::workspace::Workspace;
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
 use anyhow::{Context, Result, bail};
@@ -13,7 +13,7 @@ use serde_json::Value;
 use std::path::Path;
 
 pub(super) fn run(
-    state: &mut State,
+    state: &mut Workspace,
     target: Target<'_>,
     new_name: &str,
     mode: Mode,
@@ -180,7 +180,7 @@ fn prepare(
 /// step: a moved file is closed under its old path on whichever server
 /// owned it, then every owned document is re-synced and the target's
 /// server is waited for, so the next query sees the rename.
-fn apply(state: &mut State, root: &Path, server: &str, prepared: &Prepared) -> Result<()> {
+fn apply(state: &mut Workspace, root: &Path, server: &str, prepared: &Prepared) -> Result<()> {
     for file in &prepared.files {
         std::fs::write(&file.path, &file.after)
             .with_context(|| format!("writing {}", file.display))?;

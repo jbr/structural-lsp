@@ -4,7 +4,7 @@
 use super::unsupported;
 use crate::lsp::definition::candidate_path;
 use crate::lsp::positions::Encoding;
-use crate::state::State;
+use crate::workspace::Workspace;
 use crate::tools::hits::source_line;
 use crate::tools::listing::{header, location_line};
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
@@ -24,7 +24,7 @@ struct Call {
     from_ranges: Vec<Range>,
 }
 
-pub(super) fn run(state: &mut State, root: &Path, target: Target<'_>, incoming: bool) -> Result<String> {
+pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>, incoming: bool) -> Result<String> {
     let view = if incoming {
         super::INCOMING_CALLS
     } else {

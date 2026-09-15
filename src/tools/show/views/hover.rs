@@ -4,7 +4,7 @@
 //! of the expression the focus spans; other servers answer at its start.
 
 use super::unsupported;
-use crate::state::State;
+use crate::workspace::Workspace;
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::anchored::{Focus, locate_focus};
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
@@ -13,7 +13,7 @@ use lsp_types::Range;
 use serde_json::Value;
 use std::path::Path;
 
-pub(super) fn run(state: &mut State, root: &Path, target: Target<'_>) -> Result<String> {
+pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>) -> Result<String> {
     if let Some(anchor) = target.anchor {
         if target.symbol.is_some() {
             bail!("give either `symbol` or `anchor`, not both");

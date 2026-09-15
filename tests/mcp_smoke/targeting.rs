@@ -20,7 +20,7 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &mut structural::state::State,
+    state: &mut structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<&str>,
@@ -37,7 +37,7 @@ fn show(
 }
 
 fn uses(
-    state: &mut structural::state::State,
+    state: &mut structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<&str>,
@@ -56,7 +56,7 @@ fn uses(
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn qualified_names_and_anchors_target_what_bare_names_cannot() {
     let root = scratch_root();
-    let mut state = structural::state::State::new(root.clone());
+    let mut state = structural::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // The bare name is two things; each qualifier picks one; a wrong

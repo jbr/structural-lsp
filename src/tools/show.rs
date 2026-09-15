@@ -10,11 +10,12 @@ use crate::lsp::definition::DefinitionTarget;
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::lsp::shape;
-use crate::state::State;
+use crate::session::Session;
 use crate::tools::listing::{header, location_line};
 use crate::tools::resolution::{
     Described, Found, Resolved, Target, describe, resolve_target, server_named, sync_target,
 };
+use crate::workspace::Workspace;
 use anyhow::{Context, Result};
 use mcplease::{
     traits::{Tool, ToolMeta},
@@ -26,8 +27,8 @@ use std::path::Path;
 
 mod render;
 mod views;
-pub use views::target_header;
 use render::*;
+pub use views::target_header;
 
 /// Upper bound on the returned item body. Omission is noted, never silent;
 /// pagination is not implemented in this slice.
@@ -106,10 +107,11 @@ impl ToolMeta for Show {
     }
 }
 
-impl Tool<State> for Show {
+impl Tool<Session> for Show {
     type Output = String;
 
-    fn execute(self, state: &mut State, _context: &RequestContext) -> Result<Self::Output> {
+    fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
+        let mut state = session.workspace();
         let root = state.root().to_path_buf();
         let target = Target {
             symbol: self.symbol.as_deref(),
@@ -118,18 +120,20 @@ impl Tool<State> for Show {
             focus: self.focus.as_deref(),
         };
         match self.view.as_deref().map(str::trim) {
-            None | Some("") | Some(views::DEFINITION) => match resolve_target(state, target)? {
-                Resolved::Listed(listing) => Ok(listing),
-                Resolved::One(found) => render_definition(state, &root, &found),
-            },
-            Some(view) => views::run(state, view, target),
+            None | Some("") | Some(views::DEFINITION) => {
+                match resolve_target(&mut state, target)? {
+                    Resolved::Listed(listing) => Ok(listing),
+                    Resolved::One(found) => render_definition(&mut state, &root, &found),
+                }
+            }
+            Some(view) => views::run(&mut state, view, target),
         }
     }
 }
 
 /// The single identity's body: own the target's file, check its range,
 /// shape, and render with any notes.
-fn render_definition(state: &mut State, root: &Path, found: &Found) -> Result<String> {
+fn render_definition(state: &mut Workspace, root: &Path, found: &Found) -> Result<String> {
     let (target_path, synced) = sync_target(state, root, found)?;
     let server = server_named(state, &found.identity.server)?;
     let text = synced.text;
@@ -138,7 +142,14 @@ fn render_definition(state: &mut State, root: &Path, found: &Found) -> Result<St
     // the text we read.
     let outline = server.document_symbol(&synced.uri)?;
     let described = describe(server, outline.as_ref(), found)?;
-    let (body, mut notes) = shape_body(server, outline.is_some(), &text, found, &described, &language)?;
+    let (body, mut notes) = shape_body(
+        server,
+        outline.is_some(),
+        &text,
+        found,
+        &described,
+        &language,
+    )?;
     if !target_path.starts_with(root) {
         notes.push(format!(
             "definition is outside the workspace root: {}",

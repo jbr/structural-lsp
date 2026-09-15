@@ -12,11 +12,12 @@
 //! it. The enclosing item comes from the file's `documentSymbol`.
 
 use crate::lsp::references::{group_by_file, parse_references_result};
-use crate::state::State;
+use crate::session::Session;
 use crate::tools::listing::{header, location_line, relative_display};
 use crate::tools::resolution::{
     Found, Resolved, Target, describe, resolve_target, server_named, sync_target,
 };
+use crate::workspace::Workspace;
 use anyhow::{Context, Result};
 use mcplease::{
     traits::{Tool, ToolMeta},
@@ -94,10 +95,11 @@ impl ToolMeta for Uses {
     }
 }
 
-impl Tool<State> for Uses {
+impl Tool<Session> for Uses {
     type Output = String;
 
-    fn execute(self, state: &mut State, _context: &RequestContext) -> Result<Self::Output> {
+    fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
+        let mut state = session.workspace();
         let root = state.root().to_path_buf();
         let target = Target {
             symbol: self.symbol.as_deref(),
@@ -105,15 +107,15 @@ impl Tool<State> for Uses {
             anchor: self.anchor.as_deref(),
             focus: self.focus.as_deref(),
         };
-        match resolve_target(state, target)? {
+        match resolve_target(&mut state, target)? {
             Resolved::Listed(listing) => Ok(listing),
-            Resolved::One(found) => references_of(state, &root, &found),
+            Resolved::One(found) => references_of(&mut state, &root, &found),
         }
     }
 }
 
 /// The references of one identity, rendered.
-fn references_of(state: &mut State, root: &Path, found: &Found) -> Result<String> {
+fn references_of(state: &mut Workspace, root: &Path, found: &Found) -> Result<String> {
     let (_, synced) = sync_target(state, root, found)?;
     let server = server_named(state, &found.identity.server)?;
     let target = &found.target;
@@ -131,8 +133,12 @@ fn references_of(state: &mut State, root: &Path, found: &Found) -> Result<String
     // started work.
     server.wait_ready()?;
     let raw = server.references(&synced.uri, target.selection_range.start)?;
-    let hits = parse_references_result(raw)
-        .with_context(|| format!("{} returned an unrecognizable references result", server.name()))?;
+    let hits = parse_references_result(raw).with_context(|| {
+        format!(
+            "{} returned an unrecognizable references result",
+            server.name()
+        )
+    })?;
     let grouped = group_by_file(hits, root, &target.uri, target.selection_range);
     let total = grouped.total();
     let file_count = grouped.files.len();
@@ -173,7 +179,13 @@ fn references_of(state: &mut State, root: &Path, found: &Found) -> Result<String
         ));
     }
     Ok(render_uses(
-        &header, total, file_count, &production, &tests, MAX_HITS, &notes,
+        &header,
+        total,
+        file_count,
+        &production,
+        &tests,
+        MAX_HITS,
+        &notes,
     ))
 }
 

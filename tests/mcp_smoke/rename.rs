@@ -29,7 +29,7 @@ fn scratch_root() -> PathBuf {
 }
 
 fn action(
-    state: &mut structural::state::State,
+    state: &mut structural::session::Session,
     symbol: &str,
     path: &str,
     new_name: &str,
@@ -50,7 +50,7 @@ fn action(
     .unwrap_or_else(|error| panic!("rename {symbol} → {new_name} ({mode:?}): {error:#}"))
 }
 
-fn show(state: &mut structural::state::State, symbol: &str, path: &str) -> String {
+fn show(state: &mut structural::session::Session, symbol: &str, path: &str) -> String {
     structural::tools::Show {
         symbol: Some(symbol.to_string()),
         path: Some(path.to_string()),
@@ -74,7 +74,7 @@ fn digest_of(preview: &str) -> String {
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn rename_previews_then_applies_with_a_matching_digest() {
     let root = scratch_root();
-    let mut state = structural::state::State::new(root.clone());
+    let mut state = structural::session::Session::new(root.clone());
 
     // Preview: the definition and the call, both lines shown, nothing
     // written.

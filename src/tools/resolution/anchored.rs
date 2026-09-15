@@ -9,8 +9,8 @@ use crate::lsp::definition::{
     DefinitionSet, DefinitionTarget, Identity, Origin, candidate_path, parse_definition_result,
 };
 use crate::lsp::positions::{Encoding, offset_to_position, position_to_offset};
-use crate::state::State;
 use crate::tools::listing::relative_display;
+use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use lsp_types::{Location, Range, Uri};
 use std::path::{Path, PathBuf};
@@ -32,7 +32,7 @@ pub struct Focus {
 /// focus in the text just read. The server has been waited for; the sync
 /// precedes any query the caller sends.
 pub fn locate_focus(
-    state: &mut State,
+    state: &mut Workspace,
     root: &Path,
     scope: Option<PathBuf>,
     anchor: &str,
@@ -74,7 +74,7 @@ pub fn locate_focus(
 }
 
 pub(super) fn from_anchor(
-    state: &mut State,
+    state: &mut Workspace,
     root: &Path,
     scope: Option<PathBuf>,
     anchor: &str,

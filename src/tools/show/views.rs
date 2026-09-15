@@ -2,7 +2,7 @@
 //! and the three answers an unavailable view gets (unknown name, not
 //! supported by the server, not applicable to the target).
 
-use crate::state::State;
+use crate::workspace::Workspace;
 use crate::tools::listing::{header, location_line, relative_display};
 use crate::tools::resolution::anchored::locate_focus;
 use crate::tools::resolution::{
@@ -37,7 +37,7 @@ pub const STANDARD: [&str; 6] = [
 pub const MAX_LINES: usize = 200;
 
 /// Answer `view` for `target`. `definition` is not handled here.
-pub fn run(state: &mut State, view: &str, target: Target<'_>) -> Result<String> {
+pub fn run(state: &mut Workspace, view: &str, target: Target<'_>) -> Result<String> {
     let root = state.root().to_path_buf();
     match view {
         OUTLINE => outline::run(state, &root, target),
@@ -50,7 +50,7 @@ pub fn run(state: &mut State, view: &str, target: Target<'_>) -> Result<String> 
 }
 
 /// A view an adapter exposes, or the unknown-view answer.
-fn extra(state: &mut State, root: &Path, view: &str, target: Target<'_>) -> Result<String> {
+fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> Result<String> {
     let offered: Vec<String> = state
         .servers()
         .iter()
@@ -123,7 +123,7 @@ fn extra(state: &mut State, root: &Path, view: &str, target: Target<'_>) -> Resu
 }
 
 /// `show`'s header for a resolved target, from its file's outline.
-pub fn target_header(state: &mut State, root: &Path, found: &Found) -> Result<String> {
+pub fn target_header(state: &mut Workspace, root: &Path, found: &Found) -> Result<String> {
     let (_, synced) = sync_target(state, root, found)?;
     let server = server_named(state, &found.identity.server)?;
     let outline = server.document_symbol(&synced.uri)?;

@@ -41,7 +41,7 @@ fn rust_fixture_root() -> PathBuf {
 #[test]
 #[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
 fn in_process_show_resolves_the_fixture_struct() {
-    let mut state = structural::state::State::new(rust_fixture_root());
+    let mut state = structural::session::Session::new(rust_fixture_root());
     // `choose` is unique in the fixture, so the positive path resolves.
     let output = structural::tools::Show {
         symbol: Some("choose".to_string()),
@@ -489,8 +489,8 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
     )
     .unwrap();
 
-    let mut state = structural::state::State::new(scratch.clone());
-    let show = |state: &mut structural::state::State, symbol: &str| {
+    let mut state = structural::session::Session::new(scratch.clone());
+    let show = |state: &mut structural::session::Session, symbol: &str| {
         structural::tools::Show {
             symbol: Some(symbol.to_string()),
             path: None,

@@ -1,10 +1,13 @@
-//! The MCP server's state: one fixed workspace root and the registry of
-//! language servers running for it, started eagerly at server start so
-//! indexing begins immediately.
+//! One workspace: a canonical root and the language servers running for it.
 //!
-//! Concurrency: mcplease dispatches tool calls on a single thread and hands
-//! this state over as `&mut State`, so document ownership is serialized by
-//! construction. Each server runs on its own threads behind its handle.
+//! A workspace is created by the [`crate::host::Host`], which keys it by its
+//! canonical root and shares it between every agent or caller bound to it.
+//! Servers start eagerly at creation so indexing begins immediately.
+//!
+//! Concurrency: the host wraps this in a mutex, so document ownership is
+//! serialized per workspace — the same guarantee `&mut State` gave the MCP
+//! dispatcher — without serializing unrelated workspaces. Each server runs on
+//! its own threads behind its handle.
 
 use crate::config::Config;
 use crate::lsp::adapter::language_for;
@@ -19,9 +22,9 @@ pub struct Unavailable {
     pub hint: String,
 }
 
-pub struct State {
-    /// The canonical workspace root, fixed at server start. `show`'s `path`
-    /// is a scope inside it; it never changes a server's root.
+pub struct Workspace {
+    /// The canonical workspace root, fixed when the workspace is acquired.
+    /// A tool's `path` is a scope inside it; it never changes a server's root.
     root: PathBuf,
     servers: Vec<LspServer>,
     unavailable: Vec<Unavailable>,
@@ -30,7 +33,7 @@ pub struct State {
     config_error: Option<String>,
 }
 
-impl State {
+impl Workspace {
     /// Load `structural.toml` and start every configured server whose
     /// command can be spawned. Failure to start any one of them is recorded,
     /// not fatal: the MCP surface must still come up and serve `tools/list`,
@@ -39,33 +42,33 @@ impl State {
     /// spellings; if that fails (root missing) the raw root is kept for the
     /// error.
     pub fn new(root: PathBuf) -> Self {
-        let root = std::fs::canonicalize(&root).unwrap_or(root);
-        let mut state = Self {
+        let root = canonical_root(&root);
+        let mut workspace = Self {
             root,
             servers: Vec::new(),
             unavailable: Vec::new(),
             config_error: None,
         };
-        let adapters = match Config::load(&state.root).and_then(Config::adapters) {
+        let adapters = match Config::load(&workspace.root).and_then(Config::adapters) {
             Ok(adapters) => adapters,
             Err(error) => {
-                state.config_error = Some(format!("{error:#}"));
-                return state;
+                workspace.config_error = Some(format!("{error:#}"));
+                return workspace;
             }
         };
         for adapter in adapters {
             let name = adapter.name().to_string();
             let hint = adapter.install_hint();
-            match LspServer::start(adapter, &state.root) {
-                Ok(server) => state.servers.push(server),
-                Err(error) => state.unavailable.push(Unavailable {
+            match LspServer::start(adapter, &workspace.root) {
+                Ok(server) => workspace.servers.push(server),
+                Err(error) => workspace.unavailable.push(Unavailable {
                     name,
                     reason: format!("{error:#}"),
                     hint,
                 }),
             }
         }
-        state
+        workspace
     }
 
     pub fn root(&self) -> &Path {
@@ -136,6 +139,14 @@ impl State {
             .join(" · ")
     }
 
+    /// Stop every server. Idempotent, and each server's drop does the same, so
+    /// a workspace dropped without this still reaps its children.
+    pub fn shutdown(&mut self) {
+        for server in &mut self.servers {
+            server.shutdown();
+        }
+    }
+
     fn nothing_running(&self) -> String {
         let mut text = String::from("no language server is running.\n");
         if let Some(error) = &self.config_error {
@@ -150,4 +161,12 @@ impl State {
         text.push_str("Restart this server after installing or configuring one.");
         text
     }
+}
+
+/// The canonical spelling of a root, so two callers naming the same tree
+/// through different paths — a symlink, a relative path, a trailing slash —
+/// land on one workspace. A root that cannot be canonicalized (it does not
+/// exist) is kept as given, for the error to report.
+pub fn canonical_root(root: &Path) -> PathBuf {
+    std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf())
 }

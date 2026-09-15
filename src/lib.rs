@@ -3,6 +3,10 @@
 //! semantic-edit-mcp's `lib.rs` pattern.
 
 pub mod config;
+pub mod host;
 pub mod lsp;
-pub mod state;
+pub mod session;
+#[cfg(test)]
+mod test_support;
 pub mod tools;
+pub mod workspace;

@@ -17,7 +17,7 @@ fn scratch_root() -> PathBuf {
     std::fs::canonicalize(root).unwrap()
 }
 
-fn show(state: &mut structural::state::State, symbol: &str, path: Option<&str>) -> String {
+fn show(state: &mut structural::session::Session, symbol: &str, path: Option<&str>) -> String {
     structural::tools::Show {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
@@ -29,7 +29,7 @@ fn show(state: &mut structural::state::State, symbol: &str, path: Option<&str>) 
     .unwrap_or_else(|error| panic!("show {symbol} {path:?}: {error:#}"))
 }
 
-fn uses(state: &mut structural::state::State, symbol: &str, path: Option<&str>) -> String {
+fn uses(state: &mut structural::session::Session, symbol: &str, path: Option<&str>) -> String {
     structural::tools::Uses {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
@@ -44,18 +44,23 @@ fn uses(state: &mut structural::state::State, symbol: &str, path: Option<&str>) 
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn both_servers_answer_from_one_root() {
     let root = scratch_root();
-    let mut state = structural::state::State::new(root.clone());
-    let names: Vec<&str> = state.servers().iter().map(|s| s.name()).collect();
-    assert_eq!(
-        names,
-        ["rust-analyzer", "pyright"],
-        "both built-ins started: unavailable = {:?}",
-        state
-            .unavailable()
-            .iter()
-            .map(|u| format!("{}: {}", u.name, u.reason))
-            .collect::<Vec<_>>()
-    );
+    let mut state = structural::session::Session::new(root.clone());
+    // Scoped: the guard borrows the server names, and the calls below take
+    // the same workspace lock.
+    {
+        let workspace = state.workspace();
+        let names: Vec<&str> = workspace.servers().iter().map(|s| s.name()).collect();
+        assert_eq!(
+            names,
+            ["rust-analyzer", "pyright"],
+            "both built-ins started: unavailable = {:?}",
+            workspace
+                .unavailable()
+                .iter()
+                .map(|u| format!("{}: {}", u.name, u.reason))
+                .collect::<Vec<_>>()
+        );
+    }
 
     // `choose` exists in both fixtures: without a scope both servers are
     // asked, and the merge is honestly ambiguous, naming each server.

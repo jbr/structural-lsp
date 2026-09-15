@@ -4,14 +4,14 @@
 use super::unsupported;
 use crate::lsp::definition::{DefinitionSet, parse_definition_result};
 use crate::lsp::references::{Hit, group_by_file};
-use crate::state::State;
+use crate::workspace::Workspace;
 use crate::tools::hits::{FileGroup, lines_for, render_groups};
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
 use anyhow::{Context, Result};
 use std::path::Path;
 
-pub(super) fn implementations(state: &mut State, root: &Path, target: Target<'_>) -> Result<String> {
+pub(super) fn implementations(state: &mut Workspace, root: &Path, target: Target<'_>) -> Result<String> {
     let found = match resolve_target(state, target)? {
         Resolved::Listed(listing) => return Ok(listing),
         Resolved::One(found) => *found,

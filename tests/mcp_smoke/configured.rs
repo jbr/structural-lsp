@@ -41,19 +41,22 @@ fn scratch_module() -> PathBuf {
 #[ignore = "spawns gopls (and the built-ins); run explicitly with -- --ignored"]
 fn a_configured_server_resolves_through_the_generic_adapter() {
     let root = scratch_module();
-    let mut state = structural::state::State::new(root.clone());
-    assert!(
-        state
-            .servers()
-            .iter()
-            .any(|server| server.name() == "gopls"),
-        "gopls started: unavailable = {:?}",
-        state
-            .unavailable()
-            .iter()
-            .map(|u| format!("{}: {}", u.name, u.reason))
-            .collect::<Vec<_>>()
-    );
+    let mut state = structural::session::Session::new(root.clone());
+    {
+        let workspace = state.workspace();
+        assert!(
+            workspace
+                .servers()
+                .iter()
+                .any(|server| server.name() == "gopls"),
+            "gopls started: unavailable = {:?}",
+            workspace
+                .unavailable()
+                .iter()
+                .map(|u| format!("{}: {}", u.name, u.reason))
+                .collect::<Vec<_>>()
+        );
+    }
 
     let output = structural::tools::Show {
         symbol: Some("Greet".to_string()),

@@ -28,11 +28,11 @@ use crate::lsp::definition::{
 use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
-use crate::state::State;
 use crate::tools::listing::{
     AmbiguousEntry, location_line, render_ambiguous, render_fuzzy, render_not_found,
     render_null_definition, render_unqualified,
 };
+use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use lsp_types::SymbolKind;
 use serde_json::Value;
@@ -82,7 +82,7 @@ pub struct Found {
 
 /// Resolve `target` under the fixed root. Argument errors are errors; every
 /// other outcome is a [`Resolved`].
-pub fn resolve_target(state: &mut State, target: Target<'_>) -> Result<Resolved> {
+pub fn resolve_target(state: &mut Workspace, target: Target<'_>) -> Result<Resolved> {
     let root = state.root().to_path_buf();
     let scope = target
         .path
@@ -106,7 +106,7 @@ pub fn resolve_target(state: &mut State, target: Target<'_>) -> Result<Resolved>
 
 /// Resolve a (possibly qualified) name.
 fn resolve_symbol(
-    state: &mut State,
+    state: &mut Workspace,
     root: &Path,
     symbol: &str,
     scope: Option<PathBuf>,
@@ -142,7 +142,7 @@ fn resolve_symbol(
 /// One identity is the resolution; several are the ambiguous listing; one
 /// with no definition is stated.
 fn finish(
-    state: &mut State,
+    state: &mut Workspace,
     root: &Path,
     mut identities: Vec<Identity>,
     display: &str,
@@ -174,7 +174,7 @@ fn finish(
 /// their `workspace/symbol` candidates: exact matches, fuzzy matches, and
 /// what the root and scope filters excluded.
 fn discover(
-    state: &mut State,
+    state: &mut Workspace,
     selected: &[usize],
     symbol: &str,
     root: &Path,
@@ -212,7 +212,7 @@ fn discover(
 /// A range that no longer names the symbol is a stale index, reported
 /// rather than navigated from.
 fn definition_of(
-    state: &mut State,
+    state: &mut Workspace,
     root: &Path,
     symbol: &str,
     candidate: &Candidate,
@@ -249,7 +249,7 @@ fn definition_of(
 /// target range; the text read is what every later position converts
 /// against. Returns the canonical path and the synced document.
 pub fn sync_target(
-    state: &mut State,
+    state: &mut Workspace,
     root: &Path,
     found: &Found,
 ) -> Result<(PathBuf, crate::lsp::server::Synced)> {
@@ -330,7 +330,7 @@ pub fn describe(server: &LspServer, outline: Option<&Value>, found: &Found) -> R
 /// Display data for each distinct definition: kind, name, location, and the
 /// signature its server's outline gives (best effort — a listing is not
 /// worth failing over a signature).
-fn ambiguous_entries(state: &mut State, identities: &[Identity]) -> Vec<AmbiguousEntry> {
+fn ambiguous_entries(state: &mut Workspace, identities: &[Identity]) -> Vec<AmbiguousEntry> {
     identities
         .iter()
         .map(|identity| {
@@ -360,7 +360,7 @@ fn ambiguous_entries(state: &mut State, identities: &[Identity]) -> Vec<Ambiguou
 
 /// The outline's `detail` for the symbol at `target`, else the first line of
 /// its extent. `None` when anything on the way fails.
-fn signature_of(state: &mut State, server: &str, target: &DefinitionTarget) -> Option<String> {
+fn signature_of(state: &mut Workspace, server: &str, target: &DefinitionTarget) -> Option<String> {
     let server = server_named(state, server).ok()?;
     let path = candidate_path_of(target).ok()?;
     let synced = server.sync(&path).ok()?;
@@ -389,14 +389,14 @@ fn signature_of(state: &mut State, server: &str, target: &DefinitionTarget) -> O
         .map(str::to_string)
 }
 
-pub fn server_named<'a>(state: &'a mut State, name: &str) -> Result<&'a mut LspServer> {
+pub fn server_named<'a>(state: &'a mut Workspace, name: &str) -> Result<&'a mut LspServer> {
     let index = state
         .index_of(name)
         .with_context(|| format!("{name} is no longer running"))?;
     Ok(state.server_mut(index))
 }
 
-pub fn kind_label(state: &State, server: &str, kind: SymbolKind) -> &'static str {
+pub fn kind_label(state: &Workspace, server: &str, kind: SymbolKind) -> &'static str {
     match state.index_of(server) {
         Some(index) => state.server(index).adapter().kind_label(kind),
         None => crate::lsp::adapter::default_kind_label(kind),

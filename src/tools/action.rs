@@ -9,7 +9,7 @@
 //! changes nothing. Edits are results the server hands back, applied here
 //! to disk; a server's own `workspace/applyEdit` is declined as always.
 
-use crate::state::State;
+use crate::session::Session;
 use crate::tools::resolution::Target;
 use anyhow::{Result, bail};
 use mcplease::{
@@ -19,8 +19,8 @@ use mcplease::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-mod render;
 mod rename;
+mod render;
 
 pub const RENAME: &str = "rename";
 pub const PREVIEW: &str = "preview";
@@ -111,10 +111,11 @@ pub enum Mode {
     Apply,
 }
 
-impl Tool<State> for Action {
+impl Tool<Session> for Action {
     type Output = String;
 
-    fn execute(self, state: &mut State, _context: &RequestContext) -> Result<Self::Output> {
+    fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
+        let mut state = session.workspace();
         let mode = match self.mode.as_deref().map(str::trim) {
             None | Some("") | Some(PREVIEW) => Mode::Preview,
             Some(APPLY) => Mode::Apply,
@@ -131,7 +132,7 @@ impl Tool<State> for Action {
                 let Some(new_name) = self.new_name.as_deref().map(str::trim) else {
                     bail!("`rename` needs `new_name`");
                 };
-                rename::run(state, target, new_name, mode, self.digest.as_deref())
+                rename::run(&mut state, target, new_name, mode, self.digest.as_deref())
             }
             other => bail!("unknown action `{other}`; actions: {RENAME}"),
         }

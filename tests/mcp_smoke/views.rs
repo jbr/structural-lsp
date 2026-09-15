@@ -13,7 +13,7 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &mut structural::state::State,
+    state: &mut structural::session::Session,
     view: &str,
     symbol: Option<&str>,
     path: Option<&str>,
@@ -35,7 +35,7 @@ fn show(
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     let root = scratch_root();
-    let mut state = structural::state::State::new(root.clone());
+    let mut state = structural::session::Session::new(root.clone());
 
     // A file outline: every item in order, methods under their impls.
     let outline = show(

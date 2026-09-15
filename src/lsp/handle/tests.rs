@@ -2,33 +2,8 @@
 //! mock server, a gate policy, and a second caller-side handle.
 
 use super::*;
+use crate::test_support::python;
 use std::sync::atomic::AtomicBool;
-
-/// A Python interpreter that starts quickly. `python3` on PATH may be a
-/// version-manager shim that takes over a second to resolve, which
-/// would eat the short backstops some tests use; prefer a direct
-/// binary, and let `STRUCTURAL_TEST_PYTHON` name one explicitly.
-fn python() -> Option<String> {
-    let explicit = std::env::var("STRUCTURAL_TEST_PYTHON").ok();
-    let candidates = [
-        "/opt/homebrew/bin/python3",
-        "/usr/local/bin/python3",
-        "/usr/bin/python3",
-        "python3",
-    ];
-    explicit
-        .iter()
-        .map(String::as_str)
-        .chain(candidates)
-        .find(|candidate| {
-            std::process::Command::new(candidate)
-                .arg("--version")
-                .output()
-                .map(|output| output.status.success())
-                .unwrap_or(false)
-        })
-        .map(str::to_string)
-}
 
 /// Small capacities so overload paths are reachable; a long backstop so
 /// only the tests that set their own can trip it.
@@ -115,7 +90,7 @@ fn echo_for(events: &[Value], id: i64) -> Option<Value> {
 
 macro_rules! needs_python {
     () => {
-        if python().is_none() {
+        if crate::test_support::python().is_none() {
             eprintln!("skipping: python3 not available");
             return;
         }

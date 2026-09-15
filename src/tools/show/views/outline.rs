@@ -4,13 +4,13 @@
 use super::{MAX_LINES, unsupported};
 use crate::lsp::outline::{self, Node};
 use crate::lsp::server::LspServer;
-use crate::state::State;
+use crate::workspace::Workspace;
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
-pub(super) fn run(state: &mut State, root: &Path, target: Target<'_>) -> Result<String> {
+pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>) -> Result<String> {
     if target.symbol.is_none() && target.anchor.is_none() {
         return file_outline(state, root, target.path);
     }
@@ -37,7 +37,7 @@ pub(super) fn run(state: &mut State, root: &Path, target: Target<'_>) -> Result<
 }
 
 /// The whole outline of the file `path` names.
-fn file_outline(state: &mut State, root: &Path, path: Option<&str>) -> Result<String> {
+fn file_outline(state: &mut Workspace, root: &Path, path: Option<&str>) -> Result<String> {
     let Some(path) = path else {
         bail!("`outline` needs `path` naming a file, or a `symbol`/`anchor` target");
     };
