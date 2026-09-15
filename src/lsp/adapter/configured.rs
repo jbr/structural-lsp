@@ -3,6 +3,7 @@
 
 use super::{Adapter, Language, ReadinessPolicy};
 use serde_json::Value;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub struct Configured {
@@ -13,7 +14,7 @@ pub struct Configured {
     /// The built-in this entry overrides, when its name matches one: the
     /// server-specific knowledge (policy, capabilities, query rewriting)
     /// still comes from there. `None` for a wholly user-defined server.
-    pub base: Option<Box<dyn Adapter>>,
+    pub base: Option<Arc<dyn Adapter>>,
 }
 
 impl Adapter for Configured {

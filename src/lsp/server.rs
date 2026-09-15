@@ -18,6 +18,7 @@ use lsp_types::{Position, SymbolInformation};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::lsp::adapter::{Adapter, language_for};
 use crate::lsp::handle::{ServerHandle, Settings, Snapshot};
@@ -41,7 +42,7 @@ pub struct Synced {
 }
 
 pub struct LspServer {
-    adapter: Box<dyn Adapter>,
+    adapter: Arc<dyn Adapter>,
     root: PathBuf,
     /// `None` only after [`LspServer::shutdown`].
     handle: Option<ServerHandle>,
@@ -60,7 +61,7 @@ impl LspServer {
     /// Spawn the adapter's command and initialize it against `root`. Returns
     /// once `initialize` is answered; indexing continues in the background
     /// and the first query waits for it.
-    pub fn start(adapter: Box<dyn Adapter>, root: &Path) -> Result<Self> {
+    pub fn start(adapter: Arc<dyn Adapter>, root: &Path) -> Result<Self> {
         let argv = adapter.command();
         let (command, args) = argv
             .split_first()

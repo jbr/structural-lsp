@@ -22,6 +22,7 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub const FILE_NAME: &str = "structural.toml";
@@ -89,17 +90,17 @@ impl Config {
 
     /// The adapters to run: every built-in (overridden where named) plus
     /// every other entry as a generic server.
-    pub fn adapters(self) -> Result<Vec<Box<dyn Adapter>>> {
+    pub fn adapters(self) -> Result<Vec<Arc<dyn Adapter>>> {
         let mut entries = self.servers;
-        let mut adapters: Vec<Box<dyn Adapter>> = Vec::new();
+        let mut adapters: Vec<Arc<dyn Adapter>> = Vec::new();
         for builtin in adapter::builtins() {
             match entries.remove(builtin.name()) {
-                Some(entry) => adapters.push(Box::new(override_builtin(builtin, entry)?)),
+                Some(entry) => adapters.push(Arc::new(override_builtin(builtin, entry)?)),
                 None => adapters.push(builtin),
             }
         }
         for (name, entry) in entries {
-            adapters.push(Box::new(generic(name, entry)?));
+            adapters.push(Arc::new(generic(name, entry)?));
         }
         Ok(adapters)
     }
@@ -129,7 +130,7 @@ fn languages_of(name: &str, entry: &ServerEntry) -> Result<Vec<Language>> {
         .collect()
 }
 
-fn override_builtin(builtin: Box<dyn Adapter>, entry: ServerEntry) -> Result<Configured> {
+fn override_builtin(builtin: Arc<dyn Adapter>, entry: ServerEntry) -> Result<Configured> {
     let name = builtin.name().to_string();
     let command = if entry.command.is_empty() {
         builtin.command()

@@ -26,6 +26,7 @@
 //! No server-specific string belongs anywhere else.
 
 use serde_json::{Value, json};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub mod configured;
@@ -272,10 +273,15 @@ pub fn standard_capabilities(position_encodings: &[&str], experimental: Value) -
 }
 
 /// The adapters that are on by default.
-pub fn builtins() -> Vec<Box<dyn Adapter>> {
+///
+/// Shared, not owned: a workspace keeps one of these to answer routing
+/// questions for a server that is not running, and hands the same value to
+/// each launch. `Adapter` is a cheap, immutable descriptor, so sharing it is
+/// what "one source of truth about this server" means.
+pub fn builtins() -> Vec<Arc<dyn Adapter>> {
     vec![
-        Box::new(rust_analyzer::RustAnalyzer),
-        Box::new(pyright::Pyright),
+        Arc::new(rust_analyzer::RustAnalyzer),
+        Arc::new(pyright::Pyright),
     ]
 }
 
