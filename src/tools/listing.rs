@@ -7,6 +7,7 @@
 
 use crate::lsp::definition::Candidate;
 use crate::tools::resolution::Exclusions;
+use crate::tools::resolution::qualify::Qualified;
 use lsp_types::{Location, Position, SymbolKind, Uri};
 use std::path::Path;
 
@@ -46,6 +47,47 @@ pub fn render_fuzzy(
     text
 }
 
+/// `kind name · path:line`, or `name · path:line` when no kind is known.
+pub fn header(kind_label: Option<&str>, name: &str, location: &str) -> String {
+    match kind_label {
+        Some(kind) => format!("{kind} {name} · {location}"),
+        None => format!("{name} · {location}"),
+    }
+}
+
+/// Exact hits by name, none in a container matching the qualifier: listed
+/// with the containers the server reported, so the qualifier can be fixed.
+pub fn render_unqualified(
+    root: &Path,
+    qualified: &Qualified,
+    candidates: &[Candidate],
+    labels: &dyn Fn(&str, SymbolKind) -> &'static str,
+) -> String {
+    let mut text = format!(
+        "no '{}' is in a container ending in `{}`; the '{}' candidates:\n",
+        qualified.name,
+        qualified.qualifiers.join("::"),
+        qualified.name
+    );
+    for candidate in candidates.iter().take(MAX_LISTED) {
+        let info = &candidate.info;
+        text.push_str(&format!(
+            "{} {} · {} · {}\n",
+            labels(&candidate.server, info.kind),
+            info.name,
+            location_line(root, &info.location.uri, info.location.range.start),
+            match info.container_name.as_deref() {
+                Some(container) => format!("in {container}"),
+                None => "no container".to_string(),
+            }
+        ));
+    }
+    if candidates.len() > MAX_LISTED {
+        text.push_str(&format!("… {} more\n", candidates.len() - MAX_LISTED));
+    }
+    text
+}
+
 /// One line per distinct definition, with its signature when the server's
 /// outline gave one. Nothing is picked. The server is named only when the
 /// definitions span more than one.
@@ -59,11 +101,10 @@ pub fn render_ambiguous(
         entries.iter().map(|entry| entry.server.as_str()).collect();
     let mut text = format!("ambiguous: {} definitions of '{symbol}'\n", entries.len());
     for entry in entries.iter().take(MAX_LISTED) {
-        text.push_str(&format!(
-            "{} {} · {}",
+        text.push_str(&header(
             entry.kind_label,
-            entry.name,
-            location_line(root, &entry.location.uri, entry.location.range.start)
+            &entry.name,
+            &location_line(root, &entry.location.uri, entry.location.range.start),
         ));
         if let Some(signature) = &entry.signature {
             text.push_str(&format!(" · {signature}"));
@@ -82,7 +123,8 @@ pub fn render_ambiguous(
 
 /// One entry of the ambiguous listing, already resolved to display data.
 pub struct AmbiguousEntry {
-    pub kind_label: &'static str,
+    /// `None` for an anchored origin whose kind no outline confirmed.
+    pub kind_label: Option<&'static str>,
     pub name: String,
     pub server: String,
     /// The definition target, or the symbol's own location when the server

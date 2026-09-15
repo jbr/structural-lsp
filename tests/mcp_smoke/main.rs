@@ -12,7 +12,25 @@ mod identity;
 mod responsive;
 mod servers;
 mod stdio_server;
+mod targeting;
 use stdio_server::Server;
+
+/// Copy a fixture tree, skipping build output.
+fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            if entry.file_name() == "target" {
+                continue;
+            }
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
 
 fn rust_fixture_root() -> PathBuf {
     std::fs::canonicalize(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/rust")).unwrap()
@@ -24,8 +42,10 @@ fn in_process_show_resolves_the_fixture_struct() {
     let mut state = structural::state::State::new(rust_fixture_root());
     // `choose` is unique in the fixture, so the positive path resolves.
     let output = structural::tools::Show {
-        symbol: "choose".to_string(),
+        symbol: Some("choose".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("show choose succeeds");
@@ -50,8 +70,10 @@ fn in_process_show_resolves_the_fixture_struct() {
 
     // A `path` scope narrows to the fixture file and still resolves.
     let scoped = structural::tools::Show {
-        symbol: "choose".to_string(),
+        symbol: Some("choose".to_string()),
         path: Some("src/lib.rs".to_string()),
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("scoped show succeeds");
@@ -61,8 +83,10 @@ fn in_process_show_resolves_the_fixture_struct() {
     // module; the adapter asks rust-analyzer to exclude imports from the
     // symbol search, so the bare name resolves to the struct.
     let config = structural::tools::Show {
-        symbol: "Config".to_string(),
+        symbol: Some("Config".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("show Config succeeds");
@@ -78,8 +102,10 @@ fn in_process_show_resolves_the_fixture_struct() {
 
     // A missing name is a stated result, not an invented candidate.
     let missing = structural::tools::Show {
-        symbol: "definitely_not_here".to_string(),
+        symbol: Some("definitely_not_here".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .unwrap();
@@ -88,20 +114,24 @@ fn in_process_show_resolves_the_fixture_struct() {
         "{missing}"
     );
 
-    // A qualified path is rejected with guidance, never falsely resolved.
+    // A qualified name narrows by the container the server reports.
     let qualified = structural::tools::Show {
-        symbol: "Config::new".to_string(),
+        symbol: Some("Config::new".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default());
-    let error = qualified.unwrap_err().to_string();
-    assert!(error.contains("qualified paths"), "{error}");
+    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .expect("show Config::new succeeds");
+    assert!(qualified.starts_with("fn new · src/lib.rs:"), "{qualified}");
 
     // `uses` on the same fixture: every call to `choose` is in `run`, the
     // declaration is not a reference, and each hit carries its line.
     let uses = structural::tools::Uses {
-        symbol: "choose".to_string(),
+        symbol: Some("choose".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("uses choose succeeds");
@@ -123,8 +153,10 @@ fn in_process_show_resolves_the_fixture_struct() {
     // re-export in `alias` and the `use super::*` glob are not hits by
     // name; the impl headers and the constructor call are.
     let config_uses = structural::tools::Uses {
-        symbol: "Config".to_string(),
+        symbol: Some("Config".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("uses Config succeeds");
@@ -156,8 +188,10 @@ fn in_process_show_resolves_the_fixture_struct() {
 
     // A scope escaping the root is rejected.
     let escaping = structural::tools::Show {
-        symbol: "Config".to_string(),
+        symbol: Some("Config".to_string()),
         path: Some("../semantic-edit-mcp".to_string()),
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default());
     assert!(escaping.is_err(), "an out-of-root scope must be rejected");
@@ -322,16 +356,16 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
     assert!(text.starts_with("struct Config · src/lib.rs:"), "{text}");
     assert!(text.contains("pub struct Config"), "{text}");
 
-    // Same call through the qualified name is an actionable error, not a crash.
+    // The qualified name resolves through the same path.
     let qualified = server.request(
         "tools/call",
         json!({ "name": "show", "arguments": { "symbol": "Config::new" } }),
     );
-    assert_eq!(
-        qualified.pointer("/result/isError"),
-        Some(&json!(true)),
-        "qualified paths are rejected: {qualified}"
-    );
+    let text = qualified
+        .pointer("/result/content/0/text")
+        .and_then(Value::as_str)
+        .expect("tool text content");
+    assert!(text.starts_with("fn new · src/lib.rs:"), "{qualified}");
 
     // ping round-trips.
     let pong = server.request("ping", json!({}));
@@ -446,8 +480,10 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
     let mut state = structural::state::State::new(scratch.clone());
     let show = |state: &mut structural::state::State, symbol: &str| {
         structural::tools::Show {
-            symbol: symbol.to_string(),
+            symbol: Some(symbol.to_string()),
             path: None,
+            anchor: None,
+            focus: None,
         }
         .execute(state, &mcplease::types::RequestContext::default())
     };

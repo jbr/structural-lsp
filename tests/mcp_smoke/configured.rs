@@ -56,8 +56,10 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     );
 
     let output = structural::tools::Show {
-        symbol: "Greet".to_string(),
+        symbol: Some("Greet".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("show Greet: {error:#}"));
@@ -76,8 +78,10 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     // `uses` through the generic adapter: the call in `Run`, and the test
     // file's call set apart by its `_test.go` name.
     let uses = structural::tools::Uses {
-        symbol: "Greet".to_string(),
+        symbol: Some("Greet".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("uses Greet: {error:#}"));
@@ -88,6 +92,21 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
          tests (heuristic) · 1 reference\n\
          greet_test.go\n  6 · TestGreet · if Greet(\"x\") != \"hello x\" {\n",
         "{uses}"
+    );
+
+    // An anchor in the caller resolves to the same definition through
+    // gopls; the header is the outline's kind and name.
+    let anchored = structural::tools::Show {
+        symbol: None,
+        path: Some("main.go".to_string()),
+        anchor: Some("return Greet(\"world\")".to_string()),
+        focus: Some("Greet".to_string()),
+    }
+    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .unwrap_or_else(|error| panic!("anchored show Greet: {error:#}"));
+    assert!(
+        anchored.starts_with("function Greet · greet.go:4\n"),
+        "{anchored}"
     );
 
     drop(state);

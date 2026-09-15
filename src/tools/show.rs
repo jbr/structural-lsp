@@ -6,16 +6,16 @@
 //! the item's extent from the server's `documentSymbol`, widen it over
 //! leading decorations with tree-sitter where a grammar exists, and render.
 
-use crate::lsp::definition::{DefinitionTarget, Identity};
-use crate::lsp::outline::{self, Extent};
+use crate::lsp::definition::DefinitionTarget;
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::lsp::shape;
 use crate::state::State;
-use crate::tools::listing::location_line;
-use crate::tools::resolution::{Found, Resolved, resolve_symbol, server_named, sync_target};
+use crate::tools::listing::{header, location_line};
+use crate::tools::resolution::{
+    Described, Found, Resolved, Target, describe, resolve_target, server_named, sync_target,
+};
 use anyhow::{Context, Result};
-use lsp_types::Location;
 use mcplease::{
     traits::{Tool, ToolMeta},
     types::{RequestContext, ToolAnnotations},
@@ -31,27 +31,46 @@ use render::*;
 /// pagination is not implemented in this slice.
 const BODY_BUDGET_BYTES: usize = 12_000;
 
-/// Show a code definition by its bare name: the item's source, including
-/// its doc comments and attributes, not just a location.
+/// Show a code definition: the item's source, including its doc comments
+/// and attributes, not just a location. Target it by name (`symbol`, with
+/// an optional `path` scope) or by quoting source text from a file
+/// (`anchor` in `path`, with `focus` naming the token meant).
 ///
 /// Candidates come from the language servers' fuzzy symbol index (not
 /// proven exhaustive); only exact-name matches resolve, and several distinct
-/// definitions are listed rather than picked. The answer is current: owned
-/// files are re-synced from disk and the servers are waited for before every
-/// query. `path` scopes to a file or directory under the workspace root,
-/// which is fixed at server start.
+/// definitions are listed rather than picked. A qualifier (`Config::new`)
+/// narrows by the container the server reports. The answer is current:
+/// owned files are re-synced from disk and the servers are waited for
+/// before every query. The workspace root is fixed at server start.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "show")]
 #[group(skip)]
 pub struct Show {
-    /// Exact bare symbol name (e.g. `Config`, `choose`). Qualified paths
-    /// (`Config::new`) are rejected; pass the bare name.
-    pub symbol: String,
-
-    /// A file or directory under the workspace root, relative to it, to
-    /// narrow candidates to. A file also picks the language server for it.
+    /// The symbol's name: bare (`choose`) or qualified by its container
+    /// (`Config::new`, `Config.doubled`). Exact match on the name.
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+
+    /// A file or directory under the workspace root, relative to it: a
+    /// scope for `symbol`, or the file an `anchor` is quoted from. A file
+    /// also picks the language server for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
     pub path: Option<String>,
+
+    /// Source text quoted verbatim from `path`, occurring exactly once in
+    /// it; an alternative to `symbol` for anything a name cannot reach (a
+    /// local, a call site, an expression).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub anchor: Option<String>,
+
+    /// The token within `anchor` that is meant (`config` in `let config =
+    /// Config::new(3);`), occurring once in the anchor; the whole anchor
+    /// when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub focus: Option<String>,
 }
 
 impl ToolMeta for Show {
@@ -76,87 +95,66 @@ impl Tool<State> for Show {
 
     fn execute(self, state: &mut State, _context: &RequestContext) -> Result<Self::Output> {
         let root = state.root().to_path_buf();
-        match resolve_symbol(state, &self.symbol, self.path.as_deref())? {
+        let target = Target {
+            symbol: self.symbol.as_deref(),
+            path: self.path.as_deref(),
+            anchor: self.anchor.as_deref(),
+            focus: self.focus.as_deref(),
+        };
+        match resolve_target(state, target)? {
             Resolved::Listed(listing) => Ok(listing),
-            Resolved::One(found) => {
-                let Found { identity, target } = *found;
-                render_definition(state, &root, self.symbol.trim(), &identity, &target)
-            }
+            Resolved::One(found) => render_definition(state, &root, &found),
         }
     }
 }
 
 /// The single identity's body: own the target's file, check its range,
 /// shape, and render with any notes.
-fn render_definition(
-    state: &mut State,
-    root: &Path,
-    symbol: &str,
-    identity: &Identity,
-    target: &DefinitionTarget,
-) -> Result<String> {
-    let (target_path, synced) = sync_target(state, root, symbol, identity, target)?;
-    let server = server_named(state, &identity.server)?;
+fn render_definition(state: &mut State, root: &Path, found: &Found) -> Result<String> {
+    let (target_path, synced) = sync_target(state, root, found)?;
+    let server = server_named(state, &found.identity.server)?;
     let text = synced.text;
     let language = server.language_id(&target_path);
-    let (extent, body, mut notes) = shape_body(server, &synced.uri, &text, target, &language)?;
+    // Ordered after the sync that precedes this call, so the outline is of
+    // the text we read.
+    let outline = server.document_symbol(&synced.uri)?;
+    let described = describe(server, outline.as_ref(), found)?;
+    let (body, mut notes) = shape_body(server, outline.is_some(), &text, found, &described, &language)?;
     if !target_path.starts_with(root) {
         notes.push(format!(
             "definition is outside the workspace root: {}",
             target_path.display()
         ));
     }
-    let origin = &identity.candidates[0];
-    let kind = extent.as_ref().map_or(origin.info.kind, |extent| extent.kind);
-    let name = extent
-        .as_ref()
-        .map_or(origin.info.name.as_str(), |extent| extent.name.as_str());
-    let location = Location {
-        uri: target.uri.clone(),
-        range: target.selection_range,
-    };
-    Ok(render_resolved(
-        root,
-        server.adapter().kind_label(kind),
-        name,
-        &location,
-        &body,
-        &notes,
-    ))
+    let head = header(
+        described.kind_label,
+        &described.name,
+        &location_line(root, &found.target.uri, found.target.selection_range.start),
+    );
+    Ok(render_resolved(&head, &body, &notes))
 }
 
-/// The item's extent and body, and notes only when it did not come the
-/// normal way.
+/// The item's body, and notes only when it did not come the normal way.
 ///
-/// Normal: the server's `documentSymbol` gives the extent of the innermost
-/// symbol at the definition, and tree-sitter widens its start over the
-/// leading doc comments, attributes or decorators the language keeps
-/// outside the item (nothing, for a language without a grammar here).
-/// Fallback, said in a note: with no extent from the server, the Rust
-/// grammar's own item search, or else the server's definition range as-is.
-/// Never a guessed item.
+/// Normal: the server's `documentSymbol` gives the extent of the target's
+/// own symbol, and tree-sitter widens its start over the leading doc
+/// comments, attributes or decorators the language keeps outside the item
+/// (nothing, for a language without a grammar here). A target that is no
+/// outline item (a local) is its definition's line. Fallback, said in a
+/// note: with no outline from the server, the Rust grammar's own item
+/// search, or else the server's definition range as-is. Never a guessed
+/// item.
 fn shape_body(
     server: &LspServer,
-    uri: &str,
+    outlined: bool,
     text: &str,
-    target: &DefinitionTarget,
+    found: &Found,
+    described: &Described,
     language: &str,
-) -> Result<(Option<Extent>, String, Vec<String>)> {
+) -> Result<(String, Vec<String>)> {
     let encoding = server.encoding();
-    // Ordered after the sync that precedes this call, so the outline is of
-    // the text we read.
-    let outline = server.document_symbol(uri)?;
-    let extent = match &outline {
-        Some(result) => outline::innermost_at(result, target.selection_range.start)
-            .with_context(|| {
-                format!(
-                    "{} returned an unusable documentSymbol result",
-                    server.name()
-                )
-            })?,
-        None => None,
-    };
-    if let Some(extent) = extent {
+    let target: &DefinitionTarget = &found.target;
+    if let Some(extent) = &described.extent {
         let start = position_to_offset(text, extent.range.start, encoding)
             .context("the documentSymbol range starts outside the file as read from disk")?;
         let end = position_to_offset(text, extent.range.end, encoding)
@@ -164,19 +162,21 @@ fn shape_body(
         if start <= end {
             let start = shape::extend_start(language, text, start)?;
             let (body, truncated) = budget(&text[start..end]);
-            return Ok((Some(extent), body, truncated.into_iter().collect()));
+            return Ok((body, truncated.into_iter().collect()));
         }
     }
-
-    let why = match outline {
-        None => format!("{} does not support documentSymbol", server.name()),
-        Some(_) => format!(
-            "{}'s documentSymbol has no symbol at the definition",
-            server.name()
-        ),
-    };
     let offset = position_to_offset(text, target.selection_range.start, encoding)
         .context("definition target range is not inside the target file as read from disk")?;
+    if outlined {
+        // The outline is there but the target is not an item in it: a
+        // local, a parameter, a field the server does not list. Its line
+        // is the definition.
+        let line_start = text[..offset].rfind('\n').map_or(0, |at| at + 1);
+        let line = text[line_start..].lines().next().unwrap_or_default().trim();
+        return Ok((line.to_string(), Vec::new()));
+    }
+
+    let why = format!("{} does not support documentSymbol", server.name());
     let shaped = if language == "rust" {
         shape::item_at(text, offset)?
     } else {
@@ -195,7 +195,7 @@ fn shape_body(
     let (body, truncated) = budget(&raw);
     let mut notes = vec![format!("{why}; {how}")];
     notes.extend(truncated);
-    Ok((None, body, notes))
+    Ok((body, notes))
 }
 
 #[cfg(test)]

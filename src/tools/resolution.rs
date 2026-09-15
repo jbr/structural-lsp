@@ -1,11 +1,15 @@
-//! The resolution pipeline every tool shares: a bare name to one
-//! *identity*, or to a listing that says why there is not one.
+//! The resolution pipeline every tool shares: a target (a name, or an
+//! anchor in a file) to one *identity*, or to a listing that says why
+//! there is not one.
 //!
 //! Identity, not names: `workspace/symbol` only *nominates*. Every exact
 //! candidate is sent to `textDocument/definition`, and the results are
 //! deduplicated by target — hits that navigate to the same place are one
 //! thing; hits that navigate to different places are listed as ambiguous,
-//! with their kinds, paths and signatures, and nothing is picked.
+//! with their kinds, paths and signatures, and nothing is picked. A
+//! qualified name (`Config::new`) filters the exact candidates by the
+//! container the server reported ([`qualify`]); an anchor skips the index
+//! and asks `definition` at the focus (the `anchored` module).
 //!
 //! Correctness order: every owned document is synced from disk, then the
 //! call waits until each queried server has no outstanding work, then
@@ -18,20 +22,24 @@
 //! otherwise every running server is asked and the candidates are merged.
 
 use crate::lsp::definition::{
-    Candidate, DefinitionSet, DefinitionTarget, Identity, Partition, Resolution, group_by_target,
-    parse_definition_result, partition, verify_name_at,
+    Candidate, DefinitionSet, DefinitionTarget, Identity, Origin, Partition, Resolution,
+    group_by_target, parse_definition_result, partition, verify_name_at,
 };
-use crate::lsp::outline;
+use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::state::State;
 use crate::tools::listing::{
     AmbiguousEntry, location_line, render_ambiguous, render_fuzzy, render_not_found,
-    render_null_definition,
+    render_null_definition, render_unqualified,
 };
 use anyhow::{Context, Result, bail};
 use lsp_types::SymbolKind;
+use serde_json::Value;
 use std::path::{Path, PathBuf};
+
+mod anchored;
+pub mod qualify;
 
 /// What the filters excluded, carried to the listings.
 #[derive(Clone, Copy, Debug, Default)]
@@ -40,7 +48,21 @@ pub struct Exclusions {
     pub out_of_scope: usize,
 }
 
-/// The outcome of resolving a name.
+/// What a tool was asked to resolve, as the user gave it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Target<'a> {
+    /// A bare or qualified name.
+    pub symbol: Option<&'a str>,
+    /// A scope under the root; the file an anchor is in.
+    pub path: Option<&'a str>,
+    /// Quoted source text that occurs once in `path`.
+    pub anchor: Option<&'a str>,
+    /// The token within the anchor that is meant; the whole anchor when
+    /// absent.
+    pub focus: Option<&'a str>,
+}
+
+/// The outcome of resolving a target.
 pub enum Resolved {
     /// Not found, fuzzy only, ambiguous, or a lone hit with no definition:
     /// the answer is this listing, already rendered.
@@ -53,26 +75,57 @@ pub enum Resolved {
 pub struct Found {
     pub identity: Identity,
     pub target: DefinitionTarget,
+    /// The name that sits at the target: the bare name asked for, or what
+    /// the anchor's focus resolved to.
+    pub name: String,
 }
 
-/// Resolve `symbol` (a bare name) under the fixed root, optionally scoped
-/// to `path`. Validation errors are errors; every other outcome is a
-/// [`Resolved`].
-pub fn resolve_symbol(state: &mut State, symbol: &str, path: Option<&str>) -> Result<Resolved> {
+/// Resolve `target` under the fixed root. Argument errors are errors; every
+/// other outcome is a [`Resolved`].
+pub fn resolve_target(state: &mut State, target: Target<'_>) -> Result<Resolved> {
     let root = state.root().to_path_buf();
-    let symbol = validate_symbol(symbol)?;
-    let scope = path
+    let scope = target
+        .path
         .map(|user_path| resolve_scope(&root, user_path))
         .transpose()?;
+    match (target.symbol, target.anchor) {
+        (Some(_), Some(_)) => bail!("give either `symbol` or `anchor`, not both"),
+        (None, None) => bail!(
+            "give a `symbol` (a name such as `Config` or `Config::new`) or an `anchor` (source \
+             text quoted from the file named by `path`)"
+        ),
+        (Some(symbol), None) => {
+            if target.focus.is_some() {
+                bail!("`focus` selects within an `anchor`; with `symbol` it has no meaning");
+            }
+            resolve_symbol(state, &root, symbol, scope)
+        }
+        (None, Some(anchor)) => anchored::from_anchor(state, &root, scope, anchor, target.focus),
+    }
+}
+
+/// Resolve a (possibly qualified) name.
+fn resolve_symbol(
+    state: &mut State,
+    root: &Path,
+    symbol: &str,
+    scope: Option<PathBuf>,
+) -> Result<Resolved> {
+    let qualified = qualify::parse(symbol)?;
+    let display = qualified.display();
     let selected = state.select(scope.as_deref())?;
 
-    let (exact, fuzzy, exclusions) = discover(state, &selected, &symbol, &root, scope.as_deref())?;
+    let (exact, fuzzy, exclusions) =
+        discover(state, &selected, &qualified.name, root, scope.as_deref())?;
+    let (exact, unqualified) = qualify::filter(exact, &qualified.qualifiers);
     if exact.is_empty() {
-        return Ok(Resolved::Listed(if fuzzy.is_empty() {
-            render_not_found(&symbol, exclusions)
+        let labels = |server: &str, kind: SymbolKind| kind_label(state, server, kind);
+        return Ok(Resolved::Listed(if !unqualified.is_empty() {
+            render_unqualified(root, &qualified, &unqualified, &labels)
+        } else if fuzzy.is_empty() {
+            render_not_found(&display, exclusions)
         } else {
-            let labels = |server: &str, kind: SymbolKind| kind_label(state, server, kind);
-            render_fuzzy(&root, &symbol, &fuzzy, &labels, exclusions)
+            render_fuzzy(root, &display, &fuzzy, &labels, exclusions)
         }));
     }
 
@@ -80,24 +133,39 @@ pub fn resolve_symbol(state: &mut State, symbol: &str, path: Option<&str>) -> Re
     // it actually goes, then group by destination.
     let mut found = Vec::with_capacity(exact.len());
     for candidate in exact {
-        let set = definition_of(state, &root, &symbol, &candidate)?;
+        let set = definition_of(state, root, &qualified.name, &candidate)?;
         found.push((candidate, set));
     }
-    let mut identities = group_by_target(found);
+    finish(state, root, group_by_target(found), &display, exclusions)
+}
+
+/// One identity is the resolution; several are the ambiguous listing; one
+/// with no definition is stated.
+fn finish(
+    state: &mut State,
+    root: &Path,
+    mut identities: Vec<Identity>,
+    display: &str,
+    exclusions: Exclusions,
+) -> Result<Resolved> {
     if identities.len() != 1 {
         let entries = ambiguous_entries(state, &identities);
         return Ok(Resolved::Listed(render_ambiguous(
-            &root, &symbol, &entries, exclusions,
+            root, display, &entries, exclusions,
         )));
     }
     let identity = identities.pop().expect("exactly one");
     match identity.target.clone() {
-        Some(target) => Ok(Resolved::One(Box::new(Found { identity, target }))),
+        Some(target) => Ok(Resolved::One(Box::new(Found {
+            name: identity.origin.name.clone(),
+            identity,
+            target,
+        }))),
         None => Ok(Resolved::Listed(render_null_definition(
-            &root,
-            &symbol,
+            root,
+            display,
             &identity.server,
-            &identity.candidates[0].info.location,
+            &identity.origin.location,
         ))),
     }
 }
@@ -177,16 +245,19 @@ fn definition_of(
     })
 }
 
-/// Own the identity's target file and check that the symbol's name sits at
-/// the target range; the text read is what every later position converts
+/// Own the identity's target file and check that the name sits at the
+/// target range; the text read is what every later position converts
 /// against. Returns the canonical path and the synced document.
 pub fn sync_target(
     state: &mut State,
     root: &Path,
-    symbol: &str,
-    identity: &Identity,
-    target: &DefinitionTarget,
+    found: &Found,
 ) -> Result<(PathBuf, crate::lsp::server::Synced)> {
+    let Found {
+        identity,
+        target,
+        name,
+    } = found;
     let server = server_named(state, &identity.server)?;
     let raw_path = candidate_path_of(target)?;
     let target_path = std::fs::canonicalize(&raw_path).unwrap_or(raw_path);
@@ -194,18 +265,66 @@ pub fn sync_target(
     verify_name_at(
         &synced.text,
         target.selection_range,
-        symbol,
+        name,
         server.encoding(),
     )
     .with_context(|| {
         format!(
-            "{}'s definition target for '{symbol}' ({}) does not match the file on disk; \
+            "{}'s definition target for '{name}' ({}) does not match the file on disk; \
                  the server's view was stale — retry after it re-indexes",
             identity.server,
             location_line(root, &target.uri, target.selection_range.start)
         )
     })?;
     Ok((target_path, synced))
+}
+
+/// The header's kind word and name for a resolved target, and the outline
+/// extent when the outline symbol at the target *is* the target.
+pub struct Described {
+    pub kind_label: Option<&'static str>,
+    pub name: String,
+    /// The target's own outline symbol: present only when the outline's
+    /// selection range is the target's (or, for a flat outline without
+    /// one, the names agree). A local variable is in no outline, so its
+    /// header carries no kind word and its enclosing item is never
+    /// mistaken for it.
+    pub extent: Option<Extent>,
+}
+
+/// Describe `found` from the outline of its file (`None` when the server
+/// gave none).
+pub fn describe(server: &LspServer, outline: Option<&Value>, found: &Found) -> Result<Described> {
+    let extent = match outline {
+        Some(outline) => outline::innermost_at(outline, found.target.selection_range.start)
+            .with_context(|| {
+                format!(
+                    "{} returned an unusable documentSymbol result",
+                    server.name()
+                )
+            })?,
+        None => None,
+    };
+    let confirmed = extent.filter(|extent| match extent.selection_range {
+        Some(range) => range == found.target.selection_range,
+        None => extent.name == found.name,
+    });
+    Ok(match confirmed {
+        Some(extent) => Described {
+            kind_label: Some(server.adapter().kind_label(extent.kind)),
+            name: extent.name.clone(),
+            extent: Some(extent),
+        },
+        None => Described {
+            kind_label: found
+                .identity
+                .origin
+                .kind
+                .map(|kind| server.adapter().kind_label(kind)),
+            name: found.name.clone(),
+            extent: None,
+        },
+    })
 }
 
 /// Display data for each distinct definition: kind, name, location, and the
@@ -215,7 +334,7 @@ fn ambiguous_entries(state: &mut State, identities: &[Identity]) -> Vec<Ambiguou
     identities
         .iter()
         .map(|identity| {
-            let origin = &identity.candidates[0];
+            let origin: &Origin = &identity.origin;
             let (location, signature) = match &identity.target {
                 Some(target) => (
                     lsp_types::Location {
@@ -224,11 +343,13 @@ fn ambiguous_entries(state: &mut State, identities: &[Identity]) -> Vec<Ambiguou
                     },
                     signature_of(state, &identity.server, target),
                 ),
-                None => (origin.info.location.clone(), None),
+                None => (origin.location.clone(), None),
             };
             AmbiguousEntry {
-                kind_label: kind_label(state, &identity.server, origin.info.kind),
-                name: origin.info.name.clone(),
+                kind_label: origin
+                    .kind
+                    .map(|kind| kind_label(state, &identity.server, kind)),
+                name: origin.name.clone(),
                 server: identity.server.clone(),
                 location,
                 signature,
@@ -290,24 +411,6 @@ pub fn candidate_path_of(target: &DefinitionTarget) -> Result<PathBuf> {
             target.uri.as_str()
         )
     })
-}
-
-/// A bare name: non-empty, and none of the qualification punctuation. A
-/// qualified path cannot be validated by bare-name exact matching (the
-/// server's `containerName` is display metadata, not a language-level path),
-/// so it is rejected rather than falsely resolved.
-fn validate_symbol(symbol: &str) -> Result<String> {
-    let trimmed = symbol.trim();
-    if trimmed.is_empty() {
-        bail!("`symbol` must be a non-empty bare name (e.g. `Config`)");
-    }
-    if trimmed.contains("::") || trimmed.contains('.') || trimmed.contains('/') {
-        bail!(
-            "qualified paths (`{trimmed}`) are not supported: only bare symbol names are \
-             matched. Pass the bare name — e.g. `new` for `Config::new`."
-        );
-    }
-    Ok(trimmed.to_string())
 }
 
 /// Canonicalize a user scope under the fixed root: it must exist and stay

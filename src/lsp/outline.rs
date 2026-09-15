@@ -18,6 +18,9 @@ pub struct Extent {
     pub kind: SymbolKind,
     /// The whole item, as the server sees it.
     pub range: Range,
+    /// The range of the symbol's own name, when the result shape carries
+    /// one (`DocumentSymbol` does; `SymbolInformation` does not).
+    pub selection_range: Option<Range>,
     /// The server's one-line detail (rust-analyzer: the signature), when
     /// the result shape carries one.
     pub detail: Option<String>,
@@ -72,6 +75,7 @@ pub fn chain_at(result: &Value, position: Position) -> Result<Vec<Extent>> {
                 name: symbol.name.clone(),
                 kind: symbol.kind,
                 range: symbol.range,
+                selection_range: Some(symbol.selection_range),
                 detail: symbol.detail.clone(),
             });
             level = symbol.children.as_deref().unwrap_or(&[]);
@@ -91,6 +95,7 @@ pub fn chain_at(result: &Value, position: Position) -> Result<Vec<Extent>> {
                 name: symbol.name.clone(),
                 kind: symbol.kind,
                 range: symbol.location.range,
+                selection_range: None,
                 detail: None,
             })
             .collect())
@@ -123,6 +128,7 @@ fn innermost_hierarchical(symbols: &[DocumentSymbol], position: Position) -> Opt
         name: symbol.name.clone(),
         kind: symbol.kind,
         range: symbol.range,
+        selection_range: Some(symbol.selection_range),
         detail: symbol.detail.clone(),
     }))
 }
@@ -136,6 +142,7 @@ fn innermost_flat(symbols: &[SymbolInformation], position: Position) -> Option<E
             name: symbol.name.clone(),
             kind: symbol.kind,
             range: symbol.location.range,
+            selection_range: None,
             detail: None,
         })
 }

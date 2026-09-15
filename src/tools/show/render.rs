@@ -9,19 +9,9 @@
 use super::*;
 use crate::lsp::positions::Encoding;
 
-/// The happy path: `kind name · path:line`, the body, then any notes.
-pub(super) fn render_resolved(
-    root: &Path,
-    kind_label: &str,
-    name: &str,
-    location: &lsp_types::Location,
-    body: &str,
-    notes: &[String],
-) -> String {
-    let mut text = format!(
-        "{kind_label} {name} · {}\n{body}\n",
-        location_line(root, &location.uri, location.range.start)
-    );
+/// The happy path: the header line, the body, then any notes.
+pub(super) fn render_resolved(header: &str, body: &str, notes: &[String]) -> String {
+    let mut text = format!("{header}\n{body}\n");
     for note in notes {
         text.push_str(&format!("note: {note}\n"));
     }

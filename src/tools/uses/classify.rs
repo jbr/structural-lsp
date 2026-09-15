@@ -112,6 +112,7 @@ mod tests {
             name: name.to_string(),
             kind,
             range: Range::new(Position::new(0, 0), Position::new(0, 0)),
+            selection_range: None,
             detail: None,
         }
     }

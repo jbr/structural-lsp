@@ -12,8 +12,10 @@ fn repo_root() -> PathBuf {
 
 fn show(state: &mut structural::state::State, symbol: &str) -> String {
     structural::tools::Show {
-        symbol: symbol.to_string(),
+        symbol: Some(symbol.to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("show {symbol}: {error:#}"))
@@ -53,8 +55,10 @@ fn exact_hits_are_deduplicated_by_definition_target() {
     // `uses` on this repository: `group_by_target` is called from the
     // shared resolution pipeline, and its unit tests are set apart.
     let uses = structural::tools::Uses {
-        symbol: "group_by_target".to_string(),
+        symbol: Some("group_by_target".to_string()),
         path: None,
+        anchor: None,
+        focus: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("uses group_by_target: {error:#}"));
@@ -67,7 +71,9 @@ fn exact_hits_are_deduplicated_by_definition_target() {
         "the production caller's file is listed: {uses}"
     );
     assert!(
-        uses.contains(" · resolve_symbol · let mut identities = group_by_target(found);\n"),
+        uses.lines().any(|line| {
+            line.contains(" · resolve_symbol · ") && line.contains("group_by_target(found)")
+        }),
         "the enclosing function and the source line: {uses}"
     );
     assert!(uses.contains("tests (heuristic) · "), "{uses}");
@@ -75,11 +81,14 @@ fn exact_hits_are_deduplicated_by_definition_target() {
         uses.contains("src/lsp/definition/tests.rs\n"),
         "the unit tests are set apart by their path: {uses}"
     );
-    // The `use` line at the top of resolve.rs is a reference outside any
-    // item: listed without one.
+    // The `use` list at the top of resolution.rs is a reference outside
+    // any item: listed as `line · source` with no item segment.
     assert!(
-        uses.contains(" · use crate::lsp::definition::{\n")
-            || uses.contains(" · Candidate, DefinitionSet, DefinitionTarget, Identity, Partition, Resolution, group_by_target,\n"),
+        uses.lines().any(|line| {
+            line.starts_with("  ")
+                && line.contains("group_by_target")
+                && line.split(" · ").count() == 2
+        }),
         "{uses}"
     );
 

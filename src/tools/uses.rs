@@ -11,14 +11,15 @@
 //! that file was stale and the call is an error, never a listing built on
 //! it. The enclosing item comes from the file's `documentSymbol`.
 
-use crate::lsp::definition::{DefinitionTarget, Identity};
 use crate::lsp::outline;
 use crate::lsp::positions::{Encoding, position_to_offset};
 use crate::lsp::references::{FileHits, group_by_file, parse_references_result, verify_reference_at};
 use crate::lsp::server::LspServer;
 use crate::state::State;
-use crate::tools::listing::{location_line, relative_display};
-use crate::tools::resolution::{Found, Resolved, resolve_symbol, server_named, sync_target};
+use crate::tools::listing::{header, location_line, relative_display};
+use crate::tools::resolution::{
+    Found, Resolved, Target, describe, resolve_target, server_named, sync_target,
+};
 use anyhow::{Context, Result};
 use lsp_types::Position;
 use mcplease::{
@@ -36,33 +37,49 @@ use render::{FileGroup, HitLine, render_uses};
 /// Hits listed before the rest is reported as a count.
 const MAX_HITS: usize = 100;
 
-/// Find the references to a code symbol by its bare name: every use the
-/// language server knows of, with the source line and the enclosing item
-/// for each, grouped by file. Tests are listed separately by a heuristic:
-/// a file or directory named for tests, or a module named `tests`; test
-/// code elsewhere (an inline `#[cfg(test)]` block under another name) is
-/// listed as production.
+/// Find the references to a code symbol: every use the language server
+/// knows of, with the source line and the enclosing item for each, grouped
+/// by file. Target it as `show` does: by name (`symbol`, bare or qualified,
+/// with an optional `path` scope) or by quoting source text (`anchor` in
+/// `path`, `focus` naming the token), which reaches locals and parameters.
+/// Tests are listed separately by a heuristic: a file or directory named
+/// for tests, or a module named `tests`; test code elsewhere (an inline
+/// `#[cfg(test)]` block under another name) is listed as production.
 ///
-/// The symbol resolves exactly as `show` does; an ambiguous or unknown name
-/// returns the same listing. The declaration itself is not a reference.
-/// References follow symbol identity, not text, so renames, re-exports and
-/// method calls are found and same-named strangers are not. The answer is
-/// current: owned files are re-synced from disk and the server is waited
-/// for before every query. `path` scopes where the *symbol* is looked up,
-/// not where its references are listed.
+/// An ambiguous or unknown target returns the same listing `show` gives.
+/// The declaration itself is not a reference. References follow symbol
+/// identity, not text, so renames, re-exports and method calls are found
+/// and same-named strangers are not. The answer is current: owned files
+/// are re-synced from disk and the server is waited for before every
+/// query. `path` scopes where the *symbol* is looked up, not where its
+/// references are listed.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "uses")]
 #[group(skip)]
 pub struct Uses {
-    /// Exact bare symbol name (e.g. `Config`, `choose`). Qualified paths
-    /// (`Config::new`) are rejected; pass the bare name.
-    pub symbol: String,
-
-    /// A file or directory under the workspace root, relative to it, to
-    /// narrow the symbol's definition to. A file also picks the language
-    /// server for it.
+    /// The symbol's name: bare (`choose`) or qualified by its container
+    /// (`Config::new`, `Config.doubled`). Exact match on the name.
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+
+    /// A file or directory under the workspace root, relative to it: a
+    /// scope for `symbol`, or the file an `anchor` is quoted from. A file
+    /// also picks the language server for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
     pub path: Option<String>,
+
+    /// Source text quoted verbatim from `path`, occurring exactly once in
+    /// it; an alternative to `symbol`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub anchor: Option<String>,
+
+    /// The token within `anchor` that is meant, occurring once in the
+    /// anchor; the whole anchor when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub focus: Option<String>,
 }
 
 impl ToolMeta for Uses {
@@ -86,41 +103,32 @@ impl Tool<State> for Uses {
 
     fn execute(self, state: &mut State, _context: &RequestContext) -> Result<Self::Output> {
         let root = state.root().to_path_buf();
-        match resolve_symbol(state, &self.symbol, self.path.as_deref())? {
+        let target = Target {
+            symbol: self.symbol.as_deref(),
+            path: self.path.as_deref(),
+            anchor: self.anchor.as_deref(),
+            focus: self.focus.as_deref(),
+        };
+        match resolve_target(state, target)? {
             Resolved::Listed(listing) => Ok(listing),
-            Resolved::One(found) => {
-                let Found { identity, target } = *found;
-                references_of(state, &root, self.symbol.trim(), &identity, &target)
-            }
+            Resolved::One(found) => references_of(state, &root, &found),
         }
     }
 }
 
 /// The references of one identity, rendered.
-fn references_of(
-    state: &mut State,
-    root: &Path,
-    symbol: &str,
-    identity: &Identity,
-    target: &DefinitionTarget,
-) -> Result<String> {
-    let (_, synced) = sync_target(state, root, symbol, identity, target)?;
-    let server = server_named(state, &identity.server)?;
-    // The header names the item as `show` would: the outline's kind and
-    // name at the target when the server gives one, else the candidate's.
-    let origin = &identity.candidates[0];
-    let extent = match server.document_symbol(&synced.uri)? {
-        Some(outline) => outline::innermost_at(&outline, target.selection_range.start)?,
-        None => None,
-    };
-    let kind = extent.as_ref().map_or(origin.info.kind, |extent| extent.kind);
-    let name = extent
-        .as_ref()
-        .map_or(origin.info.name.as_str(), |extent| extent.name.as_str());
-    let header = format!(
-        "{} {name} · {}",
-        server.adapter().kind_label(kind),
-        location_line(root, &target.uri, target.selection_range.start)
+fn references_of(state: &mut State, root: &Path, found: &Found) -> Result<String> {
+    let (_, synced) = sync_target(state, root, found)?;
+    let server = server_named(state, &found.identity.server)?;
+    let target = &found.target;
+    let symbol = found.name.as_str();
+    // The header names the item as `show` would.
+    let outline = server.document_symbol(&synced.uri)?;
+    let described = describe(server, outline.as_ref(), found)?;
+    let header = header(
+        described.kind_label,
+        &described.name,
+        &location_line(root, &target.uri, target.selection_range.start),
     );
 
     // The sync above precedes this on the wire; wait again in case it

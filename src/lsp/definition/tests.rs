@@ -436,6 +436,9 @@ fn distinct_targets_stay_distinct_and_none_is_listed_not_dropped() {
             ("gopls".to_string(), Some(2)),
         ]
     );
-    assert_eq!(identities[2].kind(), identities[2].candidates[0].info.kind);
+    assert_eq!(
+        identities[2].kind(),
+        Some(identities[2].candidates[0].info.kind)
+    );
     assert_eq!(identities[2].name(), "Server");
 }

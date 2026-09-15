@@ -13,30 +13,16 @@ fn scratch_root() -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-both-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let fixtures = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures"));
-    copy_tree(fixtures, &root);
+    crate::copy_tree(fixtures, &root);
     std::fs::canonicalize(root).unwrap()
-}
-
-fn copy_tree(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            if entry.file_name() == "target" {
-                continue;
-            }
-            copy_tree(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), target).unwrap();
-        }
-    }
 }
 
 fn show(state: &mut structural::state::State, symbol: &str, path: Option<&str>) -> String {
     structural::tools::Show {
-        symbol: symbol.to_string(),
+        symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
+        anchor: None,
+        focus: None,
     }
     .execute(state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("show {symbol} {path:?}: {error:#}"))
@@ -44,8 +30,10 @@ fn show(state: &mut structural::state::State, symbol: &str, path: Option<&str>) 
 
 fn uses(state: &mut structural::state::State, symbol: &str, path: Option<&str>) -> String {
     structural::tools::Uses {
-        symbol: symbol.to_string(),
+        symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
+        anchor: None,
+        focus: None,
     }
     .execute(state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("uses {symbol} {path:?}: {error:#}"))

@@ -184,22 +184,57 @@ pub fn resolve(
 #[derive(Debug)]
 pub struct Identity {
     pub server: String,
-    /// Where `textDocument/definition` went from the candidate(s), or `None`
-    /// when the server reported no definition for them.
+    /// Where `textDocument/definition` went from the origin, or `None` when
+    /// the server reported no definition for it.
     pub target: Option<DefinitionTarget>,
-    /// Every exact candidate that led here, in discovery order. The first is
-    /// the one reported as the resolution's origin.
+    /// What the identity was reached from: the first exact candidate, or
+    /// the focus of an anchor.
+    pub origin: Origin,
+    /// Every exact candidate that led here, in discovery order; empty for
+    /// an anchored identity.
     pub candidates: Vec<Candidate>,
 }
 
+/// Where a resolution started, for headers and listings when the outline
+/// cannot name the target itself.
+#[derive(Debug, Clone)]
+pub struct Origin {
+    pub name: String,
+    /// The symbol index's kind for a candidate; `None` for an anchor, whose
+    /// focus has no kind until the outline confirms one.
+    pub kind: Option<lsp_types::SymbolKind>,
+    /// The candidate's own location, or the focus's.
+    pub location: Location,
+}
+
+impl Origin {
+    pub fn of(candidate: &Candidate) -> Self {
+        Self {
+            name: candidate.info.name.clone(),
+            kind: Some(candidate.info.kind),
+            location: candidate.info.location.clone(),
+        }
+    }
+}
+
 impl Identity {
-    /// The kind of the first candidate that led here, for listings.
-    pub fn kind(&self) -> lsp_types::SymbolKind {
-        self.candidates[0].info.kind
+    /// The origin's kind, for listings.
+    pub fn kind(&self) -> Option<lsp_types::SymbolKind> {
+        self.origin.kind
     }
 
     pub fn name(&self) -> &str {
-        &self.candidates[0].info.name
+        &self.origin.name
+    }
+
+    /// An identity reached from an anchor's focus rather than a candidate.
+    pub fn anchored(server: &str, origin: Origin, target: Option<DefinitionTarget>) -> Self {
+        Self {
+            server: server.to_string(),
+            target,
+            origin,
+            candidates: Vec::new(),
+        }
     }
 }
 
@@ -214,7 +249,7 @@ pub fn group_by_target(found: Vec<(Candidate, DefinitionSet)>) -> Vec<Identity> 
             identity.server == candidate.server
                 && match (&identity.target, &target) {
                     (Some(a), Some(b)) => a.uri == b.uri && a.selection_range == b.selection_range,
-                    (None, None) => identity.candidates[0].info.location == candidate.info.location,
+                    (None, None) => identity.origin.location == candidate.info.location,
                     _ => false,
                 }
         };
@@ -223,6 +258,7 @@ pub fn group_by_target(found: Vec<(Candidate, DefinitionSet)>) -> Vec<Identity> 
             None => identities.push(Identity {
                 server: candidate.server.clone(),
                 target,
+                origin: Origin::of(&candidate),
                 candidates: vec![candidate],
             }),
         }
