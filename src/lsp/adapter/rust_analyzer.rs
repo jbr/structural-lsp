@@ -53,6 +53,13 @@ impl Adapter for RustAnalyzer {
         Box::new(Quiescence::default())
     }
 
+    /// `-> Self` and `Self { .. }` inside an impl are reported as references
+    /// to the type (`docs/spike.md`'s raw capture for the fixture's
+    /// `Config`); a trait's `Self` likewise.
+    fn reference_aliases(&self) -> Vec<&'static str> {
+        vec!["Self"]
+    }
+
     fn kind_label(&self, kind: SymbolKind) -> &'static str {
         match kind {
             SymbolKind::FUNCTION | SymbolKind::METHOD => "fn",

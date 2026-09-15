@@ -50,5 +50,38 @@ fn exact_hits_are_deduplicated_by_definition_target() {
         "{server}"
     );
 
+    // `uses` on this repository: `group_by_target` is called from the
+    // shared resolution pipeline, and its unit tests are set apart.
+    let uses = structural::tools::Uses {
+        symbol: "group_by_target".to_string(),
+        path: None,
+    }
+    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .unwrap_or_else(|error| panic!("uses group_by_target: {error:#}"));
+    assert!(
+        uses.starts_with("fn group_by_target · src/lsp/definition.rs:"),
+        "{uses}"
+    );
+    assert!(
+        uses.contains("src/tools/resolution.rs\n"),
+        "the production caller's file is listed: {uses}"
+    );
+    assert!(
+        uses.contains(" · resolve_symbol · let mut identities = group_by_target(found);\n"),
+        "the enclosing function and the source line: {uses}"
+    );
+    assert!(uses.contains("tests (heuristic) · "), "{uses}");
+    assert!(
+        uses.contains("src/lsp/definition/tests.rs\n"),
+        "the unit tests are set apart by their path: {uses}"
+    );
+    // The `use` line at the top of resolve.rs is a reference outside any
+    // item: listed without one.
+    assert!(
+        uses.contains(" · use crate::lsp::definition::{\n")
+            || uses.contains(" · Candidate, DefinitionSet, DefinitionTarget, Identity, Partition, Resolution, group_by_target,\n"),
+        "{uses}"
+    );
+
     drop(state);
 }

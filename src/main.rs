@@ -19,10 +19,12 @@ fn main() -> anyhow::Result<()> {
         .with_context(|| format!("workspace root `{}` does not exist", root.display()))?;
     let mut state = state::State::new(root);
     let instructions = "\
-show resolves a bare symbol name to its definition's decorated source. \
-Candidates come from the language servers' fuzzy symbol index and are not \
-proven exhaustive; only exact names resolve, and several distinct definitions \
-are listed rather than picked. Every answer is current: owned files are \
+show resolves a bare symbol name to its definition's decorated source; uses \
+lists the references to it, one source line per hit with its enclosing item, \
+tests set apart heuristically. Candidates come from the language servers' \
+fuzzy symbol index and are not proven exhaustive; only exact names resolve, \
+and several distinct definitions are listed rather than picked. References \
+follow symbol identity, not text. Every answer is current: owned files are \
 re-synced from disk and the servers are waited for before each query. The \
 workspace root is fixed at server start; `path` only scopes inside it.";
     mcplease::run::<tools::Tools, _>(

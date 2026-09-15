@@ -1,8 +1,9 @@
 # structural
 
 An MCP server that gives coding agents LSP-backed code intelligence. Design in
-`design.md`; the current plan is `docs/slice-2.md` with decisions recorded in
-`docs/slice-2-handoff.md`.
+`design.md`. Slice 2 (`docs/slice-2.md`, decisions in
+`docs/slice-2-handoff.md`) built the kernel and `show`; slice 3
+(`docs/slice-3.md`) added `uses`.
 
 ## Conventions
 

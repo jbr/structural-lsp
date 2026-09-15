@@ -1,4 +1,4 @@
-//! In-process and real-stdio MCP smokes for the `show` slice. Both need
+//! In-process and real-stdio MCP smokes for `show` and `uses`. Both need
 //! rust-analyzer and are gated: run with `cargo test --test mcp_smoke -- --ignored`.
 
 use mcplease::traits::Tool;
@@ -97,6 +97,63 @@ fn in_process_show_resolves_the_fixture_struct() {
     let error = qualified.unwrap_err().to_string();
     assert!(error.contains("qualified paths"), "{error}");
 
+    // `uses` on the same fixture: every call to `choose` is in `run`, the
+    // declaration is not a reference, and each hit carries its line.
+    let uses = structural::tools::Uses {
+        symbol: "choose".to_string(),
+        path: None,
+    }
+    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .expect("uses choose succeeds");
+    let call_line = lib[..lib.find("let offset = choose(Mode::Fast);").unwrap()]
+        .matches('\n')
+        .count()
+        + 1;
+    assert_eq!(
+        uses,
+        format!(
+            "fn choose · src/lib.rs:{line} · 1 reference · 1 file\nsrc/lib.rs\n  {call_line} · run · \
+             let offset = choose(Mode::Fast);\n"
+        ),
+        "one header, one file, one hit, nothing else"
+    );
+
+    // `Config` is used as `Self` inside its impl: those are references to
+    // the struct and verify through the adapter's alias, not an error. The
+    // re-export in `alias` and the `use super::*` glob are not hits by
+    // name; the impl headers and the constructor call are.
+    let config_uses = structural::tools::Uses {
+        symbol: "Config".to_string(),
+        path: None,
+    }
+    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .expect("uses Config succeeds");
+    assert!(
+        config_uses.starts_with("struct Config · src/lib.rs:"),
+        "{config_uses}"
+    );
+    assert!(
+        config_uses.contains("· new · pub fn new(limit: usize) -> Self {"),
+        "{config_uses}"
+    );
+    assert!(
+        config_uses.contains("· new · Self { limit }"),
+        "{config_uses}"
+    );
+    assert!(
+        config_uses.contains("· run · let config = Config::new(3);"),
+        "{config_uses}"
+    );
+    assert!(config_uses.contains("· impl Config {"), "{config_uses}");
+    assert!(
+        config_uses.contains("· alias · pub use super::Config;"),
+        "{config_uses}"
+    );
+    assert!(
+        !config_uses.contains("pub struct Config"),
+        "the declaration is not a reference: {config_uses}"
+    );
+
     // A scope escaping the root is rejected.
     let escaping = structural::tools::Show {
         symbol: "Config".to_string(),
@@ -163,7 +220,7 @@ fn stdio_mcp_serves_and_reports_actionable_error_without_rust_analyzer() {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str))
         .collect();
-    assert_eq!(names, ["show"], "{names:?}");
+    assert_eq!(names, ["show", "uses"], "{names:?}");
 
     let call = request(
         3,
@@ -231,7 +288,7 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str))
         .collect();
-    assert_eq!(names, ["show"], "exactly one tool, show: {names:?}");
+    assert_eq!(names, ["show", "uses"], "the two tools: {names:?}");
     let schema = tools[0].get("inputSchema").expect("input schema");
     assert!(schema.to_string().contains("symbol"), "{schema}");
 

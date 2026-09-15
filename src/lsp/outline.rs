@@ -48,6 +48,62 @@ pub fn innermost_at(result: &Value, position: Position) -> Result<Option<Extent>
     }
 }
 
+/// The chain of symbols containing `position`, outermost first, or empty
+/// when none does. For the hierarchical shape this is the nesting path;
+/// for the flat shape it is every containing symbol from largest to
+/// smallest range. `Err` only for a result that is neither shape.
+pub fn chain_at(result: &Value, position: Position) -> Result<Vec<Extent>> {
+    if result.is_null() {
+        return Ok(Vec::new());
+    }
+    let Some(items) = result.as_array() else {
+        anyhow::bail!("documentSymbol result is neither null nor an array: {result}");
+    };
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
+    if items[0].get("range").is_some() {
+        let symbols: Vec<DocumentSymbol> =
+            serde_json::from_value(result.clone()).context("parsing DocumentSymbol[]")?;
+        let mut chain = Vec::new();
+        let mut level = symbols.as_slice();
+        while let Some(symbol) = level.iter().find(|symbol| contains(symbol.range, position)) {
+            chain.push(Extent {
+                name: symbol.name.clone(),
+                kind: symbol.kind,
+                range: symbol.range,
+                detail: symbol.detail.clone(),
+            });
+            level = symbol.children.as_deref().unwrap_or(&[]);
+        }
+        Ok(chain)
+    } else {
+        let symbols: Vec<SymbolInformation> =
+            serde_json::from_value(result.clone()).context("parsing SymbolInformation[]")?;
+        let mut containing: Vec<&SymbolInformation> = symbols
+            .iter()
+            .filter(|symbol| contains(symbol.location.range, position))
+            .collect();
+        containing.sort_by_key(|symbol| std::cmp::Reverse(span(symbol.location.range)));
+        Ok(containing
+            .into_iter()
+            .map(|symbol| Extent {
+                name: symbol.name.clone(),
+                kind: symbol.kind,
+                range: symbol.location.range,
+                detail: None,
+            })
+            .collect())
+    }
+}
+
+fn span(range: Range) -> (u32, u32) {
+    (
+        range.end.line - range.start.line,
+        range.end.character.wrapping_sub(range.start.character),
+    )
+}
+
 fn contains(range: Range, position: Position) -> bool {
     let after_start =
         (position.line, position.character) >= (range.start.line, range.start.character);
@@ -75,13 +131,7 @@ fn innermost_flat(symbols: &[SymbolInformation], position: Position) -> Option<E
     symbols
         .iter()
         .filter(|symbol| contains(symbol.location.range, position))
-        .min_by_key(|symbol| {
-            let range = symbol.location.range;
-            (
-                range.end.line - range.start.line,
-                range.end.character.wrapping_sub(range.start.character),
-            )
-        })
+        .min_by_key(|symbol| span(symbol.location.range))
         .map(|symbol| Extent {
             name: symbol.name.clone(),
             kind: symbol.kind,
@@ -134,6 +184,43 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn chain_is_outermost_first_and_empty_between_items() {
+        let outline = json!([
+            {
+                "name": "tests", "kind": 2,
+                "range": range(30, 0, 40, 1), "selectionRange": range(30, 4, 30, 9),
+                "children": [
+                    { "name": "smoke", "kind": 12, "range": range(32, 4, 35, 5), "selectionRange": range(33, 7, 33, 12) }
+                ]
+            }
+        ]);
+        let names: Vec<String> = chain_at(&outline, Position::new(34, 8))
+            .unwrap()
+            .into_iter()
+            .map(|extent| extent.name)
+            .collect();
+        assert_eq!(names, ["tests", "smoke"]);
+        assert!(chain_at(&outline, Position::new(10, 0)).unwrap().is_empty());
+        assert!(
+            chain_at(&Value::Null, Position::new(0, 0))
+                .unwrap()
+                .is_empty()
+        );
+
+        let uri = "file:///ws/a.py";
+        let flat = json!([
+            { "name": "doubled", "kind": 6, "location": { "uri": uri, "range": range(9, 4, 12, 5) } },
+            { "name": "Config", "kind": 5, "location": { "uri": uri, "range": range(3, 0, 20, 1) } }
+        ]);
+        let names: Vec<String> = chain_at(&flat, Position::new(10, 0))
+            .unwrap()
+            .into_iter()
+            .map(|extent| extent.name)
+            .collect();
+        assert_eq!(names, ["Config", "doubled"], "largest range first");
     }
 
     #[test]

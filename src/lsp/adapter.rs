@@ -138,9 +138,16 @@ pub trait Adapter: Send + Sync {
         DEFAULT_BACKSTOP
     }
 
-    /// Views beyond the standard queries this server can answer. Empty in
-    /// slice 2; the hook for slice 3.
+    /// Views beyond the standard queries this server can answer. Empty
+    /// until a tool takes a `view`.
     fn extra_views(&self) -> Vec<&'static str> {
+        Vec::new()
+    }
+
+    /// Tokens this server reports as references to a symbol without
+    /// spelling its name (rust-analyzer: `Self`). A reference whose text is
+    /// neither the name nor one of these is a stale range.
+    fn reference_aliases(&self) -> Vec<&'static str> {
         Vec::new()
     }
 

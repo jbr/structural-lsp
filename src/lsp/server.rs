@@ -319,6 +319,20 @@ impl LspServer {
         )
     }
 
+    /// `textDocument/references` at a position (in this server's encoding),
+    /// without the declaration; the raw result is normalized by
+    /// [`crate::lsp::references::parse_references_result`].
+    pub fn references(&self, uri: &str, position: Position) -> Result<Value> {
+        self.handle().request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": position,
+                "context": { "includeDeclaration": false },
+            }),
+        )
+    }
+
     /// `textDocument/documentSymbol` for an owned document, or `None` when
     /// the server did not advertise the capability. The raw result is read
     /// by [`crate::lsp::outline::innermost_at`].

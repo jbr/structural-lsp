@@ -1,3 +1,6 @@
 use crate::state::State;
 
-mcplease::tools!(State, (Show, show, "show"));
+pub mod listing;
+pub mod resolution;
+
+mcplease::tools!(State, (Show, show, "show"), (Uses, uses, "uses"));

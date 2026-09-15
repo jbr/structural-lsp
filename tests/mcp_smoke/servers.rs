@@ -42,6 +42,15 @@ fn show(state: &mut structural::state::State, symbol: &str, path: Option<&str>) 
     .unwrap_or_else(|error| panic!("show {symbol} {path:?}: {error:#}"))
 }
 
+fn uses(state: &mut structural::state::State, symbol: &str, path: Option<&str>) -> String {
+    structural::tools::Uses {
+        symbol: symbol.to_string(),
+        path: path.map(str::to_string),
+    }
+    .execute(state, &mcplease::types::RequestContext::default())
+    .unwrap_or_else(|error| panic!("uses {symbol} {path:?}: {error:#}"))
+}
+
 #[test]
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn both_servers_answer_from_one_root() {
@@ -111,6 +120,46 @@ fn both_servers_answer_from_one_root() {
     assert!(
         python_only.contains(" DEFAULT_LIMIT · python/helper.py:"),
         "{python_only}"
+    );
+
+    // `uses` across the same root: unscoped, `choose` is still two things
+    // and is listed, not picked; scoped to python, pyright's references
+    // are the import and the call in `make`, each with its line.
+    let both_uses = uses(&mut state, "choose", None);
+    assert!(
+        both_uses.starts_with("ambiguous: 2 definitions of 'choose'"),
+        "{both_uses}"
+    );
+    let python_uses = uses(&mut state, "choose", Some("python"));
+    assert!(
+        python_uses.starts_with("def choose · python/helper.py:"),
+        "{python_uses}"
+    );
+    assert!(
+        python_uses.contains("· 2 references · 1 file\npython/main.py\n"),
+        "{python_uses}"
+    );
+    assert!(
+        python_uses
+            .contains("  3 · from helper import DEFAULT_LIMIT, Config, Label, choose, identity\n"),
+        "the import is a reference outside any item: {python_uses}"
+    );
+    assert!(
+        python_uses.contains(" · make · offset = choose(True)\n"),
+        "{python_uses}"
+    );
+    // pyright's outline nests methods under their class.
+    let doubled = uses(&mut state, "doubled", Some("python"));
+    assert!(
+        doubled.contains(" · make · count = config.doubled()\n"),
+        "{doubled}"
+    );
+    let limit = uses(&mut state, "DEFAULT_LIMIT", None);
+    assert!(
+        limit.contains(
+            " · Config::__init__ · def __init__(self, limit: int = DEFAULT_LIMIT) -> None:\n"
+        ),
+        "the enclosing method is prefixed by its class: {limit}"
     );
 
     drop(state);
