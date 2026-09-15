@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 
 mod configured;
 mod identity;
+mod rename;
 mod responsive;
 mod servers;
 mod stdio_server;
@@ -261,7 +262,7 @@ fn stdio_mcp_serves_and_reports_actionable_error_without_rust_analyzer() {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str))
         .collect();
-    assert_eq!(names, ["show", "uses"], "{names:?}");
+    assert_eq!(names, ["show", "uses", "action"], "{names:?}");
 
     let call = request(
         3,
@@ -329,7 +330,11 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str))
         .collect();
-    assert_eq!(names, ["show", "uses"], "the two tools: {names:?}");
+    assert_eq!(
+        names,
+        ["show", "uses", "action"],
+        "the three tools: {names:?}"
+    );
     let schema = tools[0].get("inputSchema").expect("input schema");
     assert!(schema.to_string().contains("symbol"), "{schema}");
 

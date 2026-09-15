@@ -130,6 +130,57 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         "{signature}"
     );
 
+    // Rename through the generic adapter: both files change.
+    let preview = structural::tools::Action {
+        action: "rename".to_string(),
+        symbol: Some("Greet".to_string()),
+        path: None,
+        anchor: None,
+        focus: None,
+        new_name: Some("Hello".to_string()),
+        mode: None,
+        digest: None,
+    }
+    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .unwrap_or_else(|error| panic!("rename Greet: {error:#}"));
+    assert!(
+        preview.starts_with(
+            "rename Greet → Hello · function Greet · greet.go:4 · 4 edits · 3 files\n"
+        ),
+        "{preview}"
+    );
+    assert!(
+        preview.contains("func Hello(name string) string {\n"),
+        "{preview}"
+    );
+    assert!(preview.contains("return Hello(\"world\")\n"), "{preview}");
+    let digest = preview
+        .lines()
+        .find_map(|line| line.strip_prefix("digest: "))
+        .expect("a digest")
+        .to_string();
+    let applied = structural::tools::Action {
+        action: "rename".to_string(),
+        symbol: Some("Greet".to_string()),
+        path: None,
+        anchor: None,
+        focus: None,
+        new_name: Some("Hello".to_string()),
+        mode: Some("apply".to_string()),
+        digest: Some(digest),
+    }
+    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .unwrap_or_else(|error| panic!("apply rename Greet: {error:#}"));
+    assert!(
+        applied.starts_with("applied: rename Greet → Hello"),
+        "{applied}"
+    );
+    assert!(
+        std::fs::read_to_string(root.join("main.go"))
+            .unwrap()
+            .contains("return Hello(\"world\")")
+    );
+
     drop(state);
     let _ = std::fs::remove_dir_all(&root);
 }

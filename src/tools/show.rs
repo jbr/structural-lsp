@@ -26,6 +26,7 @@ use std::path::Path;
 
 mod render;
 mod views;
+pub use views::target_header;
 use render::*;
 
 /// Upper bound on the returned item body. Omission is noted, never silent;
@@ -172,6 +173,11 @@ fn shape_body(
 ) -> Result<(String, Vec<String>)> {
     let encoding = server.encoding();
     let target: &DefinitionTarget = &found.target;
+    if crate::lsp::definition::is_whole_file(text, target.selection_range, encoding) {
+        // A module whose definition is its file: the file is the body.
+        let (body, truncated) = budget(text);
+        return Ok((body, truncated.into_iter().collect()));
+    }
     if let Some(extent) = &described.extent {
         let start = position_to_offset(text, extent.range.start, encoding)
             .context("the documentSymbol range starts outside the file as read from disk")?;

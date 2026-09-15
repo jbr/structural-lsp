@@ -287,7 +287,9 @@ pub fn verify_name_at(text: &str, range: Range, name: &str, encoding: Encoding) 
         .context("the reported range starts outside the file as read from disk")?;
     let end = position_to_offset(text, range.end, encoding)
         .context("the reported range ends outside the file as read from disk")?;
-    if start == end {
+    if start == end || (start == 0 && end == text.len()) {
+        // Nothing, or the whole file: a module whose definition *is* its
+        // file (rust-analyzer reports either shape) names no token.
         return Ok(());
     }
     if end < start {
@@ -303,6 +305,14 @@ pub fn verify_name_at(text: &str, range: Range, name: &str, encoding: Encoding) 
             range.start.character + 1
         )
     }
+}
+
+/// Whether `range` is the whole of `text`: a definition target that is a
+/// file rather than a token in one.
+pub fn is_whole_file(text: &str, range: Range, encoding: Encoding) -> bool {
+    range.start == lsp_types::Position::new(0, 0)
+        && position_to_offset(text, range.end, encoding).is_ok_and(|end| end == text.len())
+        && !text.is_empty()
 }
 
 /// The filesystem path of a `file:` URI, if it is one.

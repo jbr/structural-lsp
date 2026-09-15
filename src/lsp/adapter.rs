@@ -229,7 +229,12 @@ pub fn standard_capabilities(position_encodings: &[&str], experimental: Value) -
     let mut capabilities = json!({
         "workspace": {
             "configuration": true,
-            "symbol": { "symbolKind": { "valueSet": (1..=26).collect::<Vec<_>>() } }
+            "symbol": { "symbolKind": { "valueSet": (1..=26).collect::<Vec<_>>() } },
+            // Edits come back as results (rename) and are applied by this
+            // client: per-document edits, and file renames for a module
+            // rename. Creation and deletion are not advertised, so a
+            // server must not ask for them.
+            "workspaceEdit": { "documentChanges": true, "resourceOperations": ["rename"] }
         },
         "textDocument": {
             "synchronization": {
@@ -241,6 +246,9 @@ pub fn standard_capabilities(position_encodings: &[&str], experimental: Value) -
             },
             "definition": { "linkSupport": false },
             "references": {},
+            "implementation": { "linkSupport": false },
+            "callHierarchy": {},
+            "rename": { "prepareSupport": true },
             "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
             "hover": { "contentFormat": ["markdown", "plaintext"] },
             "codeAction": {

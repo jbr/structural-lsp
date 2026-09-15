@@ -330,6 +330,11 @@ impl LspServer {
         )
     }
 
+    /// The server's capabilities as returned by `initialize`.
+    pub fn capabilities(&self) -> &Value {
+        &self.capabilities
+    }
+
     /// Whether the server advertised a capability: `provider` is the
     /// `ServerCapabilities` key (`documentSymbolProvider`,
     /// `callHierarchyProvider`, …); absent, `null` and `false` are no.
@@ -379,6 +384,39 @@ impl LspServer {
     pub fn hover(&self, uri: &str, range: lsp_types::Range) -> Result<Value> {
         self.handle()
             .request("textDocument/hover", self.adapter.hover_params(uri, range))
+    }
+
+    /// `textDocument/prepareRename` at a position: `null` when the server
+    /// says nothing there can be renamed.
+    pub fn prepare_rename(&self, uri: &str, position: Position) -> Result<Value> {
+        self.handle().request(
+            "textDocument/prepareRename",
+            json!({ "textDocument": { "uri": uri }, "position": position }),
+        )
+    }
+
+    /// `textDocument/rename`: the `WorkspaceEdit` that renames the symbol
+    /// at a position, as a result to apply here, never applied by the
+    /// server.
+    pub fn rename(&self, uri: &str, position: Position, new_name: &str) -> Result<Value> {
+        self.handle().request(
+            "textDocument/rename",
+            json!({ "textDocument": { "uri": uri }, "position": position, "newName": new_name }),
+        )
+    }
+
+    /// A file this server owns was moved on disk: the server is told the
+    /// old document closed, and forgets it; the next `sync` of the new
+    /// path opens it. A file that was not owned needs nothing.
+    pub fn moved(&mut self, from: &Path) -> Result<()> {
+        let uri = path_uri(from)?;
+        if self.opened.remove(&uri).is_some() {
+            self.handle().notify(
+                "textDocument/didClose",
+                json!({ "textDocument": { "uri": uri } }),
+            )?;
+        }
+        Ok(())
     }
 
     /// `textDocument/documentSymbol` for a document, or `None` when the

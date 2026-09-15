@@ -189,6 +189,32 @@ without writing; renaming `Config` also rewrites `Self`-free sites and the
 moves `util.rs`; pyright renames `choose` across `helper.py` and
 `main.py`; gopls renames `Greet` in both files. All gated.
 
+**Done 2026-09-14.** As planned, with:
+
+- `arguments` is a flat `new_name` field rather than an object: one action,
+  one argument, and a flat field is a clearer schema. Item 4 can grow an
+  `arguments` object when an action needs more than a name.
+- rust-analyzer's definition target for a module is the module's whole
+  file, so `verify_name_at` accepts a whole-file range as naming the file
+  (it accepted an empty one already), the rename is requested at the
+  module's declaration (`mod util;`, the origin) rather than at the file
+  start, and `show` renders the whole file for such a target.
+- A rename edit whose range holds something other than the old name (and
+  is not an insertion) is the stale error, like every other range check;
+  rust-analyzer, pyright and gopls all produced plain name replacements
+  in the gated tests, including the `pub use` re-export and the module
+  path.
+- The digest is a 64-bit hash over (path, on-disk text, edits) per file
+  plus the renames, printed as 16 hex digits: a confirmation token, not a
+  security boundary.
+- gopls lists a rename's edits in a different order on each call (a Go
+  map somewhere), which made the preview's digest miss on apply about
+  half the time. `edits::normalize` orders files by path and edits by
+  range, so the digest is a function of the edit, not of the listing.
+- After an apply, the moved file is closed on every server that owned it
+  and the target's server re-syncs its owned documents and is waited for;
+  `show` on the new name resolves immediately in every gated test.
+
 ## 4. Other actions (if the slice has room)
 
 `action` with no `action` given lists what the server offers at the target:

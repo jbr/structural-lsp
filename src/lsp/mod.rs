@@ -9,6 +9,7 @@
 pub mod adapter;
 pub mod anchor;
 pub mod definition;
+pub mod edits;
 pub mod framing;
 pub mod handle;
 pub mod handlers;

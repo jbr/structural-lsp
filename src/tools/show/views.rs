@@ -123,7 +123,7 @@ fn extra(state: &mut State, root: &Path, view: &str, target: Target<'_>) -> Resu
 }
 
 /// `show`'s header for a resolved target, from its file's outline.
-pub(super) fn target_header(state: &mut State, root: &Path, found: &Found) -> Result<String> {
+pub fn target_header(state: &mut State, root: &Path, found: &Found) -> Result<String> {
     let (_, synced) = sync_target(state, root, found)?;
     let server = server_named(state, &found.identity.server)?;
     let outline = server.document_symbol(&synced.uri)?;

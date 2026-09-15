@@ -19,9 +19,11 @@ fn main() -> anyhow::Result<()> {
         .with_context(|| format!("workspace root `{}` does not exist", root.display()))?;
     let mut state = state::State::new(root);
     let instructions = "\
-show resolves a symbol to its definition's decorated source; uses lists the \
+show resolves a symbol to its definition's decorated source (or another \
+`view` of it: outline, implementations, calls, type); uses lists the \
 references to it, one source line per hit with its enclosing item, tests set \
-apart heuristically. Target by name (`symbol`, bare or qualified by its \
+apart heuristically; action previews and applies a rename, following \
+identity across files. Target by name (`symbol`, bare or qualified by its \
 container: `Config::new`) or by quoting source text (`anchor` from the file \
 `path`, `focus` naming the token), which reaches locals and call sites. \
 Candidates come from the language servers' fuzzy symbol index and are not \
