@@ -5,6 +5,11 @@ An MCP server that gives coding agents LSP-backed code intelligence. Design in
 `docs/slice-2-handoff.md`) built the kernel and `show`; slice 3
 (`docs/slice-3.md`) added `uses`.
 
+The next development direction is documented in
+`docs/lifecycle-and-discovery.md`: shared MCP/embedded host ownership,
+server lifecycle, zero-config project discovery, and filesystem observation.
+It records agreed intent and sequenced work units, not implemented behavior.
+
 ## Conventions
 
 - **Files stay under about 500 lines.** A soft limit, not a rule to game:
