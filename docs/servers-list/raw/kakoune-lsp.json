@@ -1,0 +1,1582 @@
+[
+ {
+  "source": "kakoune-lsp",
+  "server_id": "clangd",
+  "hook_group": "lsp-filetype-c-family",
+  "filetype_regex": "(?:c|cpp|objc)",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "clangd",
+   "--log=error"
+  ],
+  "executables": [
+   "clangd"
+  ],
+  "root_globs": [
+   "compile_commands.json",
+   ".clangd",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "clojure-lsp",
+  "hook_group": "lsp-filetype-clojure",
+  "filetype_regex": "clojure",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "clojure-lsp"
+  ],
+  "executables": [
+   "clojure-lsp"
+  ],
+  "root_globs": [
+   "project.clj",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "cmake-language-server",
+  "hook_group": "lsp-filetype-cmake",
+  "filetype_regex": "cmake",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "cmake-language-server"
+  ],
+  "executables": [
+   "cmake-language-server"
+  ],
+  "root_globs": [
+   "CMakeLists.txt",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "crystalline",
+  "hook_group": "lsp-filetype-crystal",
+  "filetype_regex": "crystal",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "crystalline"
+  ],
+  "executables": [
+   "crystalline"
+  ],
+  "root_globs": [
+   "shard.yml"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "vscode-css-language-server",
+  "hook_group": "lsp-filetype-css",
+  "filetype_regex": "(?:css|less|scss)",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "vscode-css-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "vscode-css-language-server"
+  ],
+  "root_globs": [
+   "package.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "biome",
+  "hook_group": "lsp-filetype-css",
+  "filetype_regex": "(?:css|less|scss)",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "biome",
+   "lsp-proxy"
+  ],
+  "executables": [
+   "biome"
+  ],
+  "root_globs": [
+   "biome.json",
+   "package.json",
+   "tsconfig.json",
+   "jsconfig.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "dls",
+  "hook_group": "lsp-filetype-d",
+  "filetype_regex": "(?:d|di)",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "dls"
+  ],
+  "executables": [
+   "dls"
+  ],
+  "root_globs": [
+   ".git",
+   "dub.sdl",
+   "dub.json"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "dart-lsp",
+  "hook_group": "lsp-filetype-dart",
+  "filetype_regex": "dart",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "dart",
+   "language-server"
+  ],
+  "executables": [
+   "dart"
+  ],
+  "root_globs": [
+   "pubspec.yaml",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "elixir-ls",
+  "hook_group": "lsp-filetype-elixir",
+  "filetype_regex": "(?:elixir|eex)",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "elixir-ls"
+  ],
+  "executables": [
+   "elixir-ls"
+  ],
+  "root_globs": [
+   "mix.exs"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "elm-language-server",
+  "hook_group": "lsp-filetype-elm",
+  "filetype_regex": "elm",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "elm-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "elm-language-server"
+  ],
+  "root_globs": [
+   "elm.json"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "elvish",
+  "hook_group": "lsp-filetype-elvish",
+  "filetype_regex": "elvish",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "elvish",
+   "-lsp"
+  ],
+  "executables": [
+   "elvish"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "elp",
+  "hook_group": "lsp-filetype-erlang",
+  "filetype_regex": "erlang",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "elp",
+   "server"
+  ],
+  "executables": [
+   "elp"
+  ],
+  "root_globs": [
+   "rebar.config",
+   "erlang.mk",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "fsautocomplete",
+  "hook_group": "lsp-filetype-fsharp",
+  "filetype_regex": "fsharp",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "fsautocomplete"
+  ],
+  "executables": [
+   "fsautocomplete"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg",
+   ".sln",
+   ".fsproj"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "gopls",
+  "hook_group": "lsp-filetype-go",
+  "filetype_regex": "go",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "gopls"
+  ],
+  "executables": [
+   "gopls"
+  ],
+  "root_globs": [
+   "Gopkg.toml",
+   "go.mod",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "biome",
+  "hook_group": "lsp-filetype-graphql",
+  "filetype_regex": "graphql",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "biome",
+   "lsp-proxy"
+  ],
+  "executables": [
+   "biome"
+  ],
+  "root_globs": [
+   "biome.json",
+   "package.json",
+   "tsconfig.json",
+   "jsconfig.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "hare-lsp",
+  "hook_group": "lsp-filetype-hare",
+  "filetype_regex": "hare",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "hare-lsp",
+   "-S"
+  ],
+  "executables": [
+   "hare-lsp"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "haskell-language-server",
+  "hook_group": "lsp-filetype-haskell",
+  "filetype_regex": "haskell",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "haskell-language-server-wrapper",
+   "--lsp"
+  ],
+  "executables": [
+   "haskell-language-server-wrapper"
+  ],
+  "root_globs": [
+   "hie.yaml",
+   "cabal.project",
+   "Setup.hs",
+   "stack.yaml",
+   "*.cabal"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "static-ls",
+  "hook_group": "lsp-filetype-haskell",
+  "filetype_regex": "haskell",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "static-ls"
+  ],
+  "executables": [
+   "static-ls"
+  ],
+  "root_globs": [
+   "*.cabal",
+   "stack.yaml",
+   "cabal.project",
+   "package.yaml",
+   "hie.yaml",
+   "Setup.hs"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "vscode-html-language-server",
+  "hook_group": "lsp-filetype-html",
+  "filetype_regex": "html",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "vscode-html-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "vscode-html-language-server"
+  ],
+  "root_globs": [
+   "package.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "lake",
+  "hook_group": "lsp-filetype-lean",
+  "filetype_regex": "lean",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "sh",
+   "-c",
+   "              kak_buffile=%val{buffile}\n              %opt{lsp_find_root} lakefile.lean lakefile.toml .git .hg >/dev/null\n              exec lake serve\n            "
+  ],
+  "executables": [
+   "sh"
+  ],
+  "root_globs": [
+   "lakefile.lean",
+   "lakefile.toml",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "typescript-language-server",
+  "hook_group": "lsp-filetype-vue",
+  "filetype_regex": "(?:vue)",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "typescript-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "typescript-language-server"
+  ],
+  "root_globs": [
+   "package.json",
+   "tsconfig.json",
+   "jsconfig.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "tailwindcss-language-server",
+  "hook_group": "lsp-filetype-vue",
+  "filetype_regex": "(?:vue)",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "tailwindcss-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "tailwindcss-language-server"
+  ],
+  "root_globs": [
+   "tailwind.*"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "typescript-language-server",
+  "hook_group": "lsp-filetype-javascript",
+  "filetype_regex": "(?:javascript|typescript)",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "typescript-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "typescript-language-server"
+  ],
+  "root_globs": [
+   "package.json",
+   "tsconfig.json",
+   "jsconfig.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "deno",
+  "hook_group": "lsp-filetype-javascript",
+  "filetype_regex": "(?:javascript|typescript)",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "deno",
+   "lsp"
+  ],
+  "executables": [
+   "deno"
+  ],
+  "root_globs": [
+   "package.json",
+   "tsconfig.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "biome",
+  "hook_group": "lsp-filetype-javascript",
+  "filetype_regex": "(?:javascript|typescript)",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "biome",
+   "lsp-proxy"
+  ],
+  "executables": [
+   "biome"
+  ],
+  "root_globs": [
+   "biome.json",
+   "package.json",
+   "tsconfig.json",
+   "jsconfig.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "eslint-language-server",
+  "hook_group": "lsp-filetype-javascript",
+  "filetype_regex": "(?:javascript|typescript)",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "eslint-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "eslint-language-server"
+  ],
+  "root_globs": [
+   ".eslintrc",
+   ".eslintrc.json"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "tailwindcss-language-server",
+  "hook_group": "lsp-filetype-javascript",
+  "filetype_regex": "(?:javascript|typescript)",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "tailwindcss-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "tailwindcss-language-server"
+  ],
+  "root_globs": [
+   "tailwind.*"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "jdtls",
+  "hook_group": "lsp-filetype-java",
+  "filetype_regex": "java",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "jdtls"
+  ],
+  "executables": [
+   "jdtls"
+  ],
+  "root_globs": [
+   "mvnw",
+   "gradlew",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "vscode-json-language-server",
+  "hook_group": "lsp-filetype-json",
+  "filetype_regex": "json",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "vscode-json-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "vscode-json-language-server"
+  ],
+  "root_globs": [
+   "package.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "julia-language-server",
+  "hook_group": "lsp-filetype-julia",
+  "filetype_regex": "julia",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "julia",
+   "--startup-file=no",
+   "--history-file=no",
+   "-e",
+   "            ls_install_path = joinpath(get(DEPOT_PATH, 1, joinpath(homedir(), \".julia\")), \"environments\", \"kak-lsp\");\n            pushfirst!(LOAD_PATH, ls_install_path);\n            using LanguageServer;\n            popfirst!(LOAD_PATH);\n            depot_path = get(ENV, \"JULIA_DEPOT_PATH\", \"\");\n            server = LanguageServer.LanguageServerInstance(stdin, stdout, \"\", depot_path);\n            server.runlinter = true;\n            run(server);\n            "
+  ],
+  "executables": [
+   "julia"
+  ],
+  "root_globs": [
+   "Project.toml",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "intellij-server",
+  "hook_group": "lsp-filetype-kotlin",
+  "filetype_regex": "kotlin",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "intellij-server",
+   "--stdio"
+  ],
+  "executables": [
+   "intellij-server"
+  ],
+  "root_globs": [
+   "mvnw",
+   "gradlew",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "texlab",
+  "hook_group": "lsp-filetype-latex",
+  "filetype_regex": "latex",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "texlab"
+  ],
+  "executables": [
+   "texlab"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "lua-language-server",
+  "hook_group": "lsp-filetype-lua",
+  "filetype_regex": "lua",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "lua-language-server"
+  ],
+  "executables": [
+   "lua-language-server"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": false,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "marksman",
+  "hook_group": "lsp-filetype-markdown",
+  "filetype_regex": "markdown",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "marksman",
+   "server"
+  ],
+  "executables": [
+   "marksman"
+  ],
+  "root_globs": [
+   ".marksman.toml"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "zk",
+  "hook_group": "lsp-filetype-markdown",
+  "filetype_regex": "markdown",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "zk",
+   "lsp"
+  ],
+  "executables": [
+   "zk"
+  ],
+  "root_globs": [
+   ".zk"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "markdown-oxide",
+  "hook_group": "lsp-filetype-markdown",
+  "filetype_regex": "markdown",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "markdown-oxide"
+  ],
+  "executables": [
+   "markdown-oxide"
+  ],
+  "root_globs": [
+   ".moxide.toml",
+   ".obsidian",
+   "logseq"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "mojo-lsp-server",
+  "hook_group": "lsp-filetype-mojo",
+  "filetype_regex": "mojo",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "mojo-lsp-server"
+  ],
+  "executables": [
+   "mojo-lsp-server"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "nimlsp",
+  "hook_group": "lsp-filetype-nim",
+  "filetype_regex": "nim",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "nimlsp"
+  ],
+  "executables": [
+   "nimlsp"
+  ],
+  "root_globs": [
+   "*.nimble",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "nixd",
+  "hook_group": "lsp-filetype-nix",
+  "filetype_regex": "nix",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "nixd"
+  ],
+  "executables": [
+   "nixd"
+  ],
+  "root_globs": [
+   "flake.nix",
+   "shell.nix",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "ocamllsp",
+  "hook_group": "lsp-filetype-ocaml",
+  "filetype_regex": "ocaml",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "ocamllsp"
+  ],
+  "executables": [
+   "ocamllsp"
+  ],
+  "root_globs": [
+   "dune-workspace",
+   "dune-project",
+   "Makefile",
+   "opam",
+   "*.opam",
+   "esy.json",
+   ".git",
+   ".hg",
+   "dune"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "ols",
+  "hook_group": "lsp-filetype-odin",
+  "filetype_regex": "odin",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "ols"
+  ],
+  "executables": [
+   "ols"
+  ],
+  "root_globs": [
+   "ols.json",
+   ".git"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "intelephense",
+  "hook_group": "lsp-filetype-php",
+  "filetype_regex": "php",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "intelephense",
+   "--stdio"
+  ],
+  "executables": [
+   "intelephense"
+  ],
+  "root_globs": [
+   ".htaccess",
+   "composer.json"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "pls",
+  "hook_group": "lsp-filetype-protobuf",
+  "filetype_regex": "protobuf",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "pls"
+  ],
+  "executables": [
+   "pls"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "purescript-language-server",
+  "hook_group": "lsp-filetype-purescript",
+  "filetype_regex": "purescript",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "purescript-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "purescript-language-server"
+  ],
+  "root_globs": [
+   "spago.dhall",
+   "spago.yaml",
+   "package.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "pylsp",
+  "hook_group": "lsp-filetype-python",
+  "filetype_regex": "python",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "pylsp"
+  ],
+  "executables": [
+   "pylsp"
+  ],
+  "root_globs": [
+   "pyproject.toml",
+   "setup.py",
+   "poetry.lock",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "pyright-langserver",
+  "hook_group": "lsp-filetype-python",
+  "filetype_regex": "python",
+  "enabled_by_default": false,
+  "added_with_-add": false,
+  "command": [
+   "pyright-langserver",
+   "--stdio"
+  ],
+  "executables": [
+   "pyright-langserver"
+  ],
+  "root_globs": [
+   "pyproject.toml",
+   "setup.py",
+   "poetry.lock",
+   "pyrightconfig.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "ruff",
+  "hook_group": "lsp-filetype-python",
+  "filetype_regex": "python",
+  "enabled_by_default": false,
+  "added_with_-add": true,
+  "command": [
+   "ruff",
+   "server",
+   "--quiet"
+  ],
+  "executables": [
+   "ruff"
+  ],
+  "root_globs": [
+   "pyproject.toml",
+   "setup.py",
+   "poetry.lock",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "r-language-server",
+  "hook_group": "lsp-filetype-r",
+  "filetype_regex": "r",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "R",
+   "--slave",
+   "-e",
+   "languageserver::run()"
+  ],
+  "executables": [
+   "R"
+  ],
+  "root_globs": [
+   "DESCRIPTION",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "racket-language-server",
+  "hook_group": "lsp-filetype-racket",
+  "filetype_regex": "racket",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "racket",
+   "-l",
+   "racket-langserver"
+  ],
+  "executables": [
+   "racket"
+  ],
+  "root_globs": [
+   "info.rkt"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "ocamllsp",
+  "hook_group": "lsp-filetype-reason",
+  "filetype_regex": "reason",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "ocamllsp"
+  ],
+  "executables": [
+   "ocamllsp"
+  ],
+  "root_globs": [
+   "package.json",
+   "Makefile",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "rust-analyzer",
+  "hook_group": "lsp-filetype-rust",
+  "filetype_regex": "rust",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "rust-analyzer"
+  ],
+  "executables": [
+   "rust-analyzer"
+  ],
+  "root_globs": [
+   "Cargo.toml"
+  ],
+  "root": null,
+  "single_instance": true,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "solargraph",
+  "hook_group": "lsp-filetype-ruby",
+  "filetype_regex": "ruby",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "solargraph",
+   "stdio"
+  ],
+  "executables": [
+   "solargraph"
+  ],
+  "root_globs": [
+   "Gemfile"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "metals",
+  "hook_group": "lsp-filetype-scala",
+  "filetype_regex": "scala",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "metals",
+   "-Dmetals.extensions=false"
+  ],
+  "executables": [
+   "metals"
+  ],
+  "root_globs": [
+   "build.sbt",
+   ".scala-build"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "bash-language-server",
+  "hook_group": "lsp-filetype-sh",
+  "filetype_regex": "sh",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "bash-language-server",
+   "start"
+  ],
+  "executables": [
+   "bash-language-server"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "svelteserver",
+  "hook_group": "lsp-filetype-svelte",
+  "filetype_regex": "svelte",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "svelteserver",
+   "--stdio"
+  ],
+  "executables": [
+   "svelteserver"
+  ],
+  "root_globs": [
+   "package.json",
+   "tsconfig.json",
+   "jsconfig.json",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "sourcekit-lsp",
+  "hook_group": "lsp-filetype-swift",
+  "filetype_regex": "swift",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "sourcekit-lsp"
+  ],
+  "executables": [
+   "sourcekit-lsp"
+  ],
+  "root_globs": [
+   "Package.swift",
+   ".xcodeproj",
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "terraform-ls",
+  "hook_group": "lsp-filetype-terraform",
+  "filetype_regex": "terraform",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "terraform-ls",
+   "serve"
+  ],
+  "executables": [
+   "terraform-ls"
+  ],
+  "root_globs": [
+   "*.tf"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "taplo",
+  "hook_group": "lsp-filetype-toml",
+  "filetype_regex": "toml",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "taplo",
+   "lsp",
+   "stdio"
+  ],
+  "executables": [
+   "taplo"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "tinymist",
+  "hook_group": "lsp-filetype-typst",
+  "filetype_regex": "typst",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "tinymist",
+   "lsp"
+  ],
+  "executables": [
+   "tinymist"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "yaml-language-server",
+  "hook_group": "lsp-filetype-yaml",
+  "filetype_regex": "yaml",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "yaml-language-server",
+   "--stdio"
+  ],
+  "executables": [
+   "yaml-language-server"
+  ],
+  "root_globs": [
+   ".git",
+   ".hg"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ },
+ {
+  "source": "kakoune-lsp",
+  "server_id": "zls",
+  "hook_group": "lsp-filetype-zig",
+  "filetype_regex": "zig",
+  "enabled_by_default": true,
+  "added_with_-add": false,
+  "command": [
+   "zls"
+  ],
+  "executables": [
+   "zls"
+  ],
+  "root_globs": [
+   "build.zig"
+  ],
+  "root": null,
+  "single_instance": null,
+  "selection": {
+   "strategy": "filetype hook sets lsp_servers TOML; every active server in it runs; commented-out alternatives shown as enabled_by_default=false"
+  },
+  "root_strategy": "root_globs tried in LIST ORDER, each searched upward to /; first glob found anywhere above wins; KAK_LSP_PROJECT_ROOT_<LANG> / KAK_LSP_FORCE_PROJECT_ROOT override"
+ }
+]
