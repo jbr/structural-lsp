@@ -1,5 +1,6 @@
-//! Which hits are tests, and how an enclosing item is named. Both are
-//! heuristics over the outline chain and the path; the result says so.
+//! Which hits are tests, and how an enclosing item is named, for every
+//! location listing (`uses`, the location views). Both are heuristics
+//! over the outline chain and the path; the result says so.
 
 use crate::lsp::outline::Extent;
 use lsp_types::SymbolKind;
@@ -94,7 +95,9 @@ pub fn path_is_test(path: &Path) -> bool {
     let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
         return in_test_dir;
     };
-    let stem = file_name.split_once('.').map_or(file_name, |(stem, _)| stem);
+    let stem = file_name
+        .split_once('.')
+        .map_or(file_name, |(stem, _)| stem);
     in_test_dir
         || matches!(stem, "tests" | "test")
         || stem.starts_with("test_")

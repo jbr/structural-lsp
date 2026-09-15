@@ -16,6 +16,7 @@ fn show(state: &mut structural::state::State, symbol: &str) -> String {
         path: None,
         anchor: None,
         focus: None,
+        view: None,
     }
     .execute(state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("show {symbol}: {error:#}"))

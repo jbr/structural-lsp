@@ -1,5 +1,5 @@
-use super::render::{FileGroup, HitLine, render_uses};
-use super::source_line;
+use super::render::render_uses;
+use crate::tools::hits::{FileGroup, HitLine, source_line};
 use crate::lsp::positions::Encoding;
 use lsp_types::Position;
 

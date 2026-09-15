@@ -138,10 +138,39 @@ pub trait Adapter: Send + Sync {
         DEFAULT_BACKSTOP
     }
 
-    /// Views beyond the standard queries this server can answer. Empty
-    /// until a tool takes a `view`.
+    /// Views beyond the standard ones this server can answer through its
+    /// own extensions, by their `view` names.
     fn extra_views(&self) -> Vec<&'static str> {
         Vec::new()
+    }
+
+    /// The request (method and params) behind one of [`Adapter::extra_views`]
+    /// at a position; `None` for a view this server does not offer.
+    fn extra_view_request(
+        &self,
+        _view: &str,
+        _uri: &str,
+        _position: lsp_types::Position,
+    ) -> Option<(String, Value)> {
+        None
+    }
+
+    /// Render the result of an extra view's request. `root` is for
+    /// relative paths.
+    fn render_extra_view(
+        &self,
+        view: &str,
+        _result: &Value,
+        _root: &std::path::Path,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("{} has no view named `{view}`", self.name())
+    }
+
+    /// `textDocument/hover` params over `range`: the standard request takes
+    /// a position, so the start; a server that accepts a range (rust-
+    /// analyzer's `hoverRange`) overrides this.
+    fn hover_params(&self, uri: &str, range: lsp_types::Range) -> Value {
+        json!({ "textDocument": { "uri": uri }, "position": range.start })
     }
 
     /// Tokens this server reports as references to a symbol without

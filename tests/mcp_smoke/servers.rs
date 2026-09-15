@@ -23,6 +23,7 @@ fn show(state: &mut structural::state::State, symbol: &str, path: Option<&str>) 
         path: path.map(str::to_string),
         anchor: None,
         focus: None,
+        view: None,
     }
     .execute(state, &mcplease::types::RequestContext::default())
     .unwrap_or_else(|error| panic!("show {symbol} {path:?}: {error:#}"))

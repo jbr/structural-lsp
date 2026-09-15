@@ -11,17 +11,13 @@
 //! that file was stale and the call is an error, never a listing built on
 //! it. The enclosing item comes from the file's `documentSymbol`.
 
-use crate::lsp::outline;
-use crate::lsp::positions::{Encoding, position_to_offset};
-use crate::lsp::references::{FileHits, group_by_file, parse_references_result, verify_reference_at};
-use crate::lsp::server::LspServer;
+use crate::lsp::references::{group_by_file, parse_references_result};
 use crate::state::State;
 use crate::tools::listing::{header, location_line, relative_display};
 use crate::tools::resolution::{
     Found, Resolved, Target, describe, resolve_target, server_named, sync_target,
 };
 use anyhow::{Context, Result};
-use lsp_types::Position;
 use mcplease::{
     traits::{Tool, ToolMeta},
     types::{RequestContext, ToolAnnotations},
@@ -30,9 +26,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-mod classify;
 mod render;
-use render::{FileGroup, HitLine, render_uses};
+use crate::tools::hits::{FileGroup, HitLine, lines_for};
+use render::render_uses;
 
 /// Hits listed before the rest is reported as a count.
 const MAX_HITS: usize = 100;
@@ -148,10 +144,10 @@ fn references_of(state: &mut State, root: &Path, found: &Found) -> Result<String
     let mut files = grouped.files;
     files.sort_by(|a, b| a.path.cmp(&b.path));
     for file in files {
-        let (lines, outlined) = file_lines(server, root, symbol, &file)?;
+        let (lines, outlined) = lines_for(server, root, &file, Some(symbol))?;
         no_outline |= !outlined;
         let display = relative_display(root, &file.path);
-        let path_is_test = classify::path_is_test(&file.path);
+        let path_is_test = crate::tools::classify::path_is_test(&file.path);
         let (test_hits, other_hits): (Vec<HitLine>, Vec<HitLine>) = lines
             .into_iter()
             .partition(|line| path_is_test || line.is_test);
@@ -180,74 +176,6 @@ fn references_of(state: &mut State, root: &Path, found: &Found) -> Result<String
         &header, total, file_count, &production, &tests, MAX_HITS, &notes,
     ))
 }
-
-/// Read one file with hits from disk, check every hit against that text,
-/// and build its lines: 1-based line, enclosing item, trimmed source. The
-/// bool says whether the server gave an outline at all.
-///
-/// The file is read, not synced: syncing would make every file a broad
-/// query touches an owned document for the rest of the session. The hits
-/// came from the server's view; what is checked is that the disk text
-/// agrees with it at every range.
-fn file_lines(
-    server: &LspServer,
-    root: &Path,
-    symbol: &str,
-    file: &FileHits,
-) -> Result<(Vec<HitLine>, bool)> {
-    let encoding = server.encoding();
-    let aliases = server.adapter().reference_aliases();
-    let text = std::fs::read_to_string(&file.path)
-        .with_context(|| format!("reading {} for its references", file.path.display()))?;
-    let outline = server.document_symbol(file.uri.as_str())?;
-    let mut lines = Vec::with_capacity(file.hits.len());
-    for hit in &file.hits {
-        verify_reference_at(&text, hit.range, symbol, &aliases, encoding).with_context(|| {
-            format!(
-                "{}'s reference to '{symbol}' at {}:{} does not match the file on disk; the \
-                 server's view was stale — retry after it re-indexes",
-                server.name(),
-                relative_display(root, &file.path),
-                hit.range.start.line + 1
-            )
-        })?;
-        let chain = match &outline {
-            Some(outline) => outline::chain_at(outline, hit.range.start).with_context(|| {
-                format!(
-                    "{} returned an unusable documentSymbol result",
-                    server.name()
-                )
-            })?,
-            None => Vec::new(),
-        };
-        lines.push(HitLine {
-            line: hit.range.start.line + 1,
-            item: classify::item_label(&chain),
-            is_test: classify::chain_is_test(&chain),
-            text: source_line(&text, hit.range.start, encoding),
-        });
-    }
-    lines.sort_by_key(|line| line.line);
-    Ok((lines, outline.is_some()))
-}
-
-/// The line holding `position`, trimmed; long lines are cut with a marker.
-fn source_line(text: &str, position: Position, encoding: Encoding) -> String {
-    const MAX_CHARS: usize = 160;
-    let line = position_to_offset(text, Position::new(position.line, 0), encoding)
-        .ok()
-        .map(|start| text[start..].lines().next().unwrap_or_default())
-        .unwrap_or_default()
-        .trim();
-    if line.chars().count() <= MAX_CHARS {
-        line.to_string()
-    } else {
-        let mut cut: String = line.chars().take(MAX_CHARS).collect();
-        cut.push('…');
-        cut
-    }
-}
-
 
 #[cfg(test)]
 mod tests;

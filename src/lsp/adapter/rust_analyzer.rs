@@ -1,8 +1,11 @@
 //! rust-analyzer: everything the generic transport must not know about it.
 
 use super::{Adapter, Language, ReadinessPolicy, default_kind_label};
-use lsp_types::SymbolKind;
+use lsp_types::{Position, Range, SymbolKind};
 use serde_json::{Value, json};
+use std::path::Path;
+
+mod views;
 
 pub struct RustAnalyzer;
 
@@ -39,9 +42,38 @@ impl Adapter for RustAnalyzer {
     }
 
     /// rust-analyzer sends `experimental/serverStatus` only when the client
-    /// advertises this; it is what [`Quiescence`] observes.
+    /// advertises this; it is what [`Quiescence`] observes. `hoverRange`
+    /// lets `textDocument/hover` take a range, for the type of an
+    /// expression.
     fn experimental_capabilities(&self) -> Value {
-        json!({ "serverStatusNotification": true })
+        json!({ "serverStatusNotification": true, "hoverRange": true })
+    }
+
+    /// A range wider than a point is sent as the `position`; rust-analyzer
+    /// answers with the type of the expression it spans.
+    fn hover_params(&self, uri: &str, range: Range) -> Value {
+        if range.start == range.end {
+            json!({ "textDocument": { "uri": uri }, "position": range.start })
+        } else {
+            json!({ "textDocument": { "uri": uri }, "position": range })
+        }
+    }
+
+    fn extra_views(&self) -> Vec<&'static str> {
+        views::names()
+    }
+
+    fn extra_view_request(
+        &self,
+        view: &str,
+        uri: &str,
+        position: Position,
+    ) -> Option<(String, Value)> {
+        views::request(view, uri, position)
+    }
+
+    fn render_extra_view(&self, view: &str, result: &Value, root: &Path) -> anyhow::Result<String> {
+        views::render(view, result, root)
     }
 
     /// Offered in this order; rust-analyzer takes the first it supports.

@@ -38,7 +38,7 @@ use lsp_types::SymbolKind;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-mod anchored;
+pub mod anchored;
 pub mod qualify;
 
 /// What the filters excluded, carried to the listings.

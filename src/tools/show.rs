@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 mod render;
+mod views;
 use render::*;
 
 /// Upper bound on the returned item body. Omission is noted, never silent;
@@ -35,6 +36,13 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// and attributes, not just a location. Target it by name (`symbol`, with
 /// an optional `path` scope) or by quoting source text from a file
 /// (`anchor` in `path`, with `focus` naming the token meant).
+///
+/// Other `view`s of a target: `outline` (its children; or a whole file's
+/// symbols with only `path`), `implementations`, `incoming-calls`,
+/// `outgoing-calls`, `type` (the hover signature; with an anchor, the type
+/// of the focused expression), and per server `expanded` (rust-analyzer
+/// macro expansion at the focus) and `related-tests` (rust-analyzer, with
+/// the cargo command for each).
 ///
 /// Candidates come from the language servers' fuzzy symbol index (not
 /// proven exhaustive); only exact-name matches resolve, and several distinct
@@ -71,6 +79,13 @@ pub struct Show {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub focus: Option<String>,
+
+    /// What to show: `definition` (default), `outline`, `implementations`,
+    /// `incoming-calls`, `outgoing-calls`, `type`, `expanded`,
+    /// `related-tests`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub view: Option<String>,
 }
 
 impl ToolMeta for Show {
@@ -101,9 +116,12 @@ impl Tool<State> for Show {
             anchor: self.anchor.as_deref(),
             focus: self.focus.as_deref(),
         };
-        match resolve_target(state, target)? {
-            Resolved::Listed(listing) => Ok(listing),
-            Resolved::One(found) => render_definition(state, &root, &found),
+        match self.view.as_deref().map(str::trim) {
+            None | Some("") | Some(views::DEFINITION) => match resolve_target(state, target)? {
+                Resolved::Listed(listing) => Ok(listing),
+                Resolved::One(found) => render_definition(state, &root, &found),
+            },
+            Some(view) => views::run(state, view, target),
         }
     }
 }

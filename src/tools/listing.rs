@@ -47,11 +47,15 @@ pub fn render_fuzzy(
     text
 }
 
-/// `kind name · path:line`, or `name · path:line` when no kind is known.
+/// `kind name · path:line`, or `name · path:line` when no kind is known or
+/// the name already starts with the kind word (rust-analyzer names an impl
+/// block `impl Config`).
 pub fn header(kind_label: Option<&str>, name: &str, location: &str) -> String {
     match kind_label {
-        Some(kind) => format!("{kind} {name} · {location}"),
-        None => format!("{name} · {location}"),
+        Some(kind) if !name.starts_with(&format!("{kind} ")) => {
+            format!("{kind} {name} · {location}")
+        }
+        _ => format!("{name} · {location}"),
     }
 }
 

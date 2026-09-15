@@ -125,6 +125,23 @@ item in order with methods nested under their impls; `implementations` of
 name gets the unknown-view line with the list; `type` works on pyright
 and gopls too.
 
+**Done 2026-09-14.** As planned, plus:
+
+- rust-analyzer names an impl block `impl Config` and its kind word is
+  `impl` too; `listing::header` drops a kind word the name already starts
+  with, everywhere headers are printed.
+- An adapter view given an anchor runs at the focus, not at the focus's
+  definition: `expanded` on `format!` would otherwise ask at the macro's
+  definition in `alloc`. Names still run at the definition, which is what
+  `related-tests` wants.
+- rust-analyzer's `expandMacro` `name` carries the `!`; `hoverRange`
+  works as documented (`config.doubled()` → `usize`); pyright answers
+  `prepareCallHierarchy` and the direction queries; gopls answers `hover`
+  with the signature in a fenced block. No server needed a special case
+  beyond the two hooks (`hover_params`, the extra-view pair).
+- `outline` with a target lists the target's children; a leaf says so.
+  The file outline's cap is 200 lines, said as a note past it.
+
 ## 3. `action`: rename
 
 The third tool. `action(symbol|anchor+focus, path?, action, arguments?,

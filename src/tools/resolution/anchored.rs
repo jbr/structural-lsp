@@ -15,13 +15,29 @@ use anyhow::{Context, Result, bail};
 use lsp_types::{Location, Range, Uri};
 use std::path::{Path, PathBuf};
 
-pub(super) fn from_anchor(
+/// A located focus: the server for its file, the synced document, and the
+/// focus's range in the server's encoding.
+pub struct Focus {
+    pub server: usize,
+    pub file: PathBuf,
+    pub uri: String,
+    pub text: String,
+    pub range: Range,
+    pub focus_text: String,
+    /// 1-based line of the anchor.
+    pub line: u32,
+}
+
+/// Sync the anchor's file with the server for its language and locate the
+/// focus in the text just read. The server has been waited for; the sync
+/// precedes any query the caller sends.
+pub fn locate_focus(
     state: &mut State,
     root: &Path,
     scope: Option<PathBuf>,
     anchor: &str,
     focus: Option<&str>,
-) -> Result<Resolved> {
+) -> Result<Focus> {
     let Some(file) = scope else {
         bail!("`anchor` needs `path` naming the file the quoted text is in");
     };
@@ -43,9 +59,42 @@ pub(super) fn from_anchor(
     let start = offset_to_position(&synced.text, selection.start, encoding)?;
     let end = offset_to_position(&synced.text, selection.end, encoding)?;
     let focus_text = synced.text[selection.start..selection.end].to_string();
-    // The sync precedes this on the wire; wait again in case it started work.
+    // The sync precedes the caller's query on the wire; wait again in case
+    // it started work.
     server.wait_ready()?;
-    let raw = server.definition(&synced.uri, start)?;
+    Ok(Focus {
+        server: index,
+        file,
+        uri: synced.uri,
+        text: synced.text,
+        range: Range { start, end },
+        focus_text,
+        line: selection.line,
+    })
+}
+
+pub(super) fn from_anchor(
+    state: &mut State,
+    root: &Path,
+    scope: Option<PathBuf>,
+    anchor: &str,
+    focus: Option<&str>,
+) -> Result<Resolved> {
+    let located = locate_focus(state, root, scope, anchor, focus)?;
+    let Focus {
+        server: index,
+        file,
+        uri: synced_uri,
+        range,
+        focus_text,
+        line,
+        ..
+    } = located;
+    let server = state.server(index);
+    let encoding = server.encoding();
+    let start = range.start;
+    let end = range.end;
+    let raw = server.definition(&synced_uri, start)?;
     let set = parse_definition_result(raw).with_context(|| {
         format!(
             "{} returned an unrecognizable definition result",
@@ -53,7 +102,7 @@ pub(super) fn from_anchor(
         )
     })?;
     let server_name = server.name().to_string();
-    let uri: Uri = serde_json::from_value(serde_json::Value::String(synced.uri.clone()))
+    let uri: Uri = serde_json::from_value(serde_json::Value::String(synced_uri.clone()))
         .context("the synced document URI is not a valid URI")?;
     let origin_location = Location {
         uri,
@@ -70,7 +119,7 @@ pub(super) fn from_anchor(
         return Ok(Resolved::Listed(format!(
             "no definition at `{focus_text}` ({}:{})\n",
             relative_display(root, &file),
-            selection.line
+            line
         )));
     }
     let identities = targets

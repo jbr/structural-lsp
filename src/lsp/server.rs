@@ -49,8 +49,8 @@ pub struct LspServer {
     server_info: Option<Value>,
     /// The position encoding the server picked from the adapter's offer.
     encoding: Encoding,
-    /// Whether the server advertised `documentSymbolProvider`.
-    document_symbols: bool,
+    /// The server's capabilities as returned by `initialize`.
+    capabilities: Value,
     /// Documents opened with the server, keyed by URI, with the snapshot the
     /// server was last given.
     opened: HashMap<String, OpenedDoc>,
@@ -99,10 +99,7 @@ impl LspServer {
                 adapter.position_encodings().join(", ")
             ),
         };
-        let document_symbols = match result.pointer("/capabilities/documentSymbolProvider") {
-            None | Some(Value::Null) | Some(Value::Bool(false)) => false,
-            Some(_) => true,
-        };
+        let capabilities = result.get("capabilities").cloned().unwrap_or(Value::Null);
         handle.notify("initialized", json!({}))?;
 
         Ok(Self {
@@ -111,7 +108,7 @@ impl LspServer {
             handle: Some(handle),
             server_info,
             encoding,
-            document_symbols,
+            capabilities,
             opened: HashMap::new(),
         })
     }
@@ -333,11 +330,62 @@ impl LspServer {
         )
     }
 
-    /// `textDocument/documentSymbol` for an owned document, or `None` when
-    /// the server did not advertise the capability. The raw result is read
-    /// by [`crate::lsp::outline::innermost_at`].
+    /// Whether the server advertised a capability: `provider` is the
+    /// `ServerCapabilities` key (`documentSymbolProvider`,
+    /// `callHierarchyProvider`, …); absent, `null` and `false` are no.
+    pub fn supports(&self, provider: &str) -> bool {
+        !matches!(
+            self.capabilities.get(provider),
+            None | Some(Value::Null) | Some(Value::Bool(false))
+        )
+    }
+
+    /// Any request, for adapter-defined extension views; the standard
+    /// queries have their own methods.
+    pub fn request(&self, method: &str, params: Value) -> Result<Value> {
+        self.handle().request(method, params)
+    }
+
+    /// `textDocument/implementation` at a position; a `Location[]` (or
+    /// link) result in the same shapes as `definition`.
+    pub fn implementation(&self, uri: &str, position: Position) -> Result<Value> {
+        self.handle().request(
+            "textDocument/implementation",
+            json!({ "textDocument": { "uri": uri }, "position": position }),
+        )
+    }
+
+    /// `textDocument/prepareCallHierarchy` at a position: the
+    /// `CallHierarchyItem[]` the direction queries take.
+    pub fn prepare_call_hierarchy(&self, uri: &str, position: Position) -> Result<Value> {
+        self.handle().request(
+            "textDocument/prepareCallHierarchy",
+            json!({ "textDocument": { "uri": uri }, "position": position }),
+        )
+    }
+
+    /// `callHierarchy/incomingCalls` or `outgoingCalls` for one item.
+    pub fn calls(&self, incoming: bool, item: &Value) -> Result<Value> {
+        let method = if incoming {
+            "callHierarchy/incomingCalls"
+        } else {
+            "callHierarchy/outgoingCalls"
+        };
+        self.handle().request(method, json!({ "item": item }))
+    }
+
+    /// `textDocument/hover` over `range`: at its start, or over the whole
+    /// range when the adapter says the server takes one.
+    pub fn hover(&self, uri: &str, range: lsp_types::Range) -> Result<Value> {
+        self.handle()
+            .request("textDocument/hover", self.adapter.hover_params(uri, range))
+    }
+
+    /// `textDocument/documentSymbol` for a document, or `None` when the
+    /// server did not advertise the capability. The raw result is read by
+    /// [`crate::lsp::outline::innermost_at`].
     pub fn document_symbol(&self, uri: &str) -> Result<Option<Value>> {
-        if !self.document_symbols {
+        if !self.supports("documentSymbolProvider") {
             return Ok(None);
         }
         self.handle()

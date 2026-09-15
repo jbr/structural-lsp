@@ -13,6 +13,7 @@ mod responsive;
 mod servers;
 mod stdio_server;
 mod targeting;
+mod views;
 use stdio_server::Server;
 
 /// Copy a fixture tree, skipping build output.
@@ -46,6 +47,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         path: None,
         anchor: None,
         focus: None,
+        view: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("show choose succeeds");
@@ -74,6 +76,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         path: Some("src/lib.rs".to_string()),
         anchor: None,
         focus: None,
+        view: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("scoped show succeeds");
@@ -87,6 +90,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         path: None,
         anchor: None,
         focus: None,
+        view: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("show Config succeeds");
@@ -106,6 +110,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         path: None,
         anchor: None,
         focus: None,
+        view: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .unwrap();
@@ -120,6 +125,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         path: None,
         anchor: None,
         focus: None,
+        view: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default())
     .expect("show Config::new succeeds");
@@ -192,6 +198,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         path: Some("../semantic-edit-mcp".to_string()),
         anchor: None,
         focus: None,
+        view: None,
     }
     .execute(&mut state, &mcplease::types::RequestContext::default());
     assert!(escaping.is_err(), "an out-of-root scope must be rejected");
@@ -484,6 +491,7 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
             path: None,
             anchor: None,
             focus: None,
+            view: None,
         }
         .execute(state, &mcplease::types::RequestContext::default())
     };

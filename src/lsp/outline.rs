@@ -51,6 +51,75 @@ pub fn innermost_at(result: &Value, position: Position) -> Result<Option<Extent>
     }
 }
 
+/// An outline symbol with its children, for tree views.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Node {
+    pub extent: Extent,
+    pub children: Vec<Node>,
+}
+
+/// The whole outline as a tree. The flat shape has no nesting, so every
+/// symbol is a root in the server's order.
+pub fn tree(result: &Value) -> Result<Vec<Node>> {
+    if result.is_null() {
+        return Ok(Vec::new());
+    }
+    let Some(items) = result.as_array() else {
+        anyhow::bail!("documentSymbol result is neither null nor an array: {result}");
+    };
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
+    if items[0].get("range").is_some() {
+        let symbols: Vec<DocumentSymbol> =
+            serde_json::from_value(result.clone()).context("parsing DocumentSymbol[]")?;
+        Ok(nodes(&symbols))
+    } else {
+        let symbols: Vec<SymbolInformation> =
+            serde_json::from_value(result.clone()).context("parsing SymbolInformation[]")?;
+        Ok(symbols
+            .iter()
+            .map(|symbol| Node {
+                extent: Extent {
+                    name: symbol.name.clone(),
+                    kind: symbol.kind,
+                    range: symbol.location.range,
+                    selection_range: None,
+                    detail: None,
+                },
+                children: Vec::new(),
+            })
+            .collect())
+    }
+}
+
+fn nodes(symbols: &[DocumentSymbol]) -> Vec<Node> {
+    symbols
+        .iter()
+        .map(|symbol| Node {
+            extent: Extent {
+                name: symbol.name.clone(),
+                kind: symbol.kind,
+                range: symbol.range,
+                selection_range: Some(symbol.selection_range),
+                detail: symbol.detail.clone(),
+            },
+            children: symbol.children.as_deref().map(nodes).unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// The innermost node whose range contains `position`, with its subtree.
+pub fn subtree_at(result: &Value, position: Position) -> Result<Option<Node>> {
+    fn descend(nodes: &[Node], position: Position) -> Option<Node> {
+        let node = nodes
+            .iter()
+            .find(|node| contains(node.extent.range, position))?;
+        Some(descend(&node.children, position).unwrap_or_else(|| node.clone()))
+    }
+    Ok(descend(&tree(result)?, position))
+}
+
 /// The chain of symbols containing `position`, outermost first, or empty
 /// when none does. For the hierarchical shape this is the nesting path;
 /// for the flat shape it is every containing symbol from largest to
@@ -228,6 +297,31 @@ mod tests {
             .map(|extent| extent.name)
             .collect();
         assert_eq!(names, ["Config", "doubled"], "largest range first");
+    }
+
+    #[test]
+    fn the_tree_nests_children_and_subtree_at_is_the_innermost_node() {
+        let outline = json!([
+            {
+                "name": "Config", "kind": 23,
+                "range": range(3, 0, 20, 1), "selectionRange": range(4, 11, 4, 17),
+                "children": [
+                    { "name": "limit", "kind": 8, "range": range(6, 4, 6, 20), "selectionRange": range(6, 8, 6, 13) }
+                ]
+            },
+            { "name": "choose", "kind": 12, "range": range(22, 0, 25, 1), "selectionRange": range(23, 7, 23, 13) }
+        ]);
+        let tree = tree(&outline).unwrap();
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree[0].children[0].extent.name, "limit");
+        let sub = subtree_at(&outline, Position::new(4, 11)).unwrap().unwrap();
+        assert_eq!(sub.extent.name, "Config");
+        assert_eq!(sub.children.len(), 1);
+        assert!(
+            subtree_at(&outline, Position::new(21, 0))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

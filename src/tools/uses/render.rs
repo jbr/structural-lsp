@@ -5,26 +5,7 @@
 //! each hit is `line · item · source`, and notes appear only when something
 //! is degraded.
 
-/// One hit, ready to print.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct HitLine {
-    /// 1-based.
-    pub line: u32,
-    /// The enclosing item, when the hit is inside one.
-    pub item: Option<String>,
-    /// Whether the enclosing chain marks it a test (the file's path may too).
-    pub is_test: bool,
-    /// The trimmed source line.
-    pub text: String,
-}
-
-/// The hits of one file, in line order.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct FileGroup {
-    /// Root-relative.
-    pub path: String,
-    pub hits: Vec<HitLine>,
-}
+use crate::tools::hits::{FileGroup, render_groups};
 
 /// `header · N references · M files`, the production groups, then the
 /// tests section, then notes. Past `cap` hits, the rest is a count.
@@ -66,29 +47,4 @@ pub(super) fn render_uses(
         text.push_str(&format!("note: {note}\n"));
     }
     text
-}
-
-/// Print groups while the budget lasts; returns how many hits went unshown.
-fn render_groups(text: &mut String, groups: &[FileGroup], budget: &mut usize) -> usize {
-    let mut omitted = 0;
-    for group in groups {
-        if *budget == 0 {
-            omitted += group.hits.len();
-            continue;
-        }
-        text.push_str(&group.path);
-        text.push('\n');
-        for hit in &group.hits {
-            if *budget == 0 {
-                omitted += 1;
-                continue;
-            }
-            *budget -= 1;
-            match &hit.item {
-                Some(item) => text.push_str(&format!("  {} · {item} · {}\n", hit.line, hit.text)),
-                None => text.push_str(&format!("  {} · {}\n", hit.line, hit.text)),
-            }
-        }
-    }
-    omitted
 }

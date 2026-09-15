@@ -1,5 +1,7 @@
 use crate::state::State;
 
+pub mod classify;
+pub mod hits;
 pub mod listing;
 pub mod resolution;
 

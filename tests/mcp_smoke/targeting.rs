@@ -31,6 +31,7 @@ fn show(
         path: path.map(str::to_string),
         anchor: anchor.map(str::to_string),
         focus: focus.map(str::to_string),
+        view: None,
     }
     .execute(state, &mcplease::types::RequestContext::default())
 }
