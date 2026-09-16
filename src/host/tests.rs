@@ -624,3 +624,5 @@ fn shutdown_reaps_every_workspace_child() {
     );
     drop(session);
 }
+
+mod shutdown;

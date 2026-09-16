@@ -3,15 +3,14 @@
 
 use mcplease::traits::Tool;
 use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 
 mod configured;
 mod identity;
 mod rename;
 mod responsive;
 mod servers;
+mod shutdown;
 mod stdio_server;
 mod targeting;
 mod views;
@@ -213,35 +212,12 @@ fn in_process_show_resolves_the_fixture_struct() {
 /// needed, precisely because it is absent.
 #[test]
 fn stdio_mcp_serves_and_reports_actionable_error_without_rust_analyzer() {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_structural"))
-        .arg("serve")
-        .env("STRUCTURAL_ROOT", rust_fixture_root())
-        .env("PATH", "")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("spawning `structural serve` without rust-analyzer on PATH");
-    let mut stdin = child.stdin.take().unwrap();
-    let mut stdout = BufReader::new(child.stdout.take().unwrap());
-
-    let mut request = |id: u64, method: &str, params: Value| -> Value {
-        let frame = json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
-        writeln!(stdin, "{frame}").unwrap();
-        stdin.flush().unwrap();
-        let mut line = String::new();
-        loop {
-            line.clear();
-            let bytes = stdout.read_line(&mut line).expect("reading a response");
-            assert!(
-                bytes > 0,
-                "server closed stdout before responding to id {id}"
-            );
-            let value: Value = serde_json::from_str(&line).expect("a JSON line");
-            if value.get("id").and_then(Value::as_u64) == Some(id) {
-                return value;
-            }
-        }
-    };
+    let mut server = Server::start_with_env(
+        rust_fixture_root().to_str().unwrap(),
+        &[("PATH", String::new())],
+    );
+    let mut request =
+        |_id: u64, method: &str, params: Value| -> Value { server.request(method, params) };
 
     let initialize = request(
         1,
@@ -291,9 +267,8 @@ fn stdio_mcp_serves_and_reports_actionable_error_without_rust_analyzer() {
         "every configured server is accounted for: {text}"
     );
 
-    let _ = writeln!(stdin, r#"{{"jsonrpc":"2.0","method":"exit"}}"#);
-    let _ = child.kill();
-    let _ = child.wait();
+    server.close_stdin();
+    assert!(server.wait_exit().success());
 }
 
 #[test]

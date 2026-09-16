@@ -179,3 +179,55 @@ Operator reviews this scope before commit or implementation. In particular:
 this is externally escalatable, best-effort graceful shutdown with process
 ownership cleanup—not crash-proof editing, a portable supervisor, or a broader
 redesign of server discovery and residency.
+
+## Implementation record (2026-09-16)
+
+Implemented after approval. Host/transport landed in `cadd47c`; frontend and
+regression coverage follow in the implementation commit accompanying this note.
+
+- `Host::request_shutdown()` closes admission without waiting;
+  `force_shutdown()` interrupts starting and running server work independently
+  of workspace locks; `wait_shutdown()` waits for admitted work and cleanup.
+  `shutdown()` remains the convenience soft-request-and-wait operation.
+- `Session::acquire()` now returns a fallible whole-operation guard. Tool
+  admission and launch completion registration precede work under the same
+  coordination lock used to close admission. Raw `Session::workspace()` remains
+  a low-level escape hatch: its caller must release the guard before waiting.
+- Stop capabilities stay reachable through publication and teardown.
+  Transport force bypasses remaining protocol grace. The owner is joined, not
+  detached on a timer; pipe-worker joins retain their existing bounds.
+- On Unix, each server owns a process group. Cleanup signals the group before
+  reaping its leader, keeping the group identifier pinned until signalling is
+  finished. Deliberately detached descendants are outside this guarantee;
+  non-Unix cleanup still targets the direct child. Grandchildren are terminated,
+  not reaped by structural unless they are its children.
+- Unix CLI signals are registered before eager startup. First signal requests
+  soft shutdown; subsequent signals force. A separate cleanup waiter cancels
+  serve input after admitted work completes. The watcher is explicitly closed
+  before joining. No signal path calls `process::exit`.
+- Real input EOF forces server cleanup in the reader, not after dispatch
+  returns: dispatch might still be blocked on the server. Synthetic input
+  cancellation after soft cleanup does not escalate. One-shot CLI dispatch is
+  preserved. Signal support is Unix-specific; uncatchable structural death
+  still needs external supervision.
+
+The initial frontend implementation was faulty and is not the accepted design:
+EOF left main joining a watcher blocked forever in `read`. A captured runtime
+stack isolated that wait after all LSP threads had already exited. The exact
+regression initially failed in 16.85 seconds; after repair it passed in 0.12
+seconds in the final verification. This is why the frontend is tested as a real
+subprocess, not inferred correct from the host tests.
+
+Verification passed on the final implementation tree: `cargo test`,
+`cargo clippy --all-targets -- -D warnings`, and `cargo doc --no-deps`, with
+external TERM/KILL deadlines and unfiltered output. Tests include the original
+EOF regression, explicit failure of a force-interrupted call, first-signal idle
+exit, pre-initialization signals, admitted-call soft completion and response
+drain, CLI help, process-group descendants, thread-start failures, and host
+admission/force reachability. Real-server ignored tests were not run.
+
+Remaining boundaries: no crash-proof multi-file edit transaction; no protection
+against a caller retaining a raw workspace guard indefinitely; no portable
+supervisor; no guarantee against an embedding application reaping structural's
+children independently. The older lifecycle/handoff documents describe the
+previous four-pass shutdown; this record supersedes that mechanism description.
