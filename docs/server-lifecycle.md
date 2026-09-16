@@ -235,10 +235,25 @@ The ordering:
 4. it takes each workspace lock and stops everything published, in the map and
    in the released registry alike.
 
-The count in step 3 is what makes shutdown *decisive* rather than merely
+The wait in step 3 is what makes shutdown *decisive* rather than merely
 eventual, and it is affordable only because of step 2: the launches it waits on
 are already being killed, so the wait is bounded by teardown (about five
-seconds) instead of by a hung `initialize` (ninety). The sweep in step 4 stops
+seconds) instead of by a hung `initialize` (ninety).
+
+**A launch that cannot publish also gives up.** Publication needs the workspace
+lock, and a query holding that lock is *deliberately* unbounded in real time —
+a server that answers liveness probes but never finishes is alive and stuck,
+which no timer can tell from slow. So a launch waits for the lock for a bound,
+and then takes the other disjunct: it stops the child it started and marks the
+slot failed with a reason naming the bound. That is what stops the wait above
+from becoming unbounded in turn.
+
+The bound is a **named parameter on the host**, not a constant inside the
+launcher, because what it trades — shutdown latency against a launch that died
+for a lock it never got — is visible from outside. `std::sync::Mutex` offers no
+timed acquisition, so it is enforced by polling; the honest note is that the
+thing being bounded is another thread's critical section, which we cannot be
+notified about. The sweep in step 4 stops
 servers while holding each workspace lock, which is fine for a shutdown —
 teardown there is grace-bounded. Removing the server under the lock and
 stopping it *outside* is a rule for eviction, which is the next unit's.

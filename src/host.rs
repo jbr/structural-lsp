@@ -20,7 +20,8 @@ use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError, Weak};
+use std::time::{Duration, Instant};
 use swansong::Swansong;
 
 /// Which agent — or front end — a workspace binding belongs to. Agent start
@@ -72,13 +73,40 @@ impl std::fmt::Display for AgentId {
 pub(crate) struct Lifetime {
     song: Swansong,
     stopped: Arc<AtomicBool>,
+    /// How long a launch waits for a workspace lock before giving up and
+    /// killing what it started.
+    ///
+    /// A parameter rather than a constant buried in the launcher, because what
+    /// it trades is visible from outside: shutdown latency against a launch
+    /// that dies for a lock it never got. See [`DEFAULT_PUBLISH_BOUND`].
+    publish_bound: Duration,
 }
+
+/// How long a launch will wait for a workspace lock before it takes the other
+/// disjunct — stopping the child it started rather than queueing for a lock it
+/// may never get.
+///
+/// The lock it waits for is a workspace's, and a query holding one is
+/// *deliberately* unbounded in real time: a server that answers liveness
+/// probes but never finishes is alive and stuck, which no timer can tell from
+/// slow. Without a bound here, a shutdown waits behind that query, which is
+/// the one thing shutdown must not do.
+///
+/// `std::sync::Mutex` has no timed acquisition, so this bound is enforced by
+/// polling — there is no `try_lock_for` to call, and a `Condvar` would need
+/// every holder to notify on release, which is every lock site in the file.
+pub const DEFAULT_PUBLISH_BOUND: Duration = Duration::from_secs(30);
 
 impl Lifetime {
     pub(crate) fn new() -> Self {
+        Self::with_publish_bound(DEFAULT_PUBLISH_BOUND)
+    }
+
+    pub(crate) fn with_publish_bound(publish_bound: Duration) -> Self {
         Self {
             song: Swansong::new(),
             stopped: Arc::new(AtomicBool::new(false)),
+            publish_bound,
         }
     }
 
@@ -143,6 +171,29 @@ impl Entry {
     /// poisons it, but the workspace's own invariants are re-established by
     /// the next `sync_owned`, so the poison is ignored rather than failing
     /// every later call.
+    /// The workspace lock, or `None` if it is still held when `bound` passes.
+    ///
+    /// `std::sync::Mutex` offers no timed acquisition, so this polls. Polling
+    /// is the honest shape here rather than an accident: the thing being
+    /// bounded is another thread's critical section, which we cannot be
+    /// notified about.
+    pub(crate) fn lock_within(&self, bound: Duration) -> Option<MutexGuard<'_, Workspace>> {
+        let deadline = Instant::now() + bound;
+        loop {
+            match self.workspace.try_lock() {
+                Ok(workspace) => return Some(workspace),
+                // The workspace's own invariants are re-established by the next
+                // sync, so poisoned is a state we ignore rather than fail on.
+                Err(TryLockError::Poisoned(poisoned)) => return Some(poisoned.into_inner()),
+                Err(TryLockError::WouldBlock) => {}
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     pub(crate) fn lock(&self) -> MutexGuard<'_, Workspace> {
         self.workspace
             .lock()
@@ -289,10 +340,20 @@ impl Entry {
             Ok(server) => server,
             Err(error) => return launch.failed(format!("{error:#}")),
         };
-        let mut workspace = self.lock();
+        // The workspace lock, or nothing if it stays held past the bound. A
+        // query holding this lock is unbounded in real time by design, so
+        // waiting for it would make a shutdown wait with it.
+        let Some(mut workspace) = self.lock_within(self.lifetime.publish_bound) else {
+            drop(server);
+            return launch.failed(format!(
+                "this workspace was busy for {:?} while the server was starting, so it was \
+                 stopped rather than left running",
+                self.lifetime.publish_bound
+            ));
+        };
         if self.lifetime.stopped() {
-            // Shutdown claimed the host while this server was starting. Drop
-            // it rather than publish one nobody will look after — outside the
+            // Shutdown claimed the host while this server was starting. Drop it
+            // rather than publish one nobody will look after — outside the
             // workspace lock, because dropping it reaps a child.
             drop(workspace);
             drop(server);
@@ -329,10 +390,17 @@ impl Default for Host {
 
 impl Host {
     pub fn new() -> Self {
+        Self::with_publish_bound(DEFAULT_PUBLISH_BOUND)
+    }
+
+    /// A host whose launches give up on a busy workspace after `publish_bound`
+    /// and stop what they started, rather than waiting for a lock a wedged
+    /// query may hold indefinitely.
+    pub fn with_publish_bound(publish_bound: Duration) -> Self {
         Self {
             workspaces: Mutex::new(BTreeMap::new()),
             released: Mutex::new(Vec::new()),
-            lifetime: Lifetime::new(),
+            lifetime: Lifetime::with_publish_bound(publish_bound),
         }
     }
 

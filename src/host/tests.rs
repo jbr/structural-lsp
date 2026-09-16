@@ -177,6 +177,62 @@ fn a_panicking_participant_still_releases_its_guard() {
     );
 }
 
+/// A launch that cannot publish inside the bound stops what it started rather
+/// than queueing behind a lock a wedged query may hold indefinitely. The bound
+/// is a parameter precisely so this can be tested at a value a test can wait
+/// out.
+#[test]
+fn a_launch_that_cannot_publish_in_time_stops_its_own_child() {
+    let Some(fixture) = fixture("publish-bound") else {
+        return;
+    };
+    let host = Host::with_publish_bound(std::time::Duration::from_millis(50));
+    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let launched = fixture.launches();
+    assert!(!launched.is_empty(), "the eager warm started a server");
+
+    // Hold the workspace the way a query would, and take the running server
+    // out so the demand below has to start one rather than find it running.
+    let mut held = session.workspace();
+    let index = held.index_of("rust-analyzer").expect("rust-analyzer is up");
+    drop(held.stop(index));
+
+    // The demand runs on another thread because this one is holding the lock.
+    std::thread::scope(|scope| {
+        scope.spawn(|| session.activate(Some(&fixture.source())));
+    });
+    drop(held);
+
+    let after = fixture.launches();
+    let refused: Vec<u32> = after
+        .iter()
+        .copied()
+        .filter(|pid| !launched.contains(pid))
+        .collect();
+    assert_eq!(
+        refused.len(),
+        1,
+        "the demand did start a child before losing the race: {after:?}"
+    );
+    assert!(
+        refused.iter().all(|pid| !alive(*pid)),
+        "and stopped it again rather than leaving it running: {refused:?}"
+    );
+
+    let workspace = session.workspace();
+    let rust = workspace
+        .slots()
+        .iter()
+        .find(|slot| slot.name() == "rust-analyzer")
+        .expect("the fixture names rust-analyzer");
+    assert_eq!(rust.state().label(), "failed", "{:?}", rust.state());
+    assert!(
+        rust.state().reason().unwrap_or_default().contains("busy"),
+        "the failure says why: {:?}",
+        rust.state()
+    );
+}
+
 /// A demand arriving after the host has stopped must neither launch anything
 /// nor disturb what the sweep left behind. This is the test that would have
 /// caught the registration window `b7efc58` closed, and the election a demand
