@@ -86,9 +86,18 @@ impl Lifetime {
         self.stopped.load(Ordering::SeqCst)
     }
 
-    /// No launch may begin, and no new guards may be taken.
+    /// No launch may begin, and shutdown is *initiated* — one operation,
+    /// because the two are one decision and separating them is what let a
+    /// caller wait for a completion that had never been started. Waiting for
+    /// completion without stopping waits forever; the pair existed once and
+    /// cost an afternoon.
     fn stop(&self) {
         self.stopped.store(true, Ordering::SeqCst);
+        // The completion future is dropped on purpose: the shutdown state
+        // lives in the swansong, and the wait is taken separately, after the
+        // children have been stopped. Clippy is right that `let _ =` on a
+        // future is the wrong way to say that.
+        drop(self.song.shut_down());
     }
 }
 
@@ -408,9 +417,9 @@ impl Host {
         for entry in &entries {
             entry.stop_starting_children();
         }
-        // `shut_down` initiates and `block` waits for it: completion is "the
-        // swansong has been stopped *and* every guard is dropped", so waiting
-        // without stopping first waits forever.
+        // `stop` has already initiated; `shut_down().block()` is idempotent on
+        // the initiation and does the waiting, so this call is self-contained
+        // even though the wait depends on that earlier initiation.
         self.lifetime.song.shut_down().block();
         for entry in &entries {
             entry.lock().shutdown();
