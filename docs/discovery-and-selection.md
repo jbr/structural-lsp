@@ -208,7 +208,38 @@ extensions, mason-registry) extracted from source on 2026-09-15, merged into
 2,218 normalized records, and indexed from the other end as 760 executables and
 1,106 extensions.
 
-It settles, in the parent doc's own terms:
+**The problem this unit faces is overabundance, not sufficiency.** Thirteen
+editors' worth of servers, each with its own idea of how to choose one and
+where a project begins, is far more than a catalogue should hold and much more
+than one can adopt wholesale — which is exactly what the parent doc warns
+against when it asks for "a modest verified catalogue and explicit supported
+root-routing cases, not an unvalidated wholesale import."
+
+What is missing is therefore not data but **synthesis**: deciding which servers
+this project will stand behind, in what order, with which root rules, and what
+it will deliberately leave out. Those are judgement calls with no derivable
+answer, and they are the operator's, out of band from this unit.
+
+So this plan specifies **what the synthesis has to produce** and does not
+attempt it. The generator consumes that, and nothing else:
+
+- a **modest set** of servers — small enough that each was looked at, not
+  everything the dataset knows about;
+- per entry, **provenance**: which record(s) and which source(s) it came from,
+  and whether each field was exact or inferred, so a heuristic stays visible;
+- **arbitration where the sources disagree** — the root rule and the
+  preference order this project adopts, stated as *a choice*, with what it beat
+  named rather than averaged away;
+- the **explicitly supported root-routing cases**, which are the ones tests
+  will cover;
+- and a short **list of what was left out and why**, so the next person does
+  not relitigate the cuts.
+
+The plan's job is the machinery around that: the types, the generator, the
+selection function, and the tests. This section is the interface between the
+two halves.
+
+It provides, in the parent doc's own terms:
 
 - **catalogue contents.** Each record carries its languages and file
   extensions, the command or the source expression that computes it, its
@@ -270,12 +301,16 @@ and reasons. No spawning, no acquisition — fixtures carry explicit catalogues,
 so this half needs no dataset work at all.
 
 Then the catalogue itself, as its own step inside this milestone: a generator
-that turns `docs/servers-list/servers.json` into catalogue entries **with
-provenance and confidence retained**, plus the decisions the dataset's
-disagreements force us to make — root selection first, since that is where the
-sources differ most and where a wrong choice is expensive to unwind. The
-generated catalogue is checked in, so a change to it is reviewable, and the
-dataset's version is recorded with it.
+that turns the **synthesised set** — not the raw dataset — into catalogue
+entries with provenance and confidence retained. Root selection comes first
+among the decisions the sources' disagreements force, because that is where
+they differ most and where a wrong choice is expensive to unwind. The generated
+catalogue is checked in, so a change to it is reviewable, and the dataset
+revision it came from is recorded with it.
+
+The generator follows the synthesis rather than replacing it: it must be able
+to emit a *small* catalogue from a large dataset, and it must refuse to carry a
+field whose provenance it cannot state.
 
 **B — connect acquisition.** Stages become slots: a workspace warms what the
 plans name rather than every configured adapter, which is what makes

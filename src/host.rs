@@ -199,6 +199,11 @@ impl Entry {
         // this check a child could register just after it, have nobody to stop
         // it, and hold shutdown open for a whole handshake — measured, not
         // assumed: a guard taken after a stop keeps completion pending.
+        //
+        // The check must stay *inside* this lock. Reading the flag first and
+        // then taking the lock reopens the window it closes: the collector
+        // could run between the two. Registration and collection are one
+        // mutex, and that is the whole argument.
         if self.lifetime.stopped() {
             return None;
         }
@@ -420,6 +425,12 @@ impl Host {
         // `stop` has already initiated; `shut_down().block()` is idempotent on
         // the initiation and does the waiting, so this call is self-contained
         // even though the wait depends on that earlier initiation.
+        //
+        // This wait is also what makes the sweep below *final*: a launch
+        // returns its guard only after it has finished writing to its slot, so
+        // no slot write can land after a `mark_cold`. Bounding this wait with
+        // a timeout would lose that quietly — the state would still be swept,
+        // and a later writer could resurrect it.
         self.lifetime.song.shut_down().block();
         for entry in &entries {
             entry.lock().shutdown();
