@@ -4,10 +4,10 @@
 //! of the expression the focus spans; other servers answer at its start.
 
 use super::unsupported;
-use crate::workspace::Workspace;
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::anchored::{Focus, locate_focus};
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
+use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use lsp_types::Range;
 use serde_json::Value;
@@ -35,7 +35,7 @@ pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>) -> Res
             line,
             ..
         } = locate_focus(state, root, scope, anchor, target.focus)?;
-        let server = state.server(index);
+        let server = state.server(index)?;
         if !server.supports("hoverProvider") {
             return Ok(unsupported("type", server.name()));
         }
@@ -49,7 +49,11 @@ pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>) -> Res
                 .hover_params(&uri, range)
                 .get("position")
                 .is_some_and(|position| position.get("start").is_some());
-        if wide && focus_text.chars().any(|c| !(c.is_alphanumeric() || c == '_')) {
+        if wide
+            && focus_text
+                .chars()
+                .any(|c| !(c.is_alphanumeric() || c == '_'))
+        {
             head.push_str(&format!(
                 " (at its start: {} hovers a position, not a range)",
                 server.name()
@@ -105,7 +109,11 @@ fn extract(contents: &Value) -> (Vec<String>, Vec<String>) {
             }
         }
         Value::Object(object) => {
-            if let Some(code) = object.get("language").and(object.get("value")).and_then(Value::as_str) {
+            if let Some(code) = object
+                .get("language")
+                .and(object.get("value"))
+                .and_then(Value::as_str)
+            {
                 blocks.push(code.trim().to_string());
             } else if let Some(text) = object.get("value").and_then(Value::as_str) {
                 // Plain text has no fences, so the same split just finds
@@ -161,10 +169,17 @@ mod tests {
     #[test]
     fn code_blocks_win_over_prose_and_every_shape_is_read() {
         let markdown = json!({ "contents": { "kind": "markdown", "value": "```rust\nfixture\n```\n\n```rust\npub fn choose(mode: Mode) -> usize\n```\n\n---\n\nPicks a number.\n" } });
-        assert_eq!(render(&markdown), "fixture\npub fn choose(mode: Mode) -> usize\n");
+        assert_eq!(
+            render(&markdown),
+            "fixture\npub fn choose(mode: Mode) -> usize\n"
+        );
         let marked = json!({ "contents": [{ "language": "python", "value": "(function) def choose(flag: bool) -> int" }, "Picks."] });
-        assert_eq!(render(&marked), "(function) def choose(flag: bool) -> int\n");
-        let prose_only = json!({ "contents": { "kind": "plaintext", "value": "Just words.\n\nMore." } });
+        assert_eq!(
+            render(&marked),
+            "(function) def choose(flag: bool) -> int\n"
+        );
+        let prose_only =
+            json!({ "contents": { "kind": "plaintext", "value": "Just words.\n\nMore." } });
         assert_eq!(render(&prose_only), "Just words.\n");
         assert_eq!(render(&Value::Null), "no hover information\n");
         assert_eq!(render(&json!({ "contents": "" })), "no hover information\n");

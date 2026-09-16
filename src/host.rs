@@ -12,8 +12,10 @@
 //! each other: the map lock below is taken only to find or create a
 //! workspace, never to run a query.
 
+use crate::lsp::server::LspServer;
 use crate::session::Session;
-use crate::workspace::{Workspace, canonical_root};
+use crate::workspace::{Demand, Launch, ServerSlot, Workspace, canonical_root};
+use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
@@ -50,16 +52,26 @@ impl std::fmt::Display for AgentId {
 /// interested set that empties releases the workspace; a live [`Session`]
 /// holds an `Arc` to this entry, so an operation already under way is never
 /// cut short by a release.
+///
+/// The root and the slots are held out here, unlocked, so a launch can read
+/// them and move a server's lifecycle without the workspace lock — which is
+/// exactly what publication needs that lock for.
 pub(crate) struct Entry {
+    root: PathBuf,
     workspace: Mutex<Workspace>,
     interested: Mutex<BTreeSet<AgentId>>,
+    slots: Vec<Arc<ServerSlot>>,
 }
 
 impl Entry {
     pub(crate) fn new(workspace: Workspace) -> Self {
+        let root = workspace.root().to_path_buf();
+        let slots = workspace.slots().to_vec();
         Self {
+            root,
             workspace: Mutex::new(workspace),
             interested: Mutex::new(BTreeSet::new()),
+            slots,
         }
     }
 
@@ -77,6 +89,79 @@ impl Entry {
         self.interested
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Make the servers that would answer for `scope` running, starting the
+    /// ones that are not.
+    ///
+    /// No workspace lock is held here, deliberately: a launch publishes
+    /// *under* that lock, so waiting for one while holding it would deadlock
+    /// against the very launcher this call elects.
+    pub(crate) fn activate(self: &Arc<Self>, scope: Option<&Path>) {
+        let wanted = crate::workspace::serving(&self.slots, scope);
+        // Start every needed launch first and wait afterwards. Waiting as we
+        // went would serialize exactly what giving each launch a thread was
+        // for: one server's `initialize` would still be a delay to the next.
+        for &index in &wanted {
+            // Best effort: a server that will not start is recorded on its
+            // own slot, and the call goes on to ask for what is available.
+            // Bailing here would let one broken server stop every other from
+            // being warmed at all.
+            let _ = self.start(index);
+        }
+        for &index in &wanted {
+            let _ = self.slots[index].wait_for_launch();
+        }
+    }
+
+    /// Bring one slot to `Running`, or say why it cannot be.
+    ///
+    /// A demand that finds the slot already starting joins that launch rather
+    /// than beginning a second one, which is what makes concurrent demand
+    /// produce exactly one process.
+    fn start(self: &Arc<Self>, index: usize) -> Result<()> {
+        match self.slots[index].demand() {
+            // Already running, or someone else's launch is under way; either
+            // way the wait in `activate` covers it.
+            Demand::Ready | Demand::Join => Ok(()),
+            Demand::Failed(reason) => bail!("{reason}"),
+            Demand::Lead(launch) => {
+                self.spawn_launch(index, launch);
+                Ok(())
+            }
+        }
+    }
+
+    /// Start one server and publish it.
+    ///
+    /// The spawn and the `initialize` handshake hold no lock at all, so other
+    /// workspaces — and this one's other slots — keep working while it runs.
+    /// Only publication takes the workspace lock, and it takes it once, so no
+    /// caller can observe a `Running` slot whose server is not yet in place.
+    fn spawn_launch(self: &Arc<Self>, index: usize, launch: Launch) {
+        let entry = Arc::clone(self);
+        // A launch owns its thread, so two servers initialize at once instead
+        // of one waiting out the other's whole handshake. The handle is
+        // detached: everything the thread owes is recorded on the slot, which
+        // is what the waiters watch.
+        std::thread::spawn(move || entry.launch(index, launch));
+    }
+
+    /// One launch, on its own thread. Spawning and `initialize` hold no lock;
+    /// publication takes the workspace lock once, so no caller can observe a
+    /// `Running` slot whose server is not yet in place.
+    ///
+    /// Failures go to the slot, which the `Launch` guard does on every exit
+    /// path including a panic — so a waiter learns why rather than hanging.
+    fn launch(&self, index: usize, launch: Launch) {
+        match LspServer::start(launch.adapter_arc(), &self.root) {
+            Ok(server) => {
+                let mut workspace = self.lock();
+                workspace.publish(index, server);
+                launch.published();
+            }
+            Err(error) => launch.failed(format!("{error:#}")),
+        }
     }
 }
 
@@ -134,6 +219,12 @@ impl Host {
         };
         entry.interested().insert(agent);
         drop(workspaces);
+        // Warm every configured server, eagerly, so indexing begins before
+        // the first query — but out here, where a launch holds no host lock.
+        // Two agents on one root still produce one launch, now by the slot's
+        // own election rather than by this lock, and a failure is recorded on
+        // the slot for each call to report rather than failing the binding.
+        entry.activate(None);
         Session::bind(entry)
     }
 

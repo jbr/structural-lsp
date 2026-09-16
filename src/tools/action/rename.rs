@@ -4,9 +4,9 @@
 use super::Mode;
 use super::render::{FileChange, Prepared, render_applied, render_preview};
 use crate::lsp::edits::{self, FileRename, Located, Plan};
-use crate::workspace::Workspace;
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
+use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use lsp_types::WorkspaceEdit;
 use serde_json::Value;
@@ -123,8 +123,14 @@ fn prepare(
     for file in &plan.files {
         let text = std::fs::read_to_string(&file.path)
             .with_context(|| format!("reading {} for the rename", file.path.display()))?;
-        let located: Vec<Located> = edits::locate(&text, &file.edits, encoding)
-            .with_context(|| format!("{}'s edit to {}", server, relative_display(root, &file.path)))?;
+        let located: Vec<Located> =
+            edits::locate(&text, &file.edits, encoding).with_context(|| {
+                format!(
+                    "{}'s edit to {}",
+                    server,
+                    relative_display(root, &file.path)
+                )
+            })?;
         for edit in &located {
             let current = &text[edit.start..edit.end];
             if !current.is_empty() && current != old_name {
@@ -197,8 +203,11 @@ fn apply(state: &mut Workspace, root: &Path, server: &str, prepared: &Prepared) 
                 relative_display(root, to)
             )
         })?;
-        for index in 0..state.servers().len() {
-            state.server_mut(index).moved(from)?;
+        // Every running server, so any that owns the moved file forgets it.
+        for index in 0..state.slots().len() {
+            if let Ok(server) = state.server_mut(index) {
+                server.moved(from)?;
+            }
         }
     }
     let server = server_named(state, server)?;

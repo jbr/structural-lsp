@@ -28,15 +28,22 @@ fn fixture(name: &str) -> Option<Fixture> {
     // A source file, so file-scoped routing has something to match.
     std::fs::write(dir.join("src/lib.rs"), "pub fn a() {}\n").unwrap();
     let log = dir.join("launches.log");
-    let command = format!(
-        "command = [\"{}\", \"{}\", \"{}\"]",
-        python,
-        script.display(),
-        log.display()
-    );
+    let command = |label: &str| {
+        format!(
+            "command = [\"{}\", \"{}\", \"{}\", \"{}\"]",
+            python,
+            script.display(),
+            log.display(),
+            label
+        )
+    };
     std::fs::write(
         dir.join("structural.toml"),
-        format!("[servers.rust-analyzer]\n{command}\n\n[servers.pyright]\n{command}\n"),
+        format!(
+            "[servers.rust-analyzer]\n{}\n\n[servers.pyright]\n{}\n",
+            command("rust-analyzer"),
+            command("pyright")
+        ),
     )
     .unwrap();
     Some(Fixture { root: dir, log })
@@ -45,18 +52,193 @@ fn fixture(name: &str) -> Option<Fixture> {
 impl Fixture {
     /// One pid per launch of the mock, in the order they started.
     fn launches(&self) -> Vec<u32> {
-        std::fs::read_to_string(&self.log)
-            .map(|text| {
-                text.lines()
-                    .filter_map(|line| line.strip_prefix("START ")?.trim().parse().ok())
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.events()
+            .into_iter()
+            .filter(|event| event.kind == "START")
+            .map(|event| event.pid)
+            .collect()
     }
 
     fn source(&self) -> PathBuf {
         self.root.join("src/lib.rs")
     }
+
+    /// The recorded events, in the order they reached the log: each launch,
+    /// and the answer to its `initialize` when it came, each naming its
+    /// server.
+    fn events(&self) -> Vec<Event> {
+        std::fs::read_to_string(&self.log)
+            .map(|text| {
+                text.lines()
+                    .filter_map(|line| {
+                        let mut fields = line.split_whitespace();
+                        Some(Event {
+                            kind: fields.next()?.to_string(),
+                            server: fields.next()?.to_string(),
+                            pid: fields.next()?.parse().ok()?,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+/// One line of the mock's log: what happened, to which server, and its pid.
+#[derive(Debug)]
+struct Event {
+    kind: String,
+    server: String,
+    pid: u32,
+}
+
+/// A fixture whose two servers differ: rust-analyzer's `initialize` stalls or
+/// its command cannot be spawned, while pyright runs the mock normally. The
+/// asymmetry is what makes independence observable.
+fn asymmetric_fixture(name: &str, rust: &str) -> Option<Fixture> {
+    let python = crate::test_support::python()?;
+    let dir = std::env::temp_dir().join(format!("structural-host-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    let script = dir.join("mock.py");
+    std::fs::write(&script, HOST_MOCK_PY).unwrap();
+    std::fs::write(dir.join("src/lib.rs"), "pub fn a() {}\n").unwrap();
+    std::fs::write(dir.join("src/helper.py"), "def a():\n    pass\n").unwrap();
+    let log = dir.join("launches.log");
+    let mock = |label: &str, stall: Option<f64>| {
+        let mut argv = vec![
+            format!("\"{python}\""),
+            format!("\"{}\"", script.display()),
+            format!("\"{}\"", log.display()),
+            format!("\"{label}\""),
+        ];
+        if let Some(stall) = stall {
+            // Quoted: `command` is a list of strings, so a bare `1.0` would
+            // make the whole file unparsable and quietly leave no servers.
+            argv.push(format!("\"{stall}\""));
+        }
+        format!("command = [{}]", argv.join(", "))
+    };
+    let rust = match rust {
+        "mock" => mock("rust-analyzer", None),
+        // Long enough that a serialized activation cannot answer the other
+        // server first, and short enough not to slow the suite much.
+        "stalling" => mock("rust-analyzer", Some(1.5)),
+        other => format!("command = [\"{other}\"]"),
+    };
+    std::fs::write(
+        dir.join("structural.toml"),
+        format!(
+            "[servers.rust-analyzer]\n{rust}\n\n[servers.pyright]\n{}\n",
+            mock("pyright", None)
+        ),
+    )
+    .unwrap();
+    Some(Fixture { root: dir, log })
+}
+
+/// Two servers start at once: the second launch begins before the first has
+/// answered `initialize`. Activation that waited as it went would record
+/// START, READY, START, READY; overlapping launches record START, START,
+/// READY, READY.
+#[test]
+fn servers_start_without_waiting_for_each_other() {
+    let Some(fixture) = asymmetric_fixture("overlap", "stalling") else {
+        return;
+    };
+    let host = Host::new();
+    let _session = host.agent_started(AgentId::new("a"), &fixture.root);
+
+    let events = fixture.events();
+    assert_eq!(
+        events.iter().filter(|event| event.kind == "START").count(),
+        2,
+        "both servers started: {events:?}"
+    );
+    let ready = |server: &str| {
+        events
+            .iter()
+            .position(|event| event.kind == "READY" && event.server == server)
+    };
+    // Waiting as each launch started would answer one server's `initialize`
+    // before the other was even spawned; overlapping shows the quick one
+    // answering while the stalling one is still starting.
+    let stalling = ready("rust-analyzer").expect("the stalling server answered initialize");
+    let quick = ready("pyright").expect("the other server answered initialize");
+    assert!(
+        quick < stalling,
+        "the second server answered `initialize` while the first was still \
+         starting, so the two launches overlapped: {events:?}"
+    );
+    host.shutdown();
+}
+
+/// A server that cannot start is recorded as failed, says so for what it
+/// serves, and does not stop the other server from serving its own language.
+#[test]
+fn a_server_that_will_not_start_leaves_the_others_running() {
+    let Some(fixture) = asymmetric_fixture("one-fails", "no-such-server-binary") else {
+        return;
+    };
+    let host = Host::new();
+    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+
+    let workspace = session.workspace();
+    let states: Vec<(&str, &str)> = workspace
+        .slots()
+        .iter()
+        .map(|slot| (slot.name(), slot.state().label()))
+        .collect();
+    assert!(
+        states.contains(&("pyright", "running")),
+        "the server that can start did: {states:?}"
+    );
+    assert!(
+        states.contains(&("rust-analyzer", "failed")),
+        "the one that cannot is recorded as failed: {states:?}"
+    );
+    assert_eq!(fixture.launches().len(), 1, "only one mock was launched");
+
+    // Reported for what it would have served, and confined to it.
+    let error = workspace
+        .select(Some(&fixture.root.join("src/lib.rs")))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("rust-analyzer"), "{error}");
+    assert!(
+        workspace
+            .select(Some(&fixture.root.join("src/helper.py")))
+            .is_ok(),
+        "python still routes to the server that is running"
+    );
+    drop(workspace);
+    host.shutdown();
+}
+
+/// A session that outlives the host finds cold slots and no servers, and says
+/// so — rather than reaching for a handle whose server has been reaped.
+#[test]
+fn a_query_after_shutdown_reports_rather_than_panics() {
+    let Some(fixture) = fixture("after-shutdown") else {
+        return;
+    };
+    let host = Host::new();
+    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    assert!(!fixture.launches().is_empty(), "servers started");
+
+    host.shutdown();
+
+    let workspace = session.workspace();
+    assert_eq!(workspace.running().count(), 0, "nothing is running");
+    assert!(
+        workspace
+            .slots()
+            .iter()
+            .all(|slot| slot.state().label() == "not started"),
+        "every slot is cold again"
+    );
+    let error = workspace.select(None).unwrap_err().to_string();
+    assert!(error.contains("no language server is running"), "{error}");
 }
 
 /// Whether `pid` names a live process. `ps` is the portable-enough probe:
@@ -103,8 +285,8 @@ fn two_agents_on_one_root_share_one_launch() {
     );
     // Read one at a time: both agents hold the same workspace's lock, so two
     // guards here would deadlock rather than disagree.
-    let seen_by_a = a.workspace().servers().len();
-    let seen_by_b = b.workspace().servers().len();
+    let seen_by_a = a.workspace().running().count();
+    let seen_by_b = b.workspace().running().count();
     assert_eq!(seen_by_a, seen_by_b, "both agents see the same workspace");
     host.shutdown();
 }
@@ -128,7 +310,7 @@ fn releasing_one_agent_leaves_another_working() {
     // Scoped: shutdown takes the workspace lock, so no guard may outlive it.
     {
         let remaining = b.workspace();
-        assert_eq!(remaining.servers().len(), launched.len());
+        assert_eq!(remaining.running().count(), launched.len());
         assert!(
             !remaining
                 .select(Some(&workspace.source()))
@@ -205,7 +387,7 @@ fn a_released_agent_leaves_a_live_session_its_servers() {
     // operation short. (When residency should end after the last agent is the
     // lifecycle policy of unit 2.)
     let held = session.workspace();
-    assert_eq!(held.servers().len(), launched.len());
+    assert_eq!(held.running().count(), launched.len());
     assert!(!held.select(Some(&workspace.source())).unwrap().is_empty());
     drop(held);
     drop(session);
@@ -229,7 +411,7 @@ fn independent_workspaces_hold_their_workspaces_at_once() {
     let first = a.workspace();
     let second = b.workspace();
     assert_ne!(one.root, two.root);
-    assert!(!first.servers().is_empty() && !second.servers().is_empty());
+    assert!(first.running().count() > 0 && second.running().count() > 0);
     assert_ne!(
         one.launches(),
         two.launches(),

@@ -33,12 +33,22 @@ pub(crate) fn python() -> Option<String> {
 /// no child behind. It speaks just enough framing for `LspServer::start`:
 /// `initialize` is answered with empty capabilities, `exit` ends the process.
 pub(crate) const HOST_MOCK_PY: &str = r#"
-import json, os, sys
+import json, os, sys, time
 
 log = sys.argv[1] if len(sys.argv) > 1 else None
-if log:
-    with open(log, "a") as handle:
-        handle.write("START %d\n" % os.getpid())
+# Which server this is, so a test can tell two launches apart: process start
+# order is the operating system's business, not something to assert on.
+label = sys.argv[2] if len(sys.argv) > 2 else "?"
+# A fourth argument makes `initialize` take that many seconds to answer, so a
+# test can see one launch overlapping another.
+stall = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+
+def note(what):
+    if log:
+        with open(log, "a") as handle:
+            handle.write("%s %s %d\n" % (what, label, os.getpid()))
+
+note("START")
 
 def read_headers():
     length = None
@@ -72,6 +82,9 @@ while True:
         break
     if "method" in msg and "id" in msg:
         if msg["method"] == "initialize":
+            if stall:
+                time.sleep(stall)
+            note("READY")
             reply(msg, {"capabilities": {}})
         else:
             reply(msg, None)

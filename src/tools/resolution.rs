@@ -183,13 +183,13 @@ fn discover(
     // The wait is unbounded except by the inactivity backstop: a busy server
     // is waited for, a silent one is an error.
     for &index in selected {
-        let server = state.server_mut(index);
+        let server = state.server_mut(index)?;
         server.sync_owned()?;
         server.wait_ready()?;
     }
     let mut merged = Partition::default();
     for &index in selected {
-        let server = state.server(index);
+        let server = state.server(index)?;
         let infos = server.workspace_symbol(symbol)?;
         merged.absorb(partition(symbol, server.name(), infos, root, scope));
     }
@@ -393,14 +393,17 @@ pub fn server_named<'a>(state: &'a mut Workspace, name: &str) -> Result<&'a mut 
     let index = state
         .index_of(name)
         .with_context(|| format!("{name} is no longer running"))?;
-    Ok(state.server_mut(index))
+    state.server_mut(index)
 }
 
 pub fn kind_label(state: &Workspace, server: &str, kind: SymbolKind) -> &'static str {
-    match state.index_of(server) {
-        Some(index) => state.server(index).adapter().kind_label(kind),
-        None => crate::lsp::adapter::default_kind_label(kind),
-    }
+    state
+        .index_of(server)
+        .and_then(|index| state.server(index).ok())
+        .map_or_else(
+            || crate::lsp::adapter::default_kind_label(kind),
+            |server| server.adapter().kind_label(kind),
+        )
 }
 
 /// The filesystem path of a definition target, for reading and syncing.

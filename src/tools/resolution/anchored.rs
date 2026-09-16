@@ -50,7 +50,7 @@ pub fn locate_focus(
     // The first server serving the file's language; `select` errors when
     // none does.
     let index = state.select(Some(&file))?[0];
-    let server = state.server_mut(index);
+    let server = state.server_mut(index)?;
     server.sync_owned()?;
     server.wait_ready()?;
     let synced = server.sync(&file)?;
@@ -90,7 +90,7 @@ pub(super) fn from_anchor(
         line,
         ..
     } = located;
-    let server = state.server(index);
+    let server = state.server(index)?;
     let encoding = server.encoding();
     let start = range.start;
     let end = range.end;

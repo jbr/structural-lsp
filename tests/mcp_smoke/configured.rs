@@ -45,15 +45,13 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     {
         let workspace = state.workspace();
         assert!(
+            workspace.running().any(|server| server.name() == "gopls"),
+            "gopls started: not running = {:?}",
             workspace
-                .servers()
+                .slots()
                 .iter()
-                .any(|server| server.name() == "gopls"),
-            "gopls started: unavailable = {:?}",
-            workspace
-                .unavailable()
-                .iter()
-                .map(|u| format!("{}: {}", u.name, u.reason))
+                .filter(|slot| !slot.state().is_running())
+                .map(|slot| format!("{}: {}", slot.name(), slot.state().label()))
                 .collect::<Vec<_>>()
         );
     }

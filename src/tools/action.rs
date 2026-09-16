@@ -115,7 +115,7 @@ impl Tool<Session> for Action {
     type Output = String;
 
     fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
-        let mut state = session.workspace();
+        let mut state = session.acquire(self.path.as_deref());
         let mode = match self.mode.as_deref().map(str::trim) {
             None | Some("") | Some(PREVIEW) => Mode::Preview,
             Some(APPLY) => Mode::Apply,

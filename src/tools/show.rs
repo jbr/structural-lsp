@@ -111,7 +111,7 @@ impl Tool<Session> for Show {
     type Output = String;
 
     fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
-        let mut state = session.workspace();
+        let mut state = session.acquire(self.path.as_deref());
         let root = state.root().to_path_buf();
         let target = Target {
             symbol: self.symbol.as_deref(),

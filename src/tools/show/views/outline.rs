@@ -4,9 +4,9 @@
 use super::{MAX_LINES, unsupported};
 use crate::lsp::outline::{self, Node};
 use crate::lsp::server::LspServer;
-use crate::workspace::Workspace;
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
+use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
@@ -25,8 +25,13 @@ pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>) -> Res
     };
     let header = super::target_header(state, root, &found)?;
     let server = server_named(state, &found.identity.server)?;
-    let node = outline::subtree_at(&result, found.target.selection_range.start)
-        .with_context(|| format!("{} returned an unusable documentSymbol result", server.name()))?;
+    let node =
+        outline::subtree_at(&result, found.target.selection_range.start).with_context(|| {
+            format!(
+                "{} returned an unusable documentSymbol result",
+                server.name()
+            )
+        })?;
     let children = node.map(|node| node.children).unwrap_or_default();
     if children.is_empty() {
         return Ok(format!("{header}\nno children in the outline\n"));
@@ -52,15 +57,19 @@ fn file_outline(state: &mut Workspace, root: &Path, path: Option<&str>) -> Resul
         bail!("`outline` needs `path` to name a file; `{path}` is not one");
     }
     let index = state.select(Some(&file))?[0];
-    let server = state.server_mut(index);
+    let server = state.server_mut(index)?;
     server.sync_owned()?;
     server.wait_ready()?;
     let synced = server.sync(&file)?;
     let Some(result) = server.document_symbol(&synced.uri)? else {
         return Ok(unsupported("outline", server.name()));
     };
-    let nodes = outline::tree(&result)
-        .with_context(|| format!("{} returned an unusable documentSymbol result", server.name()))?;
+    let nodes = outline::tree(&result).with_context(|| {
+        format!(
+            "{} returned an unusable documentSymbol result",
+            server.name()
+        )
+    })?;
     let display = relative_display(root, &file);
     if nodes.is_empty() {
         return Ok(format!("{display} · empty outline\n"));
@@ -75,7 +84,9 @@ fn file_outline(state: &mut Workspace, root: &Path, path: Option<&str>) -> Resul
     if budget == 0 {
         let omitted = count.saturating_sub(MAX_LINES);
         if omitted > 0 {
-            text.push_str(&format!("note: {omitted} more symbol(s) not shown (listing cap {MAX_LINES})\n"));
+            text.push_str(&format!(
+                "note: {omitted} more symbol(s) not shown (listing cap {MAX_LINES})\n"
+            ));
         }
     }
     Ok(text)
@@ -87,7 +98,13 @@ fn count(nodes: &[Node]) -> usize {
 
 /// `kind name · line[ · detail]`, indented by depth; stops when the budget
 /// is spent.
-fn render_nodes(text: &mut String, server: &LspServer, nodes: &[Node], depth: usize, budget: &mut usize) {
+fn render_nodes(
+    text: &mut String,
+    server: &LspServer,
+    nodes: &[Node],
+    depth: usize,
+    budget: &mut usize,
+) {
     for node in nodes {
         if *budget == 0 {
             return;

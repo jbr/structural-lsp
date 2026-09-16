@@ -2,12 +2,12 @@
 //! and the three answers an unavailable view gets (unknown name, not
 //! supported by the server, not applicable to the target).
 
-use crate::workspace::Workspace;
 use crate::tools::listing::{header, location_line, relative_display};
 use crate::tools::resolution::anchored::locate_focus;
 use crate::tools::resolution::{
     Found, Resolved, Target, describe, resolve_target, server_named, sync_target,
 };
+use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
@@ -52,14 +52,13 @@ pub fn run(state: &mut Workspace, view: &str, target: Target<'_>) -> Result<Stri
 /// A view an adapter exposes, or the unknown-view answer.
 fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> Result<String> {
     let offered: Vec<String> = state
-        .servers()
-        .iter()
+        .running()
         .filter(|server| server.adapter().extra_views().contains(&view))
         .map(|server| server.name().to_string())
         .collect();
     if offered.is_empty() {
         let mut known: Vec<&str> = STANDARD.to_vec();
-        for server in state.servers() {
+        for server in state.running() {
             known.extend(server.adapter().extra_views());
         }
         known.dedup();
@@ -79,9 +78,9 @@ fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> 
             let scope = target
                 .path
                 .map(|path| {
-                    root.join(path)
-                        .canonicalize()
-                        .with_context(|| format!("`{path}` does not exist under the workspace root"))
+                    root.join(path).canonicalize().with_context(|| {
+                        format!("`{path}` does not exist under the workspace root")
+                    })
                 })
                 .transpose()?;
             let focus = locate_focus(state, root, scope, anchor, target.focus)?;
@@ -106,7 +105,7 @@ fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> 
             (index, synced.uri, found.target.selection_range.start, head)
         }
     };
-    let server = state.server(index);
+    let server = state.server(index)?;
     if !offered.iter().any(|name| name == server.name()) {
         return Ok(format!(
             "view `{view}` is not supported by {}\n",
@@ -114,7 +113,10 @@ fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> 
         ));
     }
     let Some((method, params)) = server.adapter().extra_view_request(view, &uri, position) else {
-        bail!("{} offers `{view}` but gave no request for it", server.name());
+        bail!(
+            "{} offers `{view}` but gave no request for it",
+            server.name()
+        );
     };
     server.wait_ready()?;
     let result = server.request(&method, params)?;
@@ -131,11 +133,7 @@ pub fn target_header(state: &mut Workspace, root: &Path, found: &Found) -> Resul
     Ok(header(
         described.kind_label,
         &described.name,
-        &location_line(
-            root,
-            &found.target.uri,
-            found.target.selection_range.start,
-        ),
+        &location_line(root, &found.target.uri, found.target.selection_range.start),
     ))
 }
 

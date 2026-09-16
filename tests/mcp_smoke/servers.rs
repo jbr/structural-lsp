@@ -49,15 +49,16 @@ fn both_servers_answer_from_one_root() {
     // the same workspace lock.
     {
         let workspace = state.workspace();
-        let names: Vec<&str> = workspace.servers().iter().map(|s| s.name()).collect();
+        let names: Vec<&str> = workspace.running().map(|server| server.name()).collect();
         assert_eq!(
             names,
             ["rust-analyzer", "pyright"],
-            "both built-ins started: unavailable = {:?}",
+            "both built-ins started: not running = {:?}",
             workspace
-                .unavailable()
+                .slots()
                 .iter()
-                .map(|u| format!("{}: {}", u.name, u.reason))
+                .filter(|slot| !slot.state().is_running())
+                .map(|slot| format!("{}: {}", slot.name(), slot.state().label()))
                 .collect::<Vec<_>>()
         );
     }
