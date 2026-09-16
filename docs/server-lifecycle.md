@@ -253,10 +253,13 @@ launcher, because what it trades — shutdown latency against a launch that died
 for a lock it never got — is visible from outside. `std::sync::Mutex` offers no
 timed acquisition, so it is enforced by polling; the honest note is that the
 thing being bounded is another thread's critical section, which we cannot be
-notified about. The sweep in step 4 stops
-servers while holding each workspace lock, which is fine for a shutdown —
-teardown there is grace-bounded. Removing the server under the lock and
-stopping it *outside* is a rule for eviction, which is the next unit's.
+notified about.
+
+The sweep in step 4 takes each workspace's servers out *under* its lock and
+reaps them *outside* it: dropping a server joins its threads, and that lock is
+the very one a launch needs to publish, so reaping inside would hold it for the
+length of the teardown. Eviction, in the next unit, does the same thing one
+server at a time.
 
 **Why the flag-before-sweep is what carries the invariant.** The launcher's
 check-then-publish and the sweep both need the workspace lock, so they cannot
