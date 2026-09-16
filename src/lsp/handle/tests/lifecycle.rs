@@ -219,7 +219,7 @@ fn a_blocked_notification_trips_the_backstop_on_its_own() {
     needs_python!();
     let mock = Mock::new("blocked-notify");
     let settings = Settings {
-        backstop: Duration::from_secs(1),
+        backstop: TEST_BACKSTOP,
         ..test_settings()
     };
     let handle = mock.spawn(settings, Box::new(StandardIdle));
@@ -239,7 +239,7 @@ fn a_blocked_notification_trips_the_backstop_on_its_own() {
         "{error}"
     );
     assert!(
-        started.elapsed() < Duration::from_secs(4),
+        started.elapsed() < TEST_BACKSTOP * 2,
         "failed after {:?}",
         started.elapsed()
     );

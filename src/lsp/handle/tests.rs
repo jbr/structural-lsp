@@ -20,6 +20,17 @@ fn test_settings() -> Settings {
     }
 }
 
+/// The backstop the timing tests set for themselves.
+///
+/// Those tests need a backstop short enough to wait out, and the setup
+/// handshake shares it: `initialize` is a request like any other, so this
+/// value is also the deadline for a python interpreter to start. A second was
+/// not enough on a loaded machine — the trip was in setup, and it was the
+/// machine's speed being measured rather than the mechanism under test. Three
+/// seconds is still cheap to wait out and far outside start-up's normal
+/// hundred milliseconds.
+const TEST_BACKSTOP: Duration = Duration::from_secs(3);
+
 struct Mock {
     python: String,
     script: std::path::PathBuf,

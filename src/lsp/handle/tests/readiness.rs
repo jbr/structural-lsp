@@ -125,10 +125,8 @@ fn policy_composes_with_standard_progress() {
 fn silence_trips_the_backstop_and_the_connection_survives() {
     needs_python!();
     let mock = Mock::new("silence");
-    // Python's start-up under a parallel test run can exceed a few
-    // hundred milliseconds, so the backstop is a full second.
     let settings = Settings {
-        backstop: Duration::from_secs(1),
+        backstop: TEST_BACKSTOP,
         ..test_settings()
     };
     let handle = mock.spawn(settings, Box::new(StandardIdle));
@@ -142,7 +140,7 @@ fn silence_trips_the_backstop_and_the_connection_survives() {
     assert!(text.contains("inactivity backstop"), "{text}");
     assert!(text.contains("last message: response"), "{text}");
     assert!(
-        elapsed >= Duration::from_secs(1) && elapsed < Duration::from_secs(4),
+        elapsed >= TEST_BACKSTOP && elapsed < TEST_BACKSTOP * 2,
         "tripped after {elapsed:?}"
     );
 
@@ -156,16 +154,18 @@ fn activity_extends_the_backstop() {
     needs_python!();
     let mock = Mock::new("chatter");
     let settings = Settings {
-        backstop: Duration::from_secs(1),
+        backstop: TEST_BACKSTOP,
         ..test_settings()
     };
     let handle = mock.spawn(settings, Box::new(StandardIdle));
     initialize(&handle);
 
-    // Six notifications 400 ms apart, then the reply: 2.4 s of a 1 s
-    // backstop, never silent for more than 400 ms.
+    // Six notifications 700 ms apart, then the reply: 4.2 s of a 3 s
+    // backstop, never silent for more than 700 ms. The period scales with
+    // the backstop — shrink it and the chatter stops extending anything,
+    // which is the property this test is about.
     let result = handle
-        .request("test/chatter", json!({ "count": 6, "period_ms": 400 }))
+        .request("test/chatter", json!({ "count": 6, "period_ms": 700 }))
         .unwrap();
     assert_eq!(result, json!("done"));
     handle.shutdown().unwrap();
@@ -176,14 +176,14 @@ fn a_long_idle_connection_accepts_a_new_request() {
     needs_python!();
     let mock = Mock::new("idle");
     let settings = Settings {
-        backstop: Duration::from_secs(1),
+        backstop: TEST_BACKSTOP,
         ..test_settings()
     };
     let handle = mock.spawn(settings, Box::new(StandardIdle));
     initialize(&handle);
     // Idle for longer than the backstop: the next operation starts its
     // own clock at admission.
-    thread::sleep(Duration::from_millis(2500));
+    thread::sleep(TEST_BACKSTOP + Duration::from_secs(1));
     assert_eq!(handle.request("test/echo", json!({})).unwrap(), json!("ok"));
     handle.shutdown().unwrap();
 }
@@ -193,21 +193,21 @@ fn a_quiet_server_that_answers_probes_is_waited_for() {
     needs_python!();
     let mock = Mock::new("quiet");
     let settings = Settings {
-        backstop: Duration::from_secs(1),
+        backstop: TEST_BACKSTOP,
         probe_after: Duration::from_millis(300),
         ..test_settings()
     };
     let handle = mock.spawn(settings, Box::new(StandardIdle));
     initialize(&handle);
-    // Three seconds of silence inside an open token, against a one-second
-    // backstop: only the probes keep the wait alive, and they must.
+    // Longer than the backstop of silence inside an open token: only the
+    // probes keep the wait alive, and they must.
     handle
-        .request("test/quiet-work", json!({ "secs": 3 }))
+        .request("test/quiet-work", json!({ "secs": 4 }))
         .unwrap();
     let started = Instant::now();
     handle.wait_ready(Duration::from_secs(1)).unwrap();
     assert!(
-        started.elapsed() >= Duration::from_millis(2500),
+        started.elapsed() >= TEST_BACKSTOP,
         "{:?}",
         started.elapsed()
     );
@@ -225,7 +225,7 @@ fn a_deaf_server_trips_the_backstop_with_the_probe_named() {
     needs_python!();
     let mock = Mock::new("deaf");
     let settings = Settings {
-        backstop: Duration::from_secs(1),
+        backstop: TEST_BACKSTOP,
         probe_after: Duration::from_millis(300),
         ..test_settings()
     };
@@ -238,7 +238,7 @@ fn a_deaf_server_trips_the_backstop_with_the_probe_named() {
     assert!(text.contains("inactivity backstop"), "{text}");
     assert!(text.contains("liveness probe went unanswered"), "{text}");
     assert!(
-        started.elapsed() < Duration::from_secs(4),
+        started.elapsed() < TEST_BACKSTOP * 2,
         "{:?}",
         started.elapsed()
     );
