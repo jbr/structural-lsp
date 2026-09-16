@@ -26,7 +26,9 @@ pub enum SlotState {
     Starting,
     /// The server is running, and the workspace holds it.
     Running,
-    /// The last launch failed, with this reason. A later demand may retry.
+    /// The last launch failed, with this reason. A demand reports that rather
+    /// than starting another attempt: clearing it belongs to the unit that
+    /// can re-acquire an expired server, on the clock that expires one.
     Failed(String),
 }
 

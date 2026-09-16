@@ -207,12 +207,25 @@ was added to catch.
 
 The ordering:
 
-1. `shutdown` sets the abort flag on **every** slot first, taking only slot
-   state locks;
-2. it terminates the child of every launch still in flight;
-3. it waits for in-flight launches to drain, on a launch counter and condvar;
+1. `shutdown` claims every slot first — the claim is a bare atomic store, so
+   this pass takes no lock at all;
+2. it stops the child of every launch that is still starting. A launcher
+   registers its child with the entry as soon as it spawns, so shutdown can
+   reach one that no workspace holds yet;
+3. it waits for in-flight launches to finish, on a launch counter and condvar
+   whose count is returned by a *guard* — so a launcher that panics still lets
+   shutdown return. A count returned by an ordinary call would be skipped by
+   the unwind, and shutdown would wait forever;
 4. it takes each workspace lock and stops everything published, in the map and
    in the released registry alike.
+
+The count in step 3 is what makes shutdown *decisive* rather than merely
+eventual, and it is affordable only because of step 2: the launches it waits on
+are already being killed, so the wait is bounded by teardown (about five
+seconds) instead of by a hung `initialize` (ninety). The sweep in step 4 stops
+servers while holding each workspace lock, which is fine for a shutdown —
+teardown there is grace-bounded. Removing the server under the lock and
+stopping it *outside* is a rule for eviction, which is the next unit's.
 
 **Why the flag-before-sweep is what carries the invariant.** The launcher's
 check-then-publish and the sweep both need the workspace lock, so they cannot

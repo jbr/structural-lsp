@@ -153,6 +153,33 @@ fn wait_for_launches(fixture: &Fixture, n: usize) -> Vec<u32> {
     }
 }
 
+/// A launch that panics must still let a shutdown finish. The count is
+/// returned by a guard for exactly this reason: an ordinary call after
+/// `launch` would be skipped by the unwind, and `await_launches` would then
+/// wait forever.
+#[test]
+fn a_panicking_launch_still_returns_its_count() {
+    let dir = std::env::temp_dir().join(format!("structural-host-panic-{}", std::process::id()));
+    let entry = std::sync::Arc::new(Entry::new(crate::workspace::Workspace::new(dir)));
+
+    entry.count_launch();
+    let counted = CountedLaunch(std::sync::Arc::clone(&entry));
+    let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        let _counted = counted;
+        panic!("a launcher died");
+    }));
+    assert!(unwound.is_err(), "the launch panicked, as arranged");
+
+    // Read the count rather than waiting on it: a leaked count would hang
+    // this test rather than fail it, which is the failure we are guarding
+    // against and not one to reproduce as a hang.
+    assert_eq!(
+        *entry.launching.lock().unwrap(),
+        0,
+        "the count comes back even when a launch unwinds"
+    );
+}
+
 /// A shutdown arriving while a server is still handshaking leaves no child
 /// behind: the one being started is killed, not published.
 #[test]

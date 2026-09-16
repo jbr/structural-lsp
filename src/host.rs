@@ -186,19 +186,33 @@ impl Entry {
     /// caller can observe a `Running` slot whose server is not yet in place.
     fn spawn_launch(self: &Arc<Self>, index: usize, launch: Launch) {
         let entry = Arc::clone(self);
+        self.count_launch();
+        // A launch owns its thread, so two servers initialize at once instead
+        // of one waiting out the other's whole handshake. The count is given
+        // back by a guard *inside* the thread, so it is returned on every
+        // exit path — including a panic, which an explicit call after
+        // `launch` would never reach. A launch that dies must still let a
+        // shutdown finish.
+        let spawned = std::thread::Builder::new()
+            .name(format!("structural-launch-{index}"))
+            .spawn(move || {
+                let _counted = CountedLaunch(entry);
+                let entry = Arc::clone(&_counted.0);
+                entry.launch(index, launch);
+            });
+        if spawned.is_err() {
+            // No thread was created: put the count back. The closure went
+            // with the error, so the `Launch` guard inside it has already
+            // marked the slot failed and woken anyone waiting on it.
+            self.launch_finished();
+        }
+    }
+
+    fn count_launch(&self) {
         *self
             .launching
             .lock()
             .unwrap_or_else(PoisonError::into_inner) += 1;
-        // A launch owns its thread, so two servers initialize at once instead
-        // of one waiting out the other's whole handshake. The handle is
-        // detached: everything the thread owes is recorded on the slot, which
-        // is what the waiters watch — and counted here, so shutdown can tell
-        // when the last decision has been made.
-        std::thread::spawn(move || {
-            entry.launch(index, launch);
-            entry.launch_finished();
-        });
     }
 
     fn launch_finished(&self) {
@@ -297,12 +311,12 @@ impl Host {
 
     /// Bind `agent` to the workspace at `cwd`, creating it on first use.
     ///
-    /// A new workspace starts its servers here, eagerly, so indexing begins
-    /// before the first query. The map lock is held across that startup,
-    /// which makes concurrent demand for one workspace produce one launch —
-    /// this is the simple form; unit 2 replaces it with an acquisition that
-    /// does not hold the global lock while a server initializes. Operations
-    /// on an already-acquired workspace never take this lock.
+    /// Creating a workspace is cheap — it reads the configuration and lays
+    /// out a slot per server — and the eager warm that follows happens
+    /// *outside* the map lock, so one workspace's startup never queues
+    /// another's work behind it. Two agents arriving at once still produce
+    /// one launch per server, by the slot's own election rather than by this
+    /// lock. Operations on an already-acquired workspace never take it.
     pub fn agent_started(&self, agent: AgentId, cwd: &Path) -> Session {
         let key = canonical_root(cwd);
         // Interest is recorded before the map lock is released, so a
@@ -413,6 +427,18 @@ struct ChildGuard<'a> {
 impl Drop for ChildGuard<'_> {
     fn drop(&mut self) {
         self.entry.children().remove(&self.id);
+    }
+}
+
+/// Counts one launch for as long as it is in flight, and counts it out on
+/// every exit path — including a panic, which is the path an explicit call
+/// after `launch` would miss. A leaked count is not a safety hole, but it
+/// would hang shutdown forever, which is worse than what the count buys.
+struct CountedLaunch(Arc<Entry>);
+
+impl Drop for CountedLaunch {
+    fn drop(&mut self) {
+        self.0.launch_finished();
     }
 }
 
