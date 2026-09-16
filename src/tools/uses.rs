@@ -99,7 +99,7 @@ impl Tool<Session> for Uses {
     type Output = String;
 
     fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
-        let mut state = session.acquire(self.path.as_deref());
+        let mut state = session.acquire(self.path.as_deref())?;
         let root = state.root().to_path_buf();
         let target = Target {
             symbol: self.symbol.as_deref(),

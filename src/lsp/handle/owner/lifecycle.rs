@@ -226,9 +226,8 @@ impl Owner {
     pub(super) fn kill_and_reap(&mut self) {
         // Kill, then close the pipes by reaping: a writer blocked on stdin
         // gets EPIPE, a reader gets EOF.
-        let _ = self.child.kill();
-        let _ = self.child.wait();
         self.writer_terminating.store(true, Ordering::SeqCst);
+        self.child.kill_and_reap();
     }
 
     pub(super) fn teardown(&mut self) {

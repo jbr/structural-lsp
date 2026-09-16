@@ -108,6 +108,7 @@ impl Spawning {
             encoding,
             capabilities,
             opened: HashMap::new(),
+            registration: None,
         })
     }
 }
@@ -126,9 +127,14 @@ pub struct LspServer {
     /// Documents opened with the server, keyed by URI, with the snapshot the
     /// server was last given.
     opened: HashMap<String, OpenedDoc>,
+    registration: Option<crate::host::Registration>,
 }
 
 impl LspServer {
+    pub(crate) fn set_registration(&mut self, registration: crate::host::Registration) {
+        self.registration = Some(registration);
+    }
+
     /// Spawn the adapter's command, and stop there.
     ///
     /// The process is running and nothing has been sent yet: `initialize` is

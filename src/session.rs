@@ -60,18 +60,39 @@ impl Session {
     /// scope needs. Keeping the ordering inside one function is the point: a
     /// launch publishes *under* the workspace lock, so a call that took the
     /// lock and then waited for a launch would be waiting for itself.
-    pub fn acquire(&self, path: Option<&str>) -> MutexGuard<'_, Workspace> {
+    pub fn acquire(&self, path: Option<&str>) -> anyhow::Result<Operation<'_>> {
+        let admission = self.workspace.admit()?;
         let scope = {
             let workspace = self.workspace();
             path.map(|path| workspace.root().join(path))
         };
         self.activate(scope.as_deref());
-        self.workspace()
+        Ok(Operation {
+            workspace: self.workspace(),
+            _admission: admission,
+        })
     }
 
     /// Lock the workspace for one operation. Serialized against other calls
     /// on the same workspace, and against nothing else.
     pub fn workspace(&self) -> MutexGuard<'_, Workspace> {
         self.workspace.lock()
+    }
+}
+
+/// Whole-call protection: release the workspace before returning admission.
+pub struct Operation<'a> {
+    workspace: MutexGuard<'a, Workspace>,
+    _admission: swansong::Guard,
+}
+impl std::ops::Deref for Operation<'_> {
+    type Target = Workspace;
+    fn deref(&self) -> &Workspace {
+        &self.workspace
+    }
+}
+impl std::ops::DerefMut for Operation<'_> {
+    fn deref_mut(&mut self) -> &mut Workspace {
+        &mut self.workspace
     }
 }

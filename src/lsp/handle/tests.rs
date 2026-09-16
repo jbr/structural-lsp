@@ -108,6 +108,7 @@ macro_rules! needs_python {
     };
 }
 
+mod force;
 mod lifecycle;
 mod readiness;
 
@@ -122,8 +123,8 @@ impl ServerHandle {
             inbox: self.inbox.clone(),
             inbound_cap: self.inbound_cap,
             terminate: Arc::clone(&self.terminate),
+            force: Arc::clone(&self.force),
             owner: None,
-            join_bound: self.join_bound,
         }
     }
 }

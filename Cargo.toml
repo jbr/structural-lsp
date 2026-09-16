@@ -20,3 +20,6 @@ url = "2"
 
 [patch.crates-io]
 mcplease = { path = "../mcplease" }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

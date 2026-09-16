@@ -9,12 +9,13 @@ pub(super) struct Owner {
     pub(super) label: String,
     pub(super) settings: Settings,
     pub(super) policy: Box<dyn ReadinessPolicy>,
-    pub(super) child: Child,
+    pub(super) child: OwnedChild,
     pub(super) inbox: Receiver<OwnerMsg>,
     pub(super) writer_tx: Option<SyncSender<WriterJob>>,
     pub(super) writer: Option<JoinHandle<()>>,
     pub(super) reader: Option<JoinHandle<()>>,
     pub(super) terminate: Arc<AtomicBool>,
+    pub(super) force: Arc<AtomicBool>,
     pub(super) writer_terminating: Arc<AtomicBool>,
     pub(super) next_id: i64,
     pub(super) pending: HashMap<RequestId, PendingRequest>,
@@ -39,6 +40,9 @@ pub(super) struct Owner {
 impl Owner {
     pub(super) fn run(mut self) {
         loop {
+            if self.force.load(Ordering::SeqCst) {
+                self.fail("forced shutdown requested".to_string());
+            }
             if self.terminate.load(Ordering::SeqCst) {
                 self.begin_shutdown();
             }
@@ -50,7 +54,14 @@ impl Owner {
                 .map(|deadline| deadline.saturating_duration_since(Instant::now()))
                 .map_or(CONTROL_TICK, |until| until.min(CONTROL_TICK));
             match self.inbox.recv_timeout(wait) {
-                Ok(message) => self.process(message),
+                Ok(message) => {
+                    // The wake may itself have raced force. Never process a
+                    // queued successful response after observing escalation.
+                    if self.force.load(Ordering::SeqCst) {
+                        self.fail("forced shutdown requested".to_string());
+                    }
+                    self.process(message);
+                }
                 Err(RecvTimeoutError::Timeout) => {}
                 // Every sender is gone: the handle, the reader and the
                 // writer. Nothing can arrive; tear down.

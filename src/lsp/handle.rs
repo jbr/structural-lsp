@@ -55,6 +55,14 @@
 //! waiting for the writer (a write blocked on a wedged server unblocks only
 //! when the pipe closes), then bounded joins. Every waiter still registered
 //! is failed with the reason; none is left hanging.
+//!
+//! [`Stopper::force`] skips the remaining graceful window and abandons
+//! pending work. On Unix, every server starts in its own process group;
+//! teardown kills that group before reaping the direct child. Descendants
+//! that deliberately detach are outside this guarantee. Other platforms
+//! retain direct-child cleanup only. Stop capabilities carry flags, never
+//! PIDs, and remain safe after teardown. Our own uncatchable death still
+//! requires an external supervisor for cleanup.
 
 use crate::lsp::adapter::{ReadinessPolicy, StandardIdle};
 use crate::lsp::framing::{read_frame, write_frame};
@@ -74,9 +82,12 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender, TryS
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+mod child;
 mod owner;
 mod progress;
+mod startup;
 mod workers;
+use child::OwnedChild;
 use owner::Owner;
 use progress::ProgressTokens;
 use workers::{reader_loop, writer_loop};
@@ -164,10 +175,8 @@ pub struct ServerHandle {
     inbox: SyncSender<OwnerMsg>,
     inbound_cap: usize,
     terminate: Arc<AtomicBool>,
+    force: Arc<AtomicBool>,
     owner: Option<JoinHandle<()>>,
-    /// How long `shutdown`/`Drop` wait for the owner: the graceful window
-    /// plus the teardown's own join guards, with margin.
-    join_bound: Duration,
 }
 
 impl ServerHandle {
@@ -185,94 +194,8 @@ impl ServerHandle {
         settings: Settings,
         policy: Box<dyn ReadinessPolicy>,
     ) -> Result<Self> {
-        let label = std::iter::once(command)
-            .chain(args.iter().map(String::as_str))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let mut child = std::process::Command::new(command)
-            .args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .with_context(|| format!("spawning `{label}`"))?;
-        let stdin = child.stdin.take().context("child stdin was not piped")?;
-        let stdout = child.stdout.take().context("child stdout was not piped")?;
-
-        let (inbox_tx, inbox_rx) = mpsc::sync_channel::<OwnerMsg>(settings.inbound_cap);
-        let (writer_tx, writer_rx) = mpsc::sync_channel::<WriterJob>(settings.writer_cap);
-        let terminate = Arc::new(AtomicBool::new(false));
-        let writer_terminating = Arc::new(AtomicBool::new(false));
-
-        let spawned = (|| -> Result<(JoinHandle<()>, JoinHandle<()>)> {
-            let reader = thread::Builder::new()
-                .name("lsp-reader".into())
-                .spawn({
-                    let inbox = inbox_tx.clone();
-                    move || reader_loop(BufReader::new(stdout), inbox)
-                })
-                .context("spawning reader thread")?;
-            let writer = thread::Builder::new()
-                .name("lsp-writer".into())
-                .spawn({
-                    let inbox = inbox_tx.clone();
-                    let terminating = Arc::clone(&writer_terminating);
-                    move || writer_loop(stdin, writer_rx, terminating, inbox)
-                })
-                .context("spawning writer thread")?;
-            Ok((reader, writer))
-        })();
-        let (reader, writer) = match spawned {
-            Ok(threads) => threads,
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(error);
-            }
-        };
-
-        let join_bound = settings.shutdown_grace + 2 * JOIN_GUARD + Duration::from_secs(1);
-        let inbound_cap = settings.inbound_cap;
-        let progress = ProgressTokens::new(settings.progress_token_cap);
-        let owner = Owner {
-            label: label.clone(),
-            settings,
-            policy,
-            child,
-            inbox: inbox_rx,
-            writer_tx: Some(writer_tx),
-            writer: Some(writer),
-            reader: Some(reader),
-            terminate: Arc::clone(&terminate),
-            writer_terminating,
-            next_id: 1,
-            pending: HashMap::new(),
-            waiters: Vec::new(),
-            writes: HashMap::new(),
-            next_write: 0,
-            progress,
-            events: VecDeque::new(),
-            last_incoming: None,
-            last_summary: None,
-            workspace_folders: Value::Null,
-            failed: None,
-            shutting_down: None,
-            shutdown_acknowledged: false,
-            probe_outstanding: false,
-            debug: wire_debug_enabled(),
-        };
-        let owner = thread::Builder::new()
-            .name("lsp-owner".into())
-            .spawn(move || owner.run())
-            .context("spawning owner thread")?;
-
-        Ok(Self {
-            label,
-            inbound_cap,
-            inbox: inbox_tx,
-            terminate,
-            owner: Some(owner),
-            join_bound,
+        startup::spawn(command, args, settings, policy, |name, task| {
+            thread::Builder::new().name(name.into()).spawn(task)
         })
     }
 
@@ -361,8 +284,9 @@ impl ServerHandle {
     }
 
     /// Shut the server down: a graceful `shutdown`/`exit` bounded by
-    /// `shutdown_grace`, then kill and reap. Returns once the owner has torn
-    /// down or the join bound expires (the owner finishes on its own then).
+    /// `shutdown_grace`, then kill and reap. Waits for the owner to finish;
+    /// unlike worker joins, this wait never detaches the process owner.
+    /// A retained [`Stopper`] can independently escalate while this waits.
     pub fn shutdown(mut self) -> Result<()> {
         self.begin_teardown();
         Ok(())
@@ -386,6 +310,7 @@ impl ServerHandle {
     pub fn stopper(&self) -> Stopper {
         Stopper {
             terminate: Arc::clone(&self.terminate),
+            force: Arc::clone(&self.force),
             inbox: self.inbox.clone(),
         }
     }
@@ -409,7 +334,9 @@ impl ServerHandle {
             return;
         };
         self.terminate();
-        bounded_join(owner, self.join_bound);
+        // Completion must not be reported while the owner still owns a child.
+        // Protocol grace and pipe-worker joins remain bounded independently.
+        let _ = owner.join();
     }
 }
 
@@ -419,19 +346,30 @@ impl Drop for ServerHandle {
     }
 }
 
-/// Tells one server to stop, without owning its connection.
+/// A nonblocking stop capability for the full lifetime of one server.
 ///
-/// A host starting a server cannot hold its handle yet — the handle is being
-/// used to run the `initialize` handshake — but it must still be able to stop
-/// the child if the host goes away in the meantime. This is that ability and
-/// nothing else.
+/// Safe to retain after teardown: it carries no PID and never signals from
+/// the calling thread. The owner checks flags on every wake, at most one
+/// [`CONTROL_TICK`] apart when idle, independently of caller/workspace locks.
 #[derive(Clone)]
 pub struct Stopper {
     terminate: Arc<AtomicBool>,
+    force: Arc<AtomicBool>,
     inbox: SyncSender<OwnerMsg>,
 }
 
 impl Stopper {
+    /// Abandon pending work and skip any remaining graceful shutdown window.
+    /// Monotonic and idempotent, including concurrently with [`Self::stop`].
+    /// On Unix the owner kills the owned process group, then reaps its direct
+    /// child. Descendants that deliberately detach escape that group; on
+    /// non-Unix platforms only the direct child is killed. This requests
+    /// cleanup, not completion, and cannot protect against our own SIGKILL.
+    pub fn force(&self) {
+        self.force.store(true, Ordering::SeqCst);
+        self.stop();
+    }
+
     /// Idempotent, and safe on a server that is still initializing: the
     /// owning thread's request fails, and the process is torn down.
     pub fn stop(&self) {
