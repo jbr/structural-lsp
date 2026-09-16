@@ -13,6 +13,7 @@
 
 use crate::lsp::adapter::Adapter;
 use anyhow::{Result, bail};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
 /// Where a slot is in its life. Only [`SlotState::Running`] answers queries.
@@ -73,6 +74,10 @@ pub struct ServerSlot {
     /// Signalled on every transition out of [`SlotState::Starting`], so a
     /// waiter is never left blocked on a launcher that will not wake it.
     launched: Condvar,
+    /// Set by a host shutdown before it sweeps. A launcher that finds it set
+    /// stops the server it started instead of publishing it, so nothing is
+    /// published into a host that is going away.
+    abandoned: AtomicBool,
 }
 
 impl ServerSlot {
@@ -81,7 +86,18 @@ impl ServerSlot {
             adapter,
             state: Mutex::new(SlotState::Cold),
             launched: Condvar::new(),
+            abandoned: AtomicBool::new(false),
         }
+    }
+
+    /// Claim this slot for a shutdown: from here on, no server may be
+    /// published into it, and no new one may be started.
+    pub fn abandon(&self) {
+        self.abandoned.store(true, Ordering::SeqCst);
+    }
+
+    pub fn abandoned(&self) -> bool {
+        self.abandoned.load(Ordering::SeqCst)
     }
 
     /// The adapter is immutable, so a routing question needs no lock — which

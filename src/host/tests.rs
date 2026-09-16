@@ -137,8 +137,61 @@ fn asymmetric_fixture(name: &str, rust: &str) -> Option<Fixture> {
     Some(Fixture { root: dir, log })
 }
 
+/// Wait for `n` launches to appear in the mock's log, up to a bound.
+///
+/// This observes a signal another thread produces — a pid that exists — and
+/// never stands in for a claim that a server is ready; the bounded wait is
+/// only so a failure reports rather than hangs.
+fn wait_for_launches(fixture: &Fixture, n: usize) -> Vec<u32> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let launches = fixture.launches();
+        if launches.len() >= n || std::time::Instant::now() > deadline {
+            return launches;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// A shutdown arriving while a server is still handshaking leaves no child
+/// behind: the one being started is killed, not published.
+#[test]
+fn shutdown_during_startup_leaves_no_orphan() {
+    let Some(fixture) = asymmetric_fixture("orphan", "stalling") else {
+        return;
+    };
+    let host = std::sync::Arc::new(Host::new());
+    let starter = {
+        let host = std::sync::Arc::clone(&host);
+        let root = fixture.root.clone();
+        std::thread::spawn(move || host.agent_started(AgentId::new("a"), &root))
+    };
+
+    // The stalling child exists while its launch is still inside
+    // `initialize` — that instant is what this test is about.
+    let launches = wait_for_launches(&fixture, 2);
+    assert_eq!(launches.len(), 2, "both children were started");
+
+    host.shutdown();
+
+    assert!(
+        launches.iter().all(|pid| !alive(*pid)),
+        "no child outlives the shutdown, the mid-handshake one included: {launches:?}"
+    );
+    let session = starter.join().expect("the starting thread finishes");
+    let workspace = session.workspace();
+    assert_eq!(workspace.running().count(), 0, "nothing was published");
+    assert!(
+        workspace
+            .slots()
+            .iter()
+            .all(|slot| slot.state().label() != "running"),
+        "no slot claims to be running"
+    );
+}
+
 /// Two servers start at once: the second launch begins before the first has
-/// answered `initialize`. Activation that waited as it went would record
+/// answered `initialize`.
 /// START, READY, START, READY; overlapping launches record START, START,
 /// READY, READY.
 #[test]

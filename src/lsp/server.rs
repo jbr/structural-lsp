@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::lsp::adapter::{Adapter, language_for};
-use crate::lsp::handle::{ServerHandle, Settings, Snapshot};
+use crate::lsp::handle::{ServerHandle, Settings, Snapshot, Stopper};
 use crate::lsp::positions::Encoding;
 
 /// A document the server has been given, with the snapshot it was last sent.
@@ -41,44 +41,41 @@ pub struct Synced {
     pub fed: bool,
 }
 
-pub struct LspServer {
+/// A server process that has been started but has not answered `initialize`.
+///
+/// The handshake is the slow part — minutes for rust-analyzer on a large
+/// project — and a host has to be able to stop the process while it is inside
+/// it, which it cannot do through a handle it does not hold yet. That is what
+/// [`Spawning::stopper`] is for.
+pub struct Spawning {
     adapter: Arc<dyn Adapter>,
     root: PathBuf,
-    /// `None` only after [`LspServer::shutdown`].
-    handle: Option<ServerHandle>,
-    /// `serverInfo` from `initialize`, when the server reports one.
-    server_info: Option<Value>,
-    /// The position encoding the server picked from the adapter's offer.
-    encoding: Encoding,
-    /// The server's capabilities as returned by `initialize`.
-    capabilities: Value,
-    /// Documents opened with the server, keyed by URI, with the snapshot the
-    /// server was last given.
-    opened: HashMap<String, OpenedDoc>,
+    handle: ServerHandle,
 }
 
-impl LspServer {
-    /// Spawn the adapter's command and initialize it against `root`. Returns
-    /// once `initialize` is answered; indexing continues in the background
-    /// and the first query waits for it.
-    pub fn start(adapter: Arc<dyn Adapter>, root: &Path) -> Result<Self> {
-        let argv = adapter.command();
-        let (command, args) = argv
-            .split_first()
-            .context("an adapter's command must name an executable")?;
-        let settings = Settings {
-            backstop: adapter.backstop(),
-            ..Settings::default()
-        };
-        let handle = ServerHandle::spawn_with(command, args, settings, adapter.readiness_policy())
-            .with_context(|| format!("starting {}", adapter.name()))?;
+impl Spawning {
+    /// Enough to stop this child without owning it.
+    pub fn stopper(&self) -> Stopper {
+        self.handle.stopper()
+    }
 
+    pub fn name(&self) -> &str {
+        self.adapter.name()
+    }
+
+    /// Finish the handshake and take ownership of the connection.
+    pub fn initialize(self) -> Result<LspServer> {
+        let Self {
+            adapter,
+            root,
+            handle,
+        } = self;
         let params = json!({
             "processId": std::process::id(),
             "clientInfo": { "name": "structural", "version": env!("CARGO_PKG_VERSION") },
-            "rootUri": path_uri(root)?,
+            "rootUri": path_uri(&root)?,
             "rootPath": root.to_string_lossy(),
-            "workspaceFolders": [{ "uri": path_uri(root)?, "name": "workspace" }],
+            "workspaceFolders": [{ "uri": path_uri(&root)?, "name": "workspace" }],
             "trace": "off",
             "initializationOptions": adapter.initialization_options(),
             "capabilities": adapter.client_capabilities(),
@@ -103,15 +100,68 @@ impl LspServer {
         let capabilities = result.get("capabilities").cloned().unwrap_or(Value::Null);
         handle.notify("initialized", json!({}))?;
 
-        Ok(Self {
+        Ok(LspServer {
             adapter,
-            root: root.to_path_buf(),
+            root,
             handle: Some(handle),
             server_info,
             encoding,
             capabilities,
             opened: HashMap::new(),
         })
+    }
+}
+
+pub struct LspServer {
+    adapter: Arc<dyn Adapter>,
+    root: PathBuf,
+    /// `None` only after [`LspServer::shutdown`].
+    handle: Option<ServerHandle>,
+    /// `serverInfo` from `initialize`, when the server reports one.
+    server_info: Option<Value>,
+    /// The position encoding the server picked from the adapter's offer.
+    encoding: Encoding,
+    /// The server's capabilities as returned by `initialize`.
+    capabilities: Value,
+    /// Documents opened with the server, keyed by URI, with the snapshot the
+    /// server was last given.
+    opened: HashMap<String, OpenedDoc>,
+}
+
+impl LspServer {
+    /// Spawn the adapter's command, and stop there.
+    ///
+    /// The process is running and nothing has been sent yet: `initialize` is
+    /// the next step, and keeping it separate is what lets a caller hold —
+    /// and stop — a child that is still handshaking. Most callers want
+    /// [`LspServer::start`], which does both.
+    pub fn spawn(adapter: Arc<dyn Adapter>, root: &Path) -> Result<Spawning> {
+        let argv = adapter.command();
+        let (command, args) = argv
+            .split_first()
+            .context("an adapter's command must name an executable")?;
+        let settings = Settings {
+            backstop: adapter.backstop(),
+            ..Settings::default()
+        };
+        let handle = ServerHandle::spawn_with(command, args, settings, adapter.readiness_policy())
+            .with_context(|| format!("starting {}", adapter.name()))?;
+        Ok(Spawning {
+            adapter,
+            root: root.to_path_buf(),
+            handle,
+        })
+    }
+
+    /// Spawn the adapter's command and initialize it against `root`. Returns
+    /// once `initialize` is answered; indexing continues in the background
+    /// and the first query waits for it.
+    ///
+    /// Spawning and `initialize` are separable — see [`LspServer::spawn`] —
+    /// because a host has to be able to stop a child that is still
+    /// handshaking, and the handshake is the slow part.
+    pub fn start(adapter: Arc<dyn Adapter>, root: &Path) -> Result<Self> {
+        Self::spawn(adapter, root)?.initialize()
     }
 
     fn handle(&self) -> &ServerHandle {

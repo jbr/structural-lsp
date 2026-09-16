@@ -12,13 +12,15 @@
 //! each other: the map lock below is taken only to find or create a
 //! workspace, never to run a query.
 
+use crate::lsp::handle::Stopper;
 use crate::lsp::server::LspServer;
 use crate::session::Session;
 use crate::workspace::{Demand, Launch, ServerSlot, Workspace, canonical_root};
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 
 /// Which agent — or front end — a workspace binding belongs to. Agent start
 /// and end arrive as these identifiers, so releasing one agent's interest
@@ -61,6 +63,18 @@ pub(crate) struct Entry {
     workspace: Mutex<Workspace>,
     interested: Mutex<BTreeSet<AgentId>>,
     slots: Vec<Arc<ServerSlot>>,
+    /// Children that are being started right now, which no workspace holds
+    /// yet. A shutdown kills these rather than waiting for the threads
+    /// initializing them — which is what keeps its exit bounded by teardown
+    /// instead of by a hung handshake.
+    children: Mutex<BTreeMap<u64, Stopper>>,
+    next_child: AtomicU64,
+    /// Launches in flight. Shutdown waits on this after stopping the
+    /// children, so it does not return while a child is still being torn
+    /// down — the wait is short precisely because those launches are already
+    /// failing rather than handshaking.
+    launching: Mutex<usize>,
+    stopped_launching: Condvar,
 }
 
 impl Entry {
@@ -72,6 +86,10 @@ impl Entry {
             workspace: Mutex::new(workspace),
             interested: Mutex::new(BTreeSet::new()),
             slots,
+            children: Mutex::new(BTreeMap::new()),
+            next_child: AtomicU64::new(0),
+            launching: Mutex::new(0),
+            stopped_launching: Condvar::new(),
         }
     }
 
@@ -132,6 +150,34 @@ impl Entry {
         }
     }
 
+    /// Take responsibility for a child while it is being started. The guard
+    /// gives the registration back on every exit path, including a panic.
+    fn register_child(&self, stopper: Stopper) -> ChildGuard<'_> {
+        let id = self.next_child.fetch_add(1, Ordering::SeqCst);
+        self.children().insert(id, stopper);
+        ChildGuard { entry: self, id }
+    }
+
+    fn children(&self) -> MutexGuard<'_, BTreeMap<u64, Stopper>> {
+        self.children.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Stop every child that is still being started. Their launchers then
+    /// fail, and publish nothing.
+    fn stop_starting_children(&self) {
+        let stoppers: Vec<Stopper> = self.children().values().cloned().collect();
+        for stopper in stoppers {
+            stopper.stop();
+        }
+    }
+
+    /// Claim every slot: from here on, nothing is started or published.
+    fn abandon(&self) {
+        for slot in &self.slots {
+            slot.abandon();
+        }
+    }
+
     /// Start one server and publish it.
     ///
     /// The spawn and the `initialize` handshake hold no lock at all, so other
@@ -140,11 +186,46 @@ impl Entry {
     /// caller can observe a `Running` slot whose server is not yet in place.
     fn spawn_launch(self: &Arc<Self>, index: usize, launch: Launch) {
         let entry = Arc::clone(self);
+        *self
+            .launching
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) += 1;
         // A launch owns its thread, so two servers initialize at once instead
         // of one waiting out the other's whole handshake. The handle is
         // detached: everything the thread owes is recorded on the slot, which
-        // is what the waiters watch.
-        std::thread::spawn(move || entry.launch(index, launch));
+        // is what the waiters watch — and counted here, so shutdown can tell
+        // when the last decision has been made.
+        std::thread::spawn(move || {
+            entry.launch(index, launch);
+            entry.launch_finished();
+        });
+    }
+
+    fn launch_finished(&self) {
+        let mut launching = self
+            .launching
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        *launching = launching.saturating_sub(1);
+        if *launching == 0 {
+            self.stopped_launching.notify_all();
+        }
+    }
+
+    /// Wait for every launch in flight to finish. Called once the children
+    /// are stopped, so each of those launches is failing rather than
+    /// handshaking: the wait is bounded by teardown, not by the backstop.
+    fn await_launches(&self) {
+        let mut launching = self
+            .launching
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        while *launching > 0 {
+            launching = self
+                .stopped_launching
+                .wait(launching)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
     }
 
     /// One launch, on its own thread. Spawning and `initialize` hold no lock;
@@ -154,14 +235,33 @@ impl Entry {
     /// Failures go to the slot, which the `Launch` guard does on every exit
     /// path including a panic — so a waiter learns why rather than hanging.
     fn launch(&self, index: usize, launch: Launch) {
-        match LspServer::start(launch.adapter_arc(), &self.root) {
-            Ok(server) => {
-                let mut workspace = self.lock();
-                workspace.publish(index, server);
-                launch.published();
-            }
-            Err(error) => launch.failed(format!("{error:#}")),
+        let slot = &self.slots[index];
+        if slot.abandoned() {
+            return launch.failed("the host is shutting down");
         }
+        let spawning = match LspServer::spawn(launch.adapter_arc(), &self.root) {
+            Ok(spawning) => spawning,
+            Err(error) => return launch.failed(format!("{error:#}")),
+        };
+        // Reachable by a shutdown from here on, though no workspace holds it
+        // yet: this is the window in which a child would otherwise be
+        // orphaned by a host that goes away mid-handshake.
+        let _child = self.register_child(spawning.stopper());
+        let server = match spawning.initialize() {
+            Ok(server) => server,
+            Err(error) => return launch.failed(format!("{error:#}")),
+        };
+        let mut workspace = self.lock();
+        if slot.abandoned() {
+            // Shutdown claimed this slot while the server was starting. Drop
+            // it rather than publish one nobody will look after — outside the
+            // workspace lock, because dropping it reaps a child.
+            drop(workspace);
+            drop(server);
+            return launch.failed("the host shut down while this server was starting");
+        }
+        workspace.publish(index, server);
+        launch.published();
     }
 }
 
@@ -270,7 +370,24 @@ impl Host {
             .drain(..)
             .filter_map(|weak| weak.upgrade())
             .collect();
-        for entry in live.into_iter().chain(detached) {
+        let entries: Vec<Arc<Entry>> = live.into_iter().chain(detached).collect();
+        // The order is what makes this exhaustive. Claiming every slot first
+        // means a launcher still inside `initialize` cannot publish into a
+        // workspace the sweep has already passed; stopping the starting
+        // children next reaches the ones no workspace holds yet; the sweep
+        // stops everything already published. So every child is either
+        // published — and stopped here — or killed by its launcher, and the
+        // kill does not wait for a thread that may be mid-handshake.
+        for entry in &entries {
+            entry.abandon();
+        }
+        for entry in &entries {
+            entry.stop_starting_children();
+        }
+        for entry in &entries {
+            entry.await_launches();
+        }
+        for entry in &entries {
             entry.lock().shutdown();
         }
     }
@@ -283,6 +400,19 @@ impl Host {
 
     fn detached(&self) -> MutexGuard<'_, Vec<Weak<Entry>>> {
         self.released.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// Holds a child's registration for as long as its launch is in flight, and
+/// gives it back on every exit path, including a panic.
+struct ChildGuard<'a> {
+    entry: &'a Entry,
+    id: u64,
+}
+
+impl Drop for ChildGuard<'_> {
+    fn drop(&mut self) {
+        self.entry.children().remove(&self.id);
     }
 }
 

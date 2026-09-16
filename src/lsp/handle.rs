@@ -368,6 +368,28 @@ impl ServerHandle {
         Ok(())
     }
 
+    /// Ask the server to stop, without waiting for it.
+    ///
+    /// The terminate flag is the path that cannot fail — the owner checks it
+    /// on every wake; the queued command is the fast one when the inbox has
+    /// room. This is what a host uses on a child whose owning thread is still
+    /// inside `initialize`: that thread gets its error, and the process is
+    /// already going away.
+    pub fn terminate(&self) {
+        self.terminate.store(true, Ordering::SeqCst);
+        let _ = self.inbox.try_send(OwnerMsg::Admit(Command::Shutdown));
+    }
+
+    /// Enough to stop this server without owning its connection — cloned out
+    /// of the handle so a host can hold it while the server's own thread is
+    /// still starting it.
+    pub fn stopper(&self) -> Stopper {
+        Stopper {
+            terminate: Arc::clone(&self.terminate),
+            inbox: self.inbox.clone(),
+        }
+    }
+
     fn admit(&self, command: Command) -> Result<()> {
         self.inbox
             .try_send(OwnerMsg::Admit(command))
@@ -386,9 +408,7 @@ impl ServerHandle {
         let Some(owner) = self.owner.take() else {
             return;
         };
-        self.terminate.store(true, Ordering::SeqCst);
-        // Fast path; the flag above is the path that cannot fail.
-        let _ = self.inbox.try_send(OwnerMsg::Admit(Command::Shutdown));
+        self.terminate();
         bounded_join(owner, self.join_bound);
     }
 }
@@ -396,6 +416,27 @@ impl ServerHandle {
 impl Drop for ServerHandle {
     fn drop(&mut self) {
         self.begin_teardown();
+    }
+}
+
+/// Tells one server to stop, without owning its connection.
+///
+/// A host starting a server cannot hold its handle yet — the handle is being
+/// used to run the `initialize` handshake — but it must still be able to stop
+/// the child if the host goes away in the meantime. This is that ability and
+/// nothing else.
+#[derive(Clone)]
+pub struct Stopper {
+    terminate: Arc<AtomicBool>,
+    inbox: SyncSender<OwnerMsg>,
+}
+
+impl Stopper {
+    /// Idempotent, and safe on a server that is still initializing: the
+    /// owning thread's request fails, and the process is torn down.
+    pub fn stop(&self) {
+        self.terminate.store(true, Ordering::SeqCst);
+        let _ = self.inbox.try_send(OwnerMsg::Admit(Command::Shutdown));
     }
 }
 
