@@ -19,8 +19,9 @@ use crate::workspace::{Demand, Launch, ServerSlot, Workspace, canonical_root};
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use swansong::Swansong;
 
 /// Which agent — or front end — a workspace binding belongs to. Agent start
 /// and end arrive as these identifiers, so releasing one agent's interest
@@ -58,6 +59,39 @@ impl std::fmt::Display for AgentId {
 /// The root and the slots are held out here, unlocked, so a launch can read
 /// them and move a server's lifecycle without the workspace lock — which is
 /// exactly what publication needs that lock for.
+/// The host's shared lifetime: the shutdown manager every launch takes a
+/// guard from, and the flag that says no launch may start.
+///
+/// Cloned into every entry, so a workspace acquired after a shutdown has
+/// begun still reaches the same manager and gets the same answer. The flag is
+/// the *claim* the sweep rests on: it is set before anything is stopped, and
+/// a launcher checks it again under the workspace lock before publishing, so
+/// a launcher publishing after the sweep would have had to see a clear flag
+/// that no longer existed.
+#[derive(Clone)]
+pub(crate) struct Lifetime {
+    song: Swansong,
+    stopped: Arc<AtomicBool>,
+}
+
+impl Lifetime {
+    pub(crate) fn new() -> Self {
+        Self {
+            song: Swansong::new(),
+            stopped: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn stopped(&self) -> bool {
+        self.stopped.load(Ordering::SeqCst)
+    }
+
+    /// No launch may begin, and no new guards may be taken.
+    fn stop(&self) {
+        self.stopped.store(true, Ordering::SeqCst);
+    }
+}
+
 pub(crate) struct Entry {
     root: PathBuf,
     workspace: Mutex<Workspace>,
@@ -69,16 +103,13 @@ pub(crate) struct Entry {
     /// instead of by a hung handshake.
     children: Mutex<BTreeMap<u64, Stopper>>,
     next_child: AtomicU64,
-    /// Launches in flight. Shutdown waits on this after stopping the
-    /// children, so it does not return while a child is still being torn
-    /// down — the wait is short precisely because those launches are already
-    /// failing rather than handshaking.
-    launching: Mutex<usize>,
-    stopped_launching: Condvar,
+    /// Shared with the host and every other entry: the shutdown manager, and
+    /// the flag that stops launches.
+    lifetime: Lifetime,
 }
 
 impl Entry {
-    pub(crate) fn new(workspace: Workspace) -> Self {
+    pub(crate) fn new(workspace: Workspace, lifetime: Lifetime) -> Self {
         let root = workspace.root().to_path_buf();
         let slots = workspace.slots().to_vec();
         Self {
@@ -88,8 +119,7 @@ impl Entry {
             slots,
             children: Mutex::new(BTreeMap::new()),
             next_child: AtomicU64::new(0),
-            launching: Mutex::new(0),
-            stopped_launching: Condvar::new(),
+            lifetime,
         }
     }
 
@@ -171,13 +201,6 @@ impl Entry {
         }
     }
 
-    /// Claim every slot: from here on, nothing is started or published.
-    fn abandon(&self) {
-        for slot in &self.slots {
-            slot.abandon();
-        }
-    }
-
     /// Start one server and publish it.
     ///
     /// The spawn and the `initialize` handshake hold no lock at all, so other
@@ -186,60 +209,24 @@ impl Entry {
     /// caller can observe a `Running` slot whose server is not yet in place.
     fn spawn_launch(self: &Arc<Self>, index: usize, launch: Launch) {
         let entry = Arc::clone(self);
-        self.count_launch();
         // A launch owns its thread, so two servers initialize at once instead
-        // of one waiting out the other's whole handshake. The count is given
-        // back by a guard *inside* the thread, so it is returned on every
-        // exit path — including a panic, which an explicit call after
-        // `launch` would never reach. A launch that dies must still let a
-        // shutdown finish.
-        let spawned = std::thread::Builder::new()
+        // of one waiting out the other's whole handshake. The guard is taken
+        // here and returned by a drop *inside* the thread, so it comes back on
+        // every exit path — including a panic, which an explicit "finished"
+        // call would never reach. A launch that dies must still let a shutdown
+        // finish; a launch counter said the same thing until it turned out a
+        // panicking launcher could leak it.
+        let guard = self.lifetime.song.guard();
+        // A thread that could not be created takes the closure, and the guard
+        // inside it, with the error — so there is nothing to undo here. The
+        // `Launch` guard inside has already marked the slot failed and woken
+        // anyone waiting on it.
+        let _ = std::thread::Builder::new()
             .name(format!("structural-launch-{index}"))
             .spawn(move || {
-                let _counted = CountedLaunch(entry);
-                let entry = Arc::clone(&_counted.0);
+                let _guard = guard;
                 entry.launch(index, launch);
             });
-        if spawned.is_err() {
-            // No thread was created: put the count back. The closure went
-            // with the error, so the `Launch` guard inside it has already
-            // marked the slot failed and woken anyone waiting on it.
-            self.launch_finished();
-        }
-    }
-
-    fn count_launch(&self) {
-        *self
-            .launching
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) += 1;
-    }
-
-    fn launch_finished(&self) {
-        let mut launching = self
-            .launching
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        *launching = launching.saturating_sub(1);
-        if *launching == 0 {
-            self.stopped_launching.notify_all();
-        }
-    }
-
-    /// Wait for every launch in flight to finish. Called once the children
-    /// are stopped, so each of those launches is failing rather than
-    /// handshaking: the wait is bounded by teardown, not by the backstop.
-    fn await_launches(&self) {
-        let mut launching = self
-            .launching
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        while *launching > 0 {
-            launching = self
-                .stopped_launching
-                .wait(launching)
-                .unwrap_or_else(PoisonError::into_inner);
-        }
     }
 
     /// One launch, on its own thread. Spawning and `initialize` hold no lock;
@@ -249,8 +236,7 @@ impl Entry {
     /// Failures go to the slot, which the `Launch` guard does on every exit
     /// path including a panic — so a waiter learns why rather than hanging.
     fn launch(&self, index: usize, launch: Launch) {
-        let slot = &self.slots[index];
-        if slot.abandoned() {
+        if self.lifetime.stopped() {
             return launch.failed("the host is shutting down");
         }
         let spawning = match LspServer::spawn(launch.adapter_arc(), &self.root) {
@@ -266,8 +252,8 @@ impl Entry {
             Err(error) => return launch.failed(format!("{error:#}")),
         };
         let mut workspace = self.lock();
-        if slot.abandoned() {
-            // Shutdown claimed this slot while the server was starting. Drop
+        if self.lifetime.stopped() {
+            // Shutdown claimed the host while this server was starting. Drop
             // it rather than publish one nobody will look after — outside the
             // workspace lock, because dropping it reaps a child.
             drop(workspace);
@@ -293,6 +279,8 @@ pub struct Host {
     /// interest — otherwise those children would live until the holding
     /// session happened to drop, which in a long-lived host may be never.
     released: Mutex<Vec<Weak<Entry>>>,
+    /// The host's own lifetime, cloned into every entry it hands out.
+    lifetime: Lifetime,
 }
 
 impl Default for Host {
@@ -306,6 +294,7 @@ impl Host {
         Self {
             workspaces: Mutex::new(BTreeMap::new()),
             released: Mutex::new(Vec::new()),
+            lifetime: Lifetime::new(),
         }
     }
 
@@ -326,7 +315,10 @@ impl Host {
         let entry = match workspaces.get(&key) {
             Some(entry) => Arc::clone(entry),
             None => {
-                let entry = Arc::new(Entry::new(Workspace::new(key.clone())));
+                let entry = Arc::new(Entry::new(
+                    Workspace::new(key.clone()),
+                    self.lifetime.clone(),
+                ));
                 workspaces.insert(key, Arc::clone(&entry));
                 entry
             }
@@ -385,22 +377,25 @@ impl Host {
             .filter_map(|weak| weak.upgrade())
             .collect();
         let entries: Vec<Arc<Entry>> = live.into_iter().chain(detached).collect();
-        // The order is what makes this exhaustive. Claiming every slot first
-        // means a launcher still inside `initialize` cannot publish into a
-        // workspace the sweep has already passed; stopping the starting
-        // children next reaches the ones no workspace holds yet; the sweep
-        // stops everything already published. So every child is either
-        // published — and stopped here — or killed by its launcher, and the
-        // kill does not wait for a thread that may be mid-handshake.
-        for entry in &entries {
-            entry.abandon();
-        }
+        // The order is what makes this exhaustive. Claiming the lifetime
+        // first means a launcher still inside `initialize` cannot publish into
+        // a workspace the sweep has already passed — and, unlike a claim per
+        // slot, it also covers a workspace acquired from here on. Stopping the
+        // starting children reaches the ones no workspace holds yet. Then the
+        // wait: every launch holds a guard, and this returns when the last of
+        // them has given it back, which is the same "every decision has been
+        // made" the launch counter expressed — except a guard cannot be
+        // skipped by a panic, and the counter could. The sweep last, so every
+        // child is either published and stopped here, or killed by its
+        // launcher.
+        self.lifetime.stop();
         for entry in &entries {
             entry.stop_starting_children();
         }
-        for entry in &entries {
-            entry.await_launches();
-        }
+        // `shut_down` initiates and `block` waits for it: completion is "the
+        // swansong has been stopped *and* every guard is dropped", so waiting
+        // without stopping first waits forever.
+        self.lifetime.song.shut_down().block();
         for entry in &entries {
             entry.lock().shutdown();
         }
@@ -427,18 +422,6 @@ struct ChildGuard<'a> {
 impl Drop for ChildGuard<'_> {
     fn drop(&mut self) {
         self.entry.children().remove(&self.id);
-    }
-}
-
-/// Counts one launch for as long as it is in flight, and counts it out on
-/// every exit path — including a panic, which is the path an explicit call
-/// after `launch` would miss. A leaked count is not a safety hole, but it
-/// would hang shutdown forever, which is worse than what the count buys.
-struct CountedLaunch(Arc<Entry>);
-
-impl Drop for CountedLaunch {
-    fn drop(&mut self) {
-        self.0.launch_finished();
     }
 }
 

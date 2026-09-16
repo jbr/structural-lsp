@@ -153,30 +153,27 @@ fn wait_for_launches(fixture: &Fixture, n: usize) -> Vec<u32> {
     }
 }
 
-/// A launch that panics must still let a shutdown finish. The count is
-/// returned by a guard for exactly this reason: an ordinary call after
-/// `launch` would be skipped by the unwind, and `await_launches` would then
-/// wait forever.
+/// Something that panics while holding a guard must still release it, or a
+/// shutdown would wait on it forever. This is the property a launch counter
+/// could not give: its count came back from an ordinary call, which an unwind
+/// skips past, while a guard comes back from a drop.
 #[test]
-fn a_panicking_launch_still_returns_its_count() {
-    let dir = std::env::temp_dir().join(format!("structural-host-panic-{}", std::process::id()));
-    let entry = std::sync::Arc::new(Entry::new(crate::workspace::Workspace::new(dir)));
-
-    entry.count_launch();
-    let counted = CountedLaunch(std::sync::Arc::clone(&entry));
+fn a_panicking_participant_still_releases_its_guard() {
+    let lifetime = Lifetime::new();
+    let guard = lifetime.song.guard();
     let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-        let _counted = counted;
+        let _guard = guard;
         panic!("a launcher died");
     }));
-    assert!(unwound.is_err(), "the launch panicked, as arranged");
+    assert!(unwound.is_err(), "the participant panicked, as arranged");
 
-    // Read the count rather than waiting on it: a leaked count would hang
-    // this test rather than fail it, which is the failure we are guarding
+    // Read the count rather than blocking on completion: a leaked guard would
+    // hang this test rather than fail it, which is the failure being guarded
     // against and not one to reproduce as a hang.
     assert_eq!(
-        *entry.launching.lock().unwrap(),
+        lifetime.song.guard_count(),
         0,
-        "the count comes back even when a launch unwinds"
+        "the guard comes back even when its holder unwinds"
     );
 }
 
