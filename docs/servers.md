@@ -1,0 +1,120 @@
+# Servers, adapters, and configuration
+
+What each kind of language server needs said to it, and how a deployment
+picks which ones to run. Implemented in `src/lsp/adapter.rs` (+
+`src/lsp/adapter/`), `src/lsp/server.rs` and `src/config.rs`.
+
+**No server-specific string belongs anywhere else.** Adding a server means
+adding an adapter under `src/lsp/adapter/` or a `[servers.<name>]` entry in
+`structural.toml` — never a special case in the transport, the tools, or the
+workspace.
+
+## `Adapter`: the seam
+
+`Adapter` is everything the generic `LspServer` asks about one kind of
+server. Every method has a default, so a new adapter is as small as a name,
+a command and its languages:
+
+| method | answers |
+| --- | --- |
+| `name`, `command`, `install_hint` | how to launch it, and what to tell a user when it is missing |
+| `languages` | `Language { id, extensions }` — the routing rule's input |
+| `initialization_options`, `experimental_capabilities`, `client_capabilities`, `position_encodings` | what to say at `initialize` |
+| `readiness_policy` | an extra, server-specific readiness condition |
+| `symbol_query` | rewriting a `workspace/symbol` query |
+| `backstop` | this server's inactivity backstop |
+| `extra_views`, `extra_view_request`, `render_extra_view` | non-standard views this server offers |
+| `hover_params` | how `view = "type"` asks for a type |
+| `reference_aliases` | names a reference may legitimately appear under (`Self`) |
+| `kind_label` | the word shown for a `SymbolKind` |
+
+## Readiness
+
+The transport tracks *standard* readiness itself: the set of
+`window/workDoneProgress/create` / `$/progress` tokens the server has opened
+and not ended. "Standard idle" is that set being empty. A `ReadinessPolicy`
+may add a stronger condition, and readiness is composed as
+
+```text
+ready = standard_idle && policy.is_ready()
+```
+
+so a policy can never override active standard progress. A policy that wants
+a server-specific signal observes the notification stream through
+`ReadinessPolicy::observe` and keeps its own protocol state — it never
+rescans the event log, which is capped and diagnostics-only.
+
+## The built-ins
+
+**rust-analyzer.** `initialization_options` sets
+`workspace.symbol.search = { kind: "all_symbols", excludeImports: true }`:
+the default search looks at types first and falls back to everything only
+when that is empty, so a function whose name fuzzy-matches some type would be
+unreachable, and imports and re-exports reported as symbols would make every
+re-exported name ambiguous. It advertises `serverStatusNotification`, which
+the `Quiescence` policy observes, and `hoverRange`, which is what lets
+`view = "type"` answer with the type of a whole expression rather than the
+thing under one position. Its extra views are `expanded` (macro expansion at
+the focus) and `related-tests` (which returns a runnable cargo command per
+test).
+
+**pyright.** No extensions, no readiness signal beyond standard progress, and
+the standard capability profile.
+
+`builtins()` returns both; they are on by default.
+
+## `structural.toml`
+
+Read from the workspace root. Absent: the built-ins alone. Present but
+unparsable: **nothing starts**, and every call reports the parse error —
+silently ignoring it would run the wrong servers. Unknown keys are rejected.
+
+```toml
+[servers.rust-analyzer]          # a built-in's name: override it
+command = ["/opt/ra/rust-analyzer"]
+backstop_secs = 180
+
+[servers.gopls]                  # any other name: a generic server
+command = ["gopls", "serve"]     # required
+languages = ["go"]               # required; extensions from the table below
+extensions = { go = ["go"] }     # or spell them out
+```
+
+An entry named for a built-in **overrides** its command, languages or
+backstop and keeps everything else — readiness policy, capabilities,
+initialization options, query rewriting, install hint. Any other entry is a
+generic server, which needs `command` and `languages`.
+
+Language ids with known extensions: `rust`, `python`, `typescript`,
+`javascript`, `go`, `c`, `cpp`, `ruby`, `java`, `kotlin`, `zig`. Anything
+else must supply `extensions`, and the error says so with the syntax.
+
+Selection today is exactly this: every built-in plus every configured entry,
+started eagerly for the workspace whether or not the tree contains that
+language. Evidence-based discovery, a catalogue, and fallbacks are planned
+and not built (`../backlog/discovery/selection.md`).
+
+## `LspServer`: one running server of any kind
+
+`LspServer::spawn` produces a `Spawning` — a child that exists and can be
+stopped but has not yet handshaken — and `Spawning::initialize` completes it.
+The split is what lets shutdown reach a child mid-handshake
+([shutdown.md](shutdown.md)). `LspServer::start` is the convenience of both,
+for the paths that do not need the seam.
+
+The server owns documents: `sync(path)` pushes the on-disk text with
+`didOpen`/`didChange` and keeps the file owned for the rest of the
+connection; `sync_owned` re-pushes every owned file before a query. Ownership
+does not survive a fresh instance. `moved(from)` handles a file a rename
+relocated.
+
+Queries are thin wrappers that wait for readiness and then send:
+`workspace_symbol`, `definition`, `references`, `implementation`,
+`prepare_call_hierarchy` / `calls`, `hover`, `prepare_rename` / `rename`,
+`document_symbol`, and a generic `request` for adapter-specific methods.
+`supports(provider)` reads the negotiated capabilities, so a view that a
+particular server cannot answer is reported as unsupported rather than
+attempted.
+
+`description()` is the one-line provenance (name and version) that answers
+carry in their footers.

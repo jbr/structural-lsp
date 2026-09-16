@@ -1,4 +1,4 @@
-//! The throwaway raw-LSP spike (design.md "First step", experiments C and F),
+//! The throwaway raw-LSP spike (`reference/design-draft.md`, "First step", experiments C and F),
 //! as its own binary: `cargo run --bin spike -- --server rust`.
 //!
 //! It starts one or both language servers, waits as long as it reasonably can

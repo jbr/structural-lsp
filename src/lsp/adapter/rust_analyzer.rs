@@ -26,7 +26,7 @@ impl Adapter for RustAnalyzer {
         vec![Language::new("rust", &["rs"])]
     }
 
-    /// Two findings from the slice 1 review (`docs/slice-2.md`): the default
+    /// Two findings from the first review (`docs/servers.md`): the default
     /// symbol search looks at types first and only falls back to everything
     /// when that is empty, so a function whose name fuzzy-matches some type
     /// is unreachable; and imports and re-exports are reported as symbols,
@@ -86,7 +86,7 @@ impl Adapter for RustAnalyzer {
     }
 
     /// `-> Self` and `Self { .. }` inside an impl are reported as references
-    /// to the type (`docs/spike.md`'s raw capture for the fixture's
+    /// to the type (seen in the spike's raw capture for the fixture's
     /// `Config`); a trait's `Self` likewise.
     fn reference_aliases(&self) -> Vec<&'static str> {
         vec!["Self"]

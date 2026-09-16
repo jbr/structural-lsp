@@ -1,0 +1,34 @@
+# Changelog
+
+All notable changes to structural. Format follows
+[keep-a-changelog](https://keepachangelog.com); one line per feature. The
+project is unreleased, so everything lives under *Unreleased* for now. For
+how the system works, see [`docs/`](docs/); for the narrative behind a
+change, see [`journal/`](journal/); for what is left, see
+[`backlog/`](backlog/).
+
+## [Unreleased]
+
+### Added
+- **`action` with `rename`** (docs/tools.md): a semantic change previewed with a digest over the files it touches, applied only when the digest still matches, with the servers re-synced afterwards.
+- **`show` views** (docs/tools.md): `outline`, `implementations`, `incoming-calls`, `outgoing-calls`, `type` (via rust-analyzer's `hoverRange`, so an anchor yields the type of the expression), plus rust-analyzer's `expanded` and `related-tests`, which returns a runnable cargo command per test.
+- **Qualified names and anchors** (docs/resolution.md): `Config::new` filters candidates by the container the server reports; an anchor quoted from a file — with `focus` naming the token — skips the symbol index and reaches locals, parameters and call sites.
+- **`uses`** (docs/tools.md): references to a resolved identity, one source line per hit with its enclosing item, grouped by file, tests set apart by a heuristic that says it is one, with every hit's range verified against the text just read.
+- **Externally escalatable shutdown** (docs/shutdown.md): `request_shutdown` closes admission without waiting, `force_shutdown` interrupts starting and running servers without taking a workspace lock, `wait_shutdown` waits for admitted work and cleanup. Unix signals escalate — first soft, subsequent force — and real input EOF forces cleanup in the reader.
+- **Owned process groups** (docs/shutdown.md): on Unix each server leads its own process group, and cleanup signals the group before reaping its leader, so descendants holding inherited pipes do not survive teardown.
+- **Explicit server lifecycle** (docs/ownership.md): `Cold | Starting | Running | Failed` per slot, with concurrent demand electing exactly one launcher, launches running on their own threads holding no lock while they spawn and initialize, publication bounded so a busy workspace cannot strand a child, and every exit path — including a panic — waking the waiters.
+- **The shared host** (docs/ownership.md): workspaces keyed by canonical root and shared by every caller bound to one, with per-agent interest, per-workspace serialization, and independent progress across unrelated roots. One MCP process and an embedded consumer's many agents enter through the same door.
+- **The adapter seam, pyright, and `structural.toml`** (docs/servers.md): per-server knowledge behind an `Adapter` trait — command, languages, capabilities, readiness policy, query rewriting, extra views — with built-ins overridable and any other command configurable as a generic server.
+- **The threaded LSP handle** (docs/transport.md): one server on reader/owner/writer threads with every queue bounded, one inactivity backstop as the only timer, and a `$/structural/ping` liveness probe so a quiet-but-busy server is not mistaken for a broken one.
+- **`show`** (docs/tools.md): a symbol resolved to its definition's decorated source — doc comments and attributes included — with the extent from the server's `documentSymbol` and tree-sitter widening it over leading decorations.
+
+### Changed
+- **Resolution is by identity, not by name** (docs/resolution.md): every exact `workspace/symbol` candidate is sent to `definition` and the results grouped by target, so candidates that navigate to the same place are one answer and candidates that differ are an ambiguous listing with kinds, paths and signatures. Nothing is silently picked.
+- **Answers are trimmed to what an agent needs** (docs/correctness.md): one header line plus the body on the happy path, one line per listing entry, `note:` lines only when something is degraded, and the standing caveats stated once in the tool descriptions rather than in every result.
+- **rust-analyzer's symbol search is configured `all_symbols` with `excludeImports`** (docs/servers.md): the default searches types first and reports re-exports as symbols, which made some functions unreachable and every re-exported name ambiguous.
+- **Every source file stays under about 500 lines** (CLAUDE.md), with tests in a sibling module.
+
+### Fixed
+- **A blocked tool call no longer blocks MCP `ping`** (journal/2026-09-14-generic-kernel-and-tools.md): mcplease's stdio server answers `ping`, `initialize` and `tools/list` on its reader thread while tool calls queue, so waiting as long as a server needs does not make the mount unresponsive.
+- **A failed connection keeps answering with its reason**: the owner thread lingers as a tombstone instead of exiting, which had turned every later error into "connection closed".
+- **A notification blocked behind a server that stopped reading had no backstop**: pending writes are now tracked and expired like requests. Found by deleting the crate-wide `allow(dead_code)`.

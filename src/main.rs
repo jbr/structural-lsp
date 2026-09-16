@@ -7,7 +7,7 @@
 //! same host an embedded consumer uses. Every configured language server
 //! starts before either path runs, so indexing begins immediately.
 //!
-//! Shutdown is best-effort graceful, escalated by the caller (`docs/shutdown-escalation.md`):
+//! Shutdown is best-effort graceful, escalated by the caller (`docs/shutdown.md`):
 //! on Unix, the first SIGINT/SIGTERM/SIGHUP requests a soft shutdown — new tool
 //! calls are refused, admitted ones may finish — and a second signal forces
 //! server teardown, interrupting even a call that is stuck waiting on a server

@@ -1,14 +1,69 @@
 # structural
 
-An MCP server that gives coding agents LSP-backed code intelligence. Design in
-`design.md`. Slice 2 (`docs/slice-2.md`, decisions in
-`docs/slice-2-handoff.md`) built the kernel and `show`; slice 3
-(`docs/slice-3.md`) added `uses`.
+An MCP server that gives coding agents LSP-backed code intelligence: `show`,
+`uses` and `action`, answered by real language servers (rust-analyzer,
+pyright, and anything named in `structural.toml`) rather than by grep. It
+also embeds: a host process running several agents, each with its own
+effective working directory, shares language servers instead of starting a
+set per agent.
 
-The next development direction is documented in
-`docs/lifecycle-and-discovery.md`: shared MCP/embedded host ownership,
-server lifecycle, zero-config project discovery, and filesystem observation.
-It records agreed intent and sequenced work units, not implemented behavior.
+**Start at [`docs/README.md`](docs/README.md)** — the top of the architecture
+tree, with the invariants and a map to each subsystem's doc. Read it before
+changing core types.
+
+## Where things are recorded — and what to update when
+
+Each record has one job; keep them distinct.
+
+- **[`docs/`](docs/) — current architecture.** Present-tense,
+  module-anchored, no file:line citations (they rot). Update the relevant doc
+  when the architecture changes. Depth bar: a sophisticated peer should be
+  able to rough-approximate the project from the docs alone.
+- **[`backlog/`](backlog/) — planned work, and *only* work that isn't done.**
+  The one prospective record. Unordered, one `.md` per independent unit;
+  work spanning many sessions becomes a subdirectory. **When a unit ships,
+  delete its file — and when a unit partly ships, delete the shipped part.**
+  No ✅-checklists, no fully-ticked build orders: surviving rationale goes to
+  `docs/` (present system) or `journal/` (why a road was taken). No standing
+  lists — a find goes straight to its own file, the governing unit's file, or
+  `backlog/icebox.md`. [`backlog/INDEX.md`](backlog/INDEX.md) is the one
+  ordered view. Code cites the governing `docs/` file, never a backlog path.
+- **[`CHANGELOG.md`](CHANGELOG.md) — shipped features.** Terse
+  keep-a-changelog, ≤1 line per feature.
+- **[`journal/`](journal/) — session memory.** Per-session narrative: dead
+  ends, why a road was taken or abandoned, what was verified and how. An
+  entry only when a session did something non-obvious.
+- **[`process/`](process/) — how we work on the code.** The sibling to
+  `docs/`: a document belongs there if it would still make sense with the
+  source deleted. Most process is here in CLAUDE.md; a file lands in
+  `process/` when it is too long to inline.
+- **[`reference/`](reference/) — external findings.** Surveys, datasets, the
+  original design draft. True whether or not this repository exists.
+
+When a unit of work ships: delete its `backlog/` file, add a `CHANGELOG.md`
+line, update the affected `docs/`, and add a `journal/` entry if anything
+non-obvious came up.
+
+## The governing rule
+
+**Correct and current beats fast.** Wait for all outstanding server work
+before a semantic query; the only timer is the inactivity backstop, and a
+silent server is probed with `$/structural/ping` before it can trip. No
+settle sleeps, no retry loops, no partial answers on a timer. Every range a
+server returns is checked against the text just read, and nothing ambiguous
+is silently picked. The full contract, and what each mechanism costs, is
+[`docs/correctness.md`](docs/correctness.md).
+
+## Module map
+
+`src/host.rs` + `src/host/lifetime.rs` (workspaces, admission, shutdown) ·
+`src/workspace.rs` + `src/workspace/slot.rs` (one root's servers and their
+lifecycle) · `src/session.rs` (a caller's binding) · `src/lsp/handle.rs`
+(one server on three threads) · `src/lsp/server.rs` (documents and queries) ·
+`src/lsp/adapter/` (all server-specific strings) · `src/tools/` (the three
+tools and the shared resolution pipeline) · `src/main.rs` (the front end).
+The full map, with the doc governing each subsystem, is the table in
+[docs/README.md](docs/README.md).
 
 ## Conventions
 
@@ -16,14 +71,17 @@ It records agreed intent and sequenced work units, not implemented behavior.
   when a file crosses it, split by responsibility in the same change. Tests
   go in a sibling module (`foo.rs` + `foo/tests.rs`), rendering apart from
   logic, helpers apart from the flow that uses them.
-- Correct and current beats fast. No settle sleeps, retry loops, or partial
-  answers on a timer; the only timer is the inactivity backstop, and a
-  silent server is probed with `$/structural/ping` before it can trip
-  (`docs/slice-2.md`, "Governing rule" and "Verification").
-- Server-specific strings and methods live in `src/lsp/adapter/`, never in
-  the generic transport or server. Adding a server means adding an adapter
+- **Server-specific strings and methods live in `src/lsp/adapter/`**, never
+  in the generic transport or server. Adding a server means adding an adapter
   there or a `[servers.<name>]` entry in `structural.toml`.
-- No `#[allow(dead_code)]` per item; delete or use.
+- **No `#[allow(dead_code)]` per item; delete or use.** The one thing a
+  crate-wide allow hid here was a real missing backstop.
+- **Doc comments cite the governing doc by filename** (e.g.
+  `(docs/ownership.md)`), not a line number.
+- **Register for docs and comments: describe, don't evaluate.** State
+  mechanisms and what breaks if they change — no praise words, no banner
+  theses. Assume any sentence may be quoted out of context by a future
+  summarizer.
 
 ## Verifying
 
@@ -31,8 +89,12 @@ It records agreed intent and sequenced work units, not implemented behavior.
 cargo test                                   # unit + Python-mock tests
 cargo test -- --ignored                      # rust-analyzer, pyright, gopls e2e
 cargo clippy --all-targets -- -D warnings
+cargo doc --no-deps
 ```
 
-The handle tests need a Python 3 that starts fast; `python3` behind a
-version-manager shim can be too slow for the short backstops. They try a
-few direct paths and honor `STRUCTURAL_TEST_PYTHON`.
+Bound long runs with `gtimeout` and background them; do not call an unbounded
+`wait`. The handle tests need a Python 3 that starts fast — a version-manager
+shim can be too slow for the short backstops; they try a few direct paths and
+honor `STRUCTURAL_TEST_PYTHON`. More, including which flakes are understood
+and why the front end is tested as a real subprocess, in
+[`process/testing.md`](process/testing.md).

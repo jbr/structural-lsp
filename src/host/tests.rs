@@ -587,7 +587,7 @@ fn independent_workspaces_hold_their_workspaces_at_once() {
     // workspace's lock: two workspaces' calls do not serialize against each
     // other. This is deliberately *not* a concurrent-acquisition test — the
     // host does hold the map lock across startup, so a second `agent_started`
-    // queues; see the locking rule in `docs/host-extraction.md`.
+    // queues; see the locking rule in `docs/ownership.md`.
 
     let first = a.workspace();
     let second = b.workspace();

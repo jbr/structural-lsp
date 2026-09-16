@@ -223,7 +223,7 @@ pub fn default_kind_label(kind: lsp_types::SymbolKind) -> &'static str {
 ///
 /// `workspace.workspaceFolders` is deliberately *not* advertised. With it,
 /// pyright 1.1.403 answered `initialize` and `workspace/symbol` but never a
-/// document request (`docs/spike.md`, "Observed capability association"); the
+/// document request (observed with the raw-LSP spike, `docs/spike.md`); the
 /// mechanism is not established, and nothing here needs the capability. The
 /// folders themselves are still sent in the `initialize` params.
 pub fn standard_capabilities(position_encodings: &[&str], experimental: Value) -> Value {
