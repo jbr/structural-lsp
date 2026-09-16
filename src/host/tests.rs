@@ -154,7 +154,7 @@ fn wait_for_launches(fixture: &Fixture, n: usize) -> Vec<u32> {
 }
 
 /// Something that panics while holding a guard must still release it, or a
-/// shutdown would wait on it forever. This is the property a launch counter
+/// shutdown would wait on it forever.
 /// could not give: its count came back from an ordinary call, which an unwind
 /// skips past, while a guard comes back from a drop.
 #[test]

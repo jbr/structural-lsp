@@ -182,10 +182,20 @@ impl Entry {
 
     /// Take responsibility for a child while it is being started. The guard
     /// gives the registration back on every exit path, including a panic.
-    fn register_child(&self, stopper: Stopper) -> ChildGuard<'_> {
+    fn register_child(&self, stopper: Stopper) -> Option<ChildGuard<'_>> {
+        let mut children = self.children();
+        // Refusing once the lifetime is stopping is what keeps the sweep
+        // exhaustive. The claim is set before the sweep collects, so every
+        // child that *did* register is visible to that collection; without
+        // this check a child could register just after it, have nobody to stop
+        // it, and hold shutdown open for a whole handshake — measured, not
+        // assumed: a guard taken after a stop keeps completion pending.
+        if self.lifetime.stopped() {
+            return None;
+        }
         let id = self.next_child.fetch_add(1, Ordering::SeqCst);
-        self.children().insert(id, stopper);
-        ChildGuard { entry: self, id }
+        children.insert(id, stopper);
+        Some(ChildGuard { entry: self, id })
     }
 
     fn children(&self) -> MutexGuard<'_, BTreeMap<u64, Stopper>> {
@@ -246,7 +256,13 @@ impl Entry {
         // Reachable by a shutdown from here on, though no workspace holds it
         // yet: this is the window in which a child would otherwise be
         // orphaned by a host that goes away mid-handshake.
-        let _child = self.register_child(spawning.stopper());
+        let Some(_child) = self.register_child(spawning.stopper()) else {
+            // The host began stopping between the check above and this
+            // registration, so nothing will stop this child but us. Dropping
+            // the half-started server tears it down and reaps it.
+            drop(spawning);
+            return launch.failed("the host is shutting down");
+        };
         let server = match spawning.initialize() {
             Ok(server) => server,
             Err(error) => return launch.failed(format!("{error:#}")),
