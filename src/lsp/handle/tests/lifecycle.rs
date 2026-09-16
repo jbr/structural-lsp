@@ -174,15 +174,24 @@ fn a_notification_flood_between_calls_is_consumed_and_bounded() {
     let handle = mock.spawn(test_settings(), Box::new(StandardIdle));
     initialize(&handle);
 
-    // Arm: the mock opens a progress token, replies, then — with no
-    // request of ours outstanding — emits 10 000 notifications and ends
-    // the token. Readiness returns only once the owner has processed the
-    // `end`, which the reader delivered after all 10 000 (same producer,
-    // FIFO). Nothing pumps; the caller only waits for readiness.
+    // Arm: the mock opens a progress token, replies, then — with no request
+    // of ours outstanding — emits 10 000 notifications. The token stays open
+    // until `test/flood-release` below, so readiness is blocked for a reason
+    // this test controls rather than for as long as the owner thread happens
+    // to take to drain them. Readiness returns only once the owner has
+    // processed the `end`, which the reader delivered after all 10 000 (same
+    // producer, FIFO). Nothing pumps; the caller only waits for readiness.
+
     handle
         .request("test/flood-arm", json!({ "n": 10_000, "token": "flood" }))
         .unwrap();
+    // The token is still open — only the release request below ends it — so
+    // this says the world is not ready while work is pending, and not that
+    // the owner thread happened to be behind.
     assert!(!handle.snapshot().unwrap().ready);
+    handle
+        .request("test/flood-release", json!({ "token": "flood" }))
+        .unwrap();
     handle.wait_ready(Duration::from_secs(20)).unwrap();
 
     let snapshot = handle.snapshot().unwrap();
@@ -190,10 +199,11 @@ fn a_notification_flood_between_calls_is_consumed_and_bounded() {
     assert_eq!(snapshot.pending_operations, 0);
     let events = handle.capture_events().unwrap();
     assert!(events.len() <= 200, "event log capped: {}", events.len());
+    let tail: Vec<&Value> = events.iter().rev().take(3).collect();
     assert_eq!(
         events.last().and_then(|e| e.pointer("/params/value/kind")),
         Some(&json!("end")),
-        "the last event is the token's end"
+        "the last event is the token's end; tail was {tail:?}"
     );
     assert!(
         events.iter().any(|e| e["method"] == "test/noise"),

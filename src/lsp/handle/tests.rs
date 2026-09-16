@@ -204,12 +204,18 @@ while True:
             notify("test/gate", {"open": bool(params["open"])})
             reply(msg, "sent")
         elif method == "test/flood-arm":
+            # Open the token, answer, then flood — and leave the token open.
+            # Ending it here would race the caller's next look at readiness;
+            # `test/flood-release` ends it, so "not ready yet" is a fact about
+            # the protocol rather than about who ran first.
             token = params["token"]
             progress(token, "begin")
             reply(msg, "armed")
             for i in range(int(params["n"])):
                 notify("test/noise", {"i": i})
-            progress(token, "end")
+        elif method == "test/flood-release":
+            progress(params["token"], "end")
+            reply(msg, "released")
         elif method == "test/quiet-work":
             # Work in progress and nothing said for a while, but the loop
             # keeps answering requests (a probe gets the default reply).
