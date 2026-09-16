@@ -82,6 +82,13 @@ impl Lifetime {
         }
     }
 
+    /// The shared claim itself, for the slots a workspace lays out. Shared
+    /// rather than copied: a copy per slot would be a second claim, and two
+    /// claims can disagree.
+    pub(crate) fn flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.stopped)
+    }
+
     fn stopped(&self) -> bool {
         self.stopped.load(Ordering::SeqCst)
     }
@@ -182,6 +189,7 @@ impl Entry {
             // way the wait in `activate` covers it.
             Demand::Ready | Demand::Join => Ok(()),
             Demand::Failed(reason) => bail!("{reason}"),
+            Demand::Refused => bail!("the host is shutting down"),
             Demand::Lead(launch) => {
                 self.spawn_launch(index, launch);
                 Ok(())
@@ -346,7 +354,7 @@ impl Host {
             Some(entry) => Arc::clone(entry),
             None => {
                 let entry = Arc::new(Entry::new(
-                    Workspace::new(key.clone()),
+                    Workspace::new(key.clone(), self.lifetime.flag()),
                     self.lifetime.clone(),
                 ));
                 workspaces.insert(key, Arc::clone(&entry));
@@ -433,7 +441,10 @@ impl Host {
         // and a later writer could resurrect it.
         self.lifetime.song.shut_down().block();
         for entry in &entries {
-            entry.lock().shutdown();
+            // Taken under the lock, reaped outside it: dropping a server joins
+            // its threads, and this is the lock a launcher needs to publish.
+            let stopped = entry.lock().take_all();
+            drop(stopped);
         }
     }
 

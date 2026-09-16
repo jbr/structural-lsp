@@ -13,6 +13,7 @@
 
 use crate::lsp::adapter::Adapter;
 use anyhow::{Result, bail};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
 /// Where a slot is in its life. Only [`SlotState::Running`] answers queries.
@@ -66,11 +67,20 @@ pub enum Demand {
     /// leaves `Starting` on every exit path, including a panic, and owns its
     /// slot so the launch can run on a thread of its own.
     Lead(Launch),
+    /// The host is stopping. No launch may begin, and none did: the slot is
+    /// left exactly as it was, so a demand after a shutdown costs a load
+    /// rather than a thread.
+    Refused,
 }
 
 /// One configured server's lifecycle.
 pub struct ServerSlot {
     adapter: Arc<dyn Adapter>,
+    /// The host's one claim, shared rather than copied — the same atomic every
+    /// other slot sees. Election consults it, so a demand arriving after a
+    /// shutdown neither elects a launcher nor spawns a thread for a launch
+    /// that was born refusing.
+    stopped: Arc<AtomicBool>,
     state: Mutex<SlotState>,
     /// Signalled on every transition out of [`SlotState::Starting`], so a
     /// waiter is never left blocked on a launcher that will not wake it.
@@ -78,9 +88,10 @@ pub struct ServerSlot {
 }
 
 impl ServerSlot {
-    pub fn new(adapter: Arc<dyn Adapter>) -> Self {
+    pub fn new(adapter: Arc<dyn Adapter>, stopped: Arc<AtomicBool>) -> Self {
         Self {
             adapter,
+            stopped,
             state: Mutex::new(SlotState::Cold),
             launched: Condvar::new(),
         }
@@ -109,6 +120,9 @@ impl ServerSlot {
     /// across the decision so that becoming the launcher is atomic with
     /// leaving `Cold`.
     pub fn demand(self: &Arc<Self>) -> Demand {
+        if self.stopped.load(Ordering::SeqCst) {
+            return Demand::Refused;
+        }
         let mut state = self.lock();
         match &*state {
             SlotState::Running => Demand::Ready,

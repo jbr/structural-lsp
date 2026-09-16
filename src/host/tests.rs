@@ -177,6 +177,54 @@ fn a_panicking_participant_still_releases_its_guard() {
     );
 }
 
+/// A demand arriving after the host has stopped must neither launch anything
+/// nor disturb what the sweep left behind. This is the test that would have
+/// caught the registration window `b7efc58` closed, and the election a demand
+/// used to perform anyway.
+#[test]
+fn a_demand_after_shutdown_launches_nothing_and_leaves_slots_cold() {
+    let Some(fixture) = fixture("post-claim") else {
+        return;
+    };
+    let host = Host::new();
+    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let launched = fixture.launches();
+    assert!(!launched.is_empty(), "servers started");
+
+    host.shutdown();
+    assert!(
+        launched.iter().all(|pid| !alive(*pid)),
+        "the sweep reaped what was running: {launched:?}"
+    );
+
+    // A call arriving after the claim: it must return rather than start
+    // anything, and it must leave every slot as the sweep left it.
+    let started = std::time::Instant::now();
+    session.activate(None);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(2),
+        "a post-claim demand returns instead of starting a launch that was \
+         born refusing: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(
+        fixture.launches(),
+        launched,
+        "no child was launched after the host stopped"
+    );
+
+    let workspace = session.workspace();
+    assert!(
+        workspace
+            .slots()
+            .iter()
+            .all(|slot| slot.state().label() == "not started"),
+        "every slot is still cold"
+    );
+    let error = workspace.select(None).unwrap_err().to_string();
+    assert!(error.contains("no language server is running"), "{error}");
+}
+
 /// A shutdown arriving while a server is still handshaking leaves no child
 /// behind: the one being started is killed, not published.
 #[test]

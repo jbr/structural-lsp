@@ -18,6 +18,7 @@ use crate::lsp::server::LspServer;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 mod slot;
 
@@ -48,7 +49,7 @@ impl Workspace {
     /// is canonicalized so every scope/candidate check compares real paths,
     /// not symlink spellings; if that fails (root missing) the raw root is
     /// kept for the error.
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(root: PathBuf, stopped: Arc<AtomicBool>) -> Self {
         let root = canonical_root(&root);
         let mut workspace = Self {
             root,
@@ -64,7 +65,9 @@ impl Workspace {
             }
         };
         for adapter in adapters {
-            workspace.slots.push(Arc::new(ServerSlot::new(adapter)));
+            workspace
+                .slots
+                .push(Arc::new(ServerSlot::new(adapter, Arc::clone(&stopped))));
             workspace.servers.push(None);
         }
         workspace
@@ -176,21 +179,23 @@ impl Workspace {
     /// demand. One operation, so shutdown and eviction cannot disagree about
     /// what stopping means — and so a session that outlives the host finds a
     /// cold slot rather than a handle to a server that is gone.
-    pub fn stop(&mut self, index: usize) {
-        if let Some(server) = self.servers.get_mut(index).and_then(Option::take) {
-            drop(server);
-        }
+    pub fn stop(&mut self, index: usize) -> Option<LspServer> {
+        let server = self.servers.get_mut(index).and_then(Option::take);
         if let Some(slot) = self.slots.get(index) {
             slot.mark_cold();
         }
+        server
     }
 
-    /// Stop every server. Idempotent, and each server's drop does the same, so
-    /// a workspace dropped without this still reaps its children.
-    pub fn shutdown(&mut self) {
-        for index in 0..self.slots.len() {
-            self.stop(index);
-        }
+    /// Take every server out, leaving every slot cold, and hand them back so
+    /// the caller can reap them **outside** this workspace's lock. Dropping a
+    /// server joins its threads — bounded, but not instant — and this lock is
+    /// the one a launcher needs to publish, so reaping here would make every
+    /// shutdown hold it for as long as the teardown takes.
+    pub fn take_all(&mut self) -> Vec<LspServer> {
+        (0..self.slots.len())
+            .filter_map(|index| self.stop(index))
+            .collect()
     }
 
     /// Which of `candidates` have a server, read from the workspace's own

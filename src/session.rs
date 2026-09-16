@@ -26,9 +26,10 @@ impl Session {
     /// nothing releases it but dropping it. Front ends that share workspaces
     /// go through [`crate::host::Host::agent_started`] instead.
     pub fn new(root: PathBuf) -> Self {
+        let lifetime = crate::host::Lifetime::new();
         let session = Self::bind(Arc::new(Entry::new(
-            Workspace::new(canonical_root(&root)),
-            crate::host::Lifetime::new(),
+            Workspace::new(canonical_root(&root), lifetime.flag()),
+            lifetime,
         )));
         // Warm every configured server, as the MCP process does when an agent
         // starts. A server that will not start is recorded on its slot, for
