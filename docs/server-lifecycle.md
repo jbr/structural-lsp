@@ -82,17 +82,20 @@ Host ─ map lock: root → Arc<Entry>          lookup, insert, release only
 
 ## Locking rule
 
-Three locks, taken in this order, outer to inner. **Never** take an outer lock
+Four locks, taken in this order, outer to inner. **Never** take an outer lock
 while holding an inner one.
 
 1. the host map lock — lookup, insert, release, and nothing else;
 2. the workspace lock — semantic and document state, held for a call;
-3. a slot's state lock — lifecycle only, never held across protocol I/O.
+3. a slot's state lock — lifecycle only, never held across protocol I/O;
+4. an entry's `interested` set — agent bookkeeping. It is a leaf, taken on its
+   own; the idle sweep must never consult it, because eviction is about a
+   workspace's servers and not about who is interested in sharing them.
 
 Keep the pose that has served both units so far: an operation's protection is
 an accident of a lock it already holds, not a separate guard.
 
-**Publication is one workspace-lock hold.** The abort-flag check, the push of
+**Publication is one workspace-lock hold.** The claim check, the push of
 the server into the workspace, and the slot's move to `Running` must all happen
 inside it. If the slot update were deferred until after the lock dropped, a
 waiter could observe `Starting` for a server the workspace already holds, and
@@ -174,24 +177,35 @@ already anticipates.
 
 ## Failure policy
 
-`Failed(reason)` is terminal for the call that finds it and retried by the next
-demand. A call that finds `Failed` returns the actionable error immediately
-(the same fast-fail the MCP surface gives today for an unavailable server); the
-next call elects a launcher and waits for a fresh attempt.
+`Failed(reason)` is **reported, not retried**. A call that finds it returns the
+actionable error immediately — the same fast-fail the MCP surface gives today
+for a server that is not running — and the slot stays failed until something
+clears it.
 
-This is not the 90-second hang it looks like. A missing or unrunnable binary
-fails `LspServer::start` in milliseconds — only a *hung* `initialize` costs the
-backstop, and that is the case where waiting is correct. No backoff, no retry
-timer, no restart loop: demand is the signal.
+**Expiry is what clears it, so retry belongs to milestone B.** The sweep that
+moves an idle `Running` slot to `Cold` moves a `Failed` one to `Cold` as well,
+and then "the next demand starts a fresh instance" is one rule about cold slots
+rather than a second mechanism.
+
+An earlier draft of this plan put retry in A, on the reasoning that A should
+not leave a tombstone. That was wrong, and the reason is worth keeping:
+fail-fast-then-retry has to tell "not yet retried" from "the retry already
+failed", and `SlotState` has nowhere to keep that distinction. The shape has
+one honest answer, and A's version of it is a sticky failure.
+
+Sticky is not a regression: it is exactly what the code does today, where a
+server that will not start stays reported for the life of the process. A says
+so explicitly rather than implying otherwise.
+
+When expiry does clear a failure the retry is cheap — a missing or unrunnable
+binary fails `spawn` in milliseconds, and only a *hung* `initialize` costs the
+backstop. No backoff, no retry timer, no restart loop: demand is the signal.
 
 Failures are per slot, which is what makes "one failing server does not block
-another" true — a waiter on one slot is untouched by another's failure.
-`config_error` stays workspace-level: an unparsable `structural.toml` still
-means nothing starts and every call says why.
-
-This whole policy is milestone A's, not B's: a `Failed` state with no way past
-it is a tombstone a call can never clear, and retry-after-failure is also the
-first path that produces a fresh instance carrying an empty `opened` map.
+another" true: a waiter on one slot is untouched by another's failure, and
+`agent_started` warms every slot rather than stopping at the first that will
+not start. `config_error` stays workspace-level: an unparsable
+`structural.toml` means nothing starts and every call says why.
 
 ## Shutdown during startup
 
@@ -212,10 +226,12 @@ The ordering:
 2. it stops the child of every launch that is still starting. A launcher
    registers its child with the entry as soon as it spawns, so shutdown can
    reach one that no workspace holds yet;
-3. it waits for in-flight launches to finish, on a launch counter and condvar
-   whose count is returned by a *guard* — so a launcher that panics still lets
-   shutdown return. A count returned by an ordinary call would be skipped by
-   the unwind, and shutdown would wait forever;
+3. it waits for shutdown completion. Every launch holds a guard from the
+   host's shutdown manager, and completion is the last of them giving its
+   guard back — so a launcher that panics still lets shutdown return. A count
+   returned by an ordinary call would be skipped by the unwind, and shutdown
+   would wait forever; that is exactly what a hand-rolled counter did until a
+   review found it;
 4. it takes each workspace lock and stops everything published, in the map and
    in the released registry alike.
 
@@ -231,8 +247,9 @@ stopping it *outside* is a rule for eviction, which is the next unit's.
 check-then-publish and the sweep both need the workspace lock, so they cannot
 interleave; a launcher that publishes after the sweep would have had to see a
 clear flag that no longer existed. A launcher that finds the flag set kills the
-server it just built and publishes nothing. The counter in step 3 does *not*
-carry the invariant — it carries the **return** condition.
+server it just built and publishes nothing. The guards in step 3 do *not*
+carry the invariant — they carry the **return** condition, and they are what a
+panic cannot skip.
 
 **Why the return condition is worth paying for.** An MCP process's normal path
 is `host.shutdown()`, then exit. A launcher still holding a live child at that
@@ -249,8 +266,10 @@ has to make:
 - `ServerHandle::terminate(&self)` — the flag and the graceful command without
   the join, which is what `shutdown(self)` already does before joining;
 - `LspServer::start` split into `spawn` and `initialize`, so the handle exists
-  and is registered with the slot *before* the slow handshake. `LspServer`
-  holds `Arc<ServerHandle>` to make that registration possible.
+  *before* the slow handshake and a `Stopper` cloned from it can be registered
+  with the entry *before* the handshake too. A `Stopper` is the ability to say
+  stop and nothing else — not the connection, which the launching thread is
+  still using.
 
 Shutdown must never block on a slot's waiters; launchers clean up their own.
 
@@ -262,8 +281,13 @@ server is a no-op. The contract is per-call resync: `sync` opens on first touch
 for the file being queried, so the common path is self-healing.
 
 This is a quiet staleness bug if left implicit, and it gets a test: a bare-name
-query immediately after a reacquisition must still resolve. It belongs to
-milestone A, because retry-after-failure reaches it without any clock.
+query immediately after a reacquisition must still resolve.
+
+It belongs to milestone A even though retry does not, because a fresh instance
+does not need a clock to reach: `Workspace::stop` takes a running server out
+and leaves the slot cold, and the next demand starts another. That is the
+forced-fresh-instance hook the test uses — the same operation expiry performs,
+without the clock.
 
 ## Milestones
 
@@ -271,18 +295,25 @@ Two halves, each green and each useful on its own. The parent doc permits a
 work unit to span commits.
 
 **A — explicit lifecycle, lock-free launch, dedup, failure, shutdown.**
-Slots, `SlotState`, the `Arc<dyn Adapter>` change, activation before the
-workspace lock, election and `Condvar`, the launcher's RAII guard, the abort
-flag, `ServerHandle::terminate`, the `spawn`/`initialize` split, and
-`select` learning to answer per slot. Per-slot failure with demand-driven
-retry, and the document-state contract with its test. No clock, no expiry.
+Slots, `SlotState`, the `Arc<dyn Adapter>` change (already landed), activation
+before the workspace lock, election and `Condvar`, the launcher's RAII guard,
+the lifetime's claim flag, `ServerHandle::terminate`, the `spawn`/`initialize`
+split, the child registry, and `select` learning to answer per slot. Per-slot
+failure *reporting*, and the document-state contract with its test — reached by
+`Workspace::stop`, not by expiry. No clock, no expiry.
 
 Covers: one launch, independent launches, one failing server does not block
 another, no orphan.
 
-**B — expiry, reacquisition, status.**
+**B — expiry, reacquisition, retry, status.**
 `Clock`, `expire_idle`, `try_lock` eviction, the janitor and its lifecycle,
-per-slot `last_activity`, and the status rendering below.
+per-slot `last_activity`, demand-driven retry, and the status rendering below.
+
+Retry is B's because expiry is what expresses it: a slot that failed is
+sticky, and the sweep moving `Failed → Cold` alongside `Running → Cold` gives
+"the next demand starts a fresh instance" one rule about cold slots instead of
+a second mechanism. A needs somewhere to record "not yet retried" versus "the
+retry already failed", and has nowhere: see the failure policy.
 
 Covers: expiry cannot interrupt an operation, later demand starts a fresh
 instance.
@@ -303,6 +334,14 @@ parent-doc decision and is not this unit's.
   eagerly, as today, because rust-analyzer's indexing should begin before the
   first query. Unit 2's acquisition work is dedup-at-warm plus
   post-expiry/post-failure reacquisition, not a move to lazy start.
+
+  Eager warm is **synchronous from the caller's point of view**, and that is
+  deliberate: `agent_started` and `Session::new` return once every applicable
+  server is running or failed, which is what the MCP surface comes up behind.
+  What threading each launch buys is that the wait is the *slowest* server
+  rather than the sum of them — not that the caller stops waiting. A caller
+  that must not wait needs the servers started somewhere else, which is a
+  different design and not this unit's.
 
 ## Traps, ranked
 
