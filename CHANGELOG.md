@@ -43,6 +43,8 @@ change, see [`journal/`](journal/); for what is left, see
 - **Every source file stays under about 500 lines** (CLAUDE.md), with tests in a sibling module.
 
 ### Fixed
+- **A configured override of a built-in keeps all of its knowledge** (docs/servers.md): `Configured` did not forward `outline_container`, `extra_views`, `extra_view_request`, `render_extra_view`, `hover_params` or `reference_aliases`, so naming rust-analyzer in `structural.toml` to point at a specific binary silently lost impl containers, the `expanded`/`related-tests`/`type` views and `Self` aliases.
+
 - **A symbol range wider than the name resolves** (docs/correctness.md): `SymbolInformation.location.range` is the range enclosing the symbol, so a whole-declaration range is conforming; the name is located within it and the follow-up request is sent at the name. A range holding no occurrence is still refused, and two are ambiguous. The refusal no longer claims staleness it has not established.
 - **`workspace/symbol` is not sent to a server that did not offer it** (docs/servers.md): a `-32601` used to end the whole query, including file-scoped ones that never needed the index.
 - **A refused outline degrades `uses` instead of failing it** (docs/tools.md): the enclosing-item column is dropped with a note saying why, distinguishing a server without `documentSymbol` from one that would not outline an unopened document.

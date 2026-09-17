@@ -88,8 +88,20 @@ extensions = { go = ["go"] }     # or spell them out
 
 An entry named for a built-in **overrides** its command, languages or
 backstop and keeps everything else — readiness policy, capabilities,
-initialization options, query rewriting, install hint. Any other entry is a
-generic server, which needs `command` and `languages`.
+initialization options, query rewriting, install hint, extra views, hover
+params, reference aliases, outline containers. Any other entry is a generic
+server, which needs `command` and `languages`.
+
+`Configured` keeps that promise one hand-written method at a time: each one
+forwards to `base` when there is one and answers the trait default when
+there is not. Adding a method to `Adapter` that a built-in overrides means
+adding a case to `Configured` **and** to the case in
+`adapter/configured.rs` that asks an override every server-specific
+question the built-in answers. Forgetting is silent and does not look like
+a configuration problem — `outline_container` was missing, so an overridden
+rust-analyzer compared `impl Config` to the `Config` at its range, called
+the difference a disagreement, and failed a file-scoped `Config::doubled`
+with a message blaming the outline for not describing the file.
 
 Language ids with known extensions: `rust`, `python`, `typescript`,
 `javascript`, `go`, `c`, `cpp`, `ruby`, `java`, `kotlin`, `zig`. Anything
