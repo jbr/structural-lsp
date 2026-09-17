@@ -64,6 +64,16 @@ must sit there (or one of the adapter's reference aliases, such as `Self`).
 A mismatch means the server's view of that file is stale, and it is an
 **error** — never a retry, and never a listing built on it.
 
+Where the check happens depends on what the candidate is for. A
+**file-scoped** candidate is checked when it is nominated, on the text
+already in hand, before a qualifier filter or a listing can use it, and its
+range is what every listing of it prints. An **index-nominated** candidate
+is checked when the pipeline navigates from it (`definition_of`), so a
+listing built without navigating — the unqualified and fuzzy listings —
+carries the ranges the index reported, which is one reason the index is
+described as bounded and unproven rather than authoritative
+(`resolution.md`).
+
 Position conversion is honest in both directions and rejects rather than
 clamps: a byte offset off a character boundary, a line past the end, a column
 past its line, or a column inside a surrogate pair is an error, not a
@@ -71,7 +81,8 @@ silently moved cursor (`src/lsp/positions.rs`).
 
 ## Nothing is silently picked
 
-`workspace/symbol` only *nominates*. Every exact candidate goes to
+`workspace/symbol` — or, in a file scope, the file's own outline — only
+*nominates*. Every exact candidate goes to
 `textDocument/definition`, and results are deduplicated by target: hits that
 navigate to the same place are one identity, hits that navigate elsewhere are
 listed as ambiguous with their kinds, paths and signatures. Zero exact
@@ -80,9 +91,14 @@ Anchors are subject to the same rule in the text domain: an anchor must occur
 exactly once in the file and a focus exactly once within the anchor;
 otherwise the error says where the occurrences are.
 
-Candidates come from the servers' fuzzy symbol index and are **not proven
-exhaustive** — this is stated in the tool descriptions and in the server's
-MCP instructions rather than implied away.
+Candidates come from the servers' fuzzy symbol index — bounded, and **not
+proven exhaustive** — except in a **file scope**, where a `path` naming a
+file nominates from that file's own `documentSymbol` instead, so its
+candidates are the file's own symbols rather than a sample of a bounded
+cross-workspace response; the outline itself is not a proven-exhaustive
+declaration index either (`resolution.md`). What is not proven is stated in
+the tool descriptions and in the server's MCP instructions rather than
+implied away.
 
 ## Degradation is named, never silent
 

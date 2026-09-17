@@ -30,7 +30,8 @@ process.
 Tests that mutate work on scratch copies. Acceptance cases should use
 realistic common-name and multi-project inputs, not only tiny happy-path
 fixtures — the qualified-name feature passed on a fixture and failed on a
-real tree for exactly that reason (`../backlog/file-scoped-lookup.md`).
+real tree for exactly that reason
+(`../journal/2026-09-16-file-scoped-nomination.md`).
 
 Do not make `fixtures/` itself a root: rust-analyzer searches parent
 directories for a `Cargo.toml` and will load this repository instead.

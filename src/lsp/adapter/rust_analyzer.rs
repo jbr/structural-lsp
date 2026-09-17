@@ -5,6 +5,7 @@ use lsp_types::{Position, Range, SymbolKind};
 use serde_json::{Value, json};
 use std::path::Path;
 
+mod outline;
 mod views;
 
 pub struct RustAnalyzer;
@@ -81,6 +82,16 @@ impl Adapter for RustAnalyzer {
         vec!["utf-8", "utf-16"]
     }
 
+    /// rust-analyzer nests a method under an `impl` node, not under the type
+    /// it is written for: the node is named `impl Config`, `impl Label for
+    /// Config` or `impl<T> Wrapper<T>`, and its selection range names the
+    /// type — the container its `workspace/symbol` reports for the methods
+    /// under it. [`outline`] parses that header and compares the self type it
+    /// names with the range exactly; an ordinary name is its own container.
+    fn outline_container(&self, name: &str, selected: &str) -> Option<String> {
+        outline::container(name, selected)
+    }
+
     fn readiness_policy(&self) -> Box<dyn ReadinessPolicy> {
         Box::new(Quiescence::default())
     }
@@ -144,6 +155,42 @@ mod tests {
 
     fn status(quiescent: bool) -> Value {
         json!({ "health": "ok", "quiescent": quiescent })
+    }
+
+    /// The seam the resolution layer calls, through the real adapter: an
+    /// ordinary name is its own container, an impl node's is the self type
+    /// its header names, and nothing else is a container at all. The parse
+    /// itself is covered in [`outline`]'s tests.
+    #[test]
+    fn the_container_rule_is_exact_and_never_a_substring() {
+        let adapter = RustAnalyzer;
+        assert_eq!(
+            adapter.outline_container("Config", "Config"),
+            Some("Config".to_string())
+        );
+        assert_eq!(
+            adapter.outline_container("implementation", "implementation"),
+            Some("implementation".to_string()),
+            "an ordinary name beginning `impl` still matches itself"
+        );
+        assert_eq!(
+            adapter.outline_container("impl Label for Config", "Config"),
+            Some("Config".to_string())
+        );
+        for (name, selected) in [
+            ("Config", "Other"),
+            ("OtherItem", "Item"),
+            ("implementation", "mentation"),
+            ("impl Label for Config", "Label"),
+            ("impl<T> Wrapper<T>", "T"),
+            ("impl crate::config::Config", "Config"),
+        ] {
+            assert_eq!(
+                adapter.outline_container(name, selected),
+                None,
+                "{name} selecting {selected} must not be a container"
+            );
+        }
     }
 
     #[test]

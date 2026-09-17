@@ -59,9 +59,10 @@ pub struct Uses {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
 
-    /// A file or directory under the workspace root, relative to it: a
-    /// scope for `symbol`, or the file an `anchor` is quoted from. A file
-    /// also picks the language server for it.
+    /// A file or directory under the workspace root, relative to it. A file
+    /// nominates `symbol` from that file's own outline rather than the
+    /// workspace index, and picks its language server; a directory narrows
+    /// the index. With `anchor`, the file the quoted text is in.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub path: Option<String>,

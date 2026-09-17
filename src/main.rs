@@ -42,9 +42,10 @@ apart heuristically; action previews and applies a rename, following \
 identity across files. Target by name (`symbol`, bare or qualified by its \
 container: `Config::new`) or by quoting source text (`anchor` from the file \
 `path`, `focus` naming the token), which reaches locals and call sites. \
-Candidates come from the language servers' fuzzy symbol index and are not \
-proven exhaustive; only exact names resolve, and several distinct definitions \
-are listed rather than picked. References follow symbol identity, not text. \
+Candidates come from the language servers' fuzzy symbol index (bounded, \
+not proven exhaustive) or, when `path` names a file, from that file's own \
+outline; neither is proven exhaustive. Only exact names resolve, and several \
+distinct definitions are listed rather than picked. \
 Every answer is current: owned files are re-synced from disk and the servers \
 are waited for before each query. The workspace root is fixed at server \
 start; `path` only scopes inside it.";

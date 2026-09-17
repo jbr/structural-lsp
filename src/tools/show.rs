@@ -46,10 +46,11 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// macro expansion at the focus) and `related-tests` (rust-analyzer, with
 /// the cargo command for each).
 ///
-/// Candidates come from the language servers' fuzzy symbol index (not
-/// proven exhaustive); only exact-name matches resolve, and several distinct
+/// Candidates come from the language servers' fuzzy symbol index, or — for
+/// a `path` naming a file — from that file's own outline; neither is proven
+/// exhaustive. Only exact-name matches resolve, and several distinct
 /// definitions are listed rather than picked. A qualifier (`Config::new`)
-/// narrows by the container the server reports. The answer is current:
+/// narrows by the container the symbol sits in.
 /// owned files are re-synced from disk and the servers are waited for
 /// before every query. The workspace root is fixed at server start.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
@@ -61,9 +62,10 @@ pub struct Show {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
 
-    /// A file or directory under the workspace root, relative to it: a
-    /// scope for `symbol`, or the file an `anchor` is quoted from. A file
-    /// also picks the language server for it.
+    /// A file or directory under the workspace root, relative to it. A file
+    /// nominates `symbol` from that file's own outline rather than the
+    /// workspace index, and picks its language server; a directory narrows
+    /// the index. With `anchor`, the file the quoted text is in.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub path: Option<String>,

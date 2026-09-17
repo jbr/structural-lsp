@@ -181,6 +181,26 @@ pub trait Adapter: Send + Sync {
         Vec::new()
     }
 
+    /// The **container** a symbol's enclosing outline node gives it, from
+    /// that node's advertised `name` and the text `selected` at its
+    /// selection range, or `None` when this server's outline gives no
+    /// container for such a node.
+    ///
+    /// The default is an ordinary symbol: its selection range names the
+    /// symbol itself, so the advertised name is the container and any other
+    /// text is a disagreement this cannot resolve. A server whose outline
+    /// nests a method under a node that names something besides itself
+    /// (rust-analyzer's `impl Config`, whose range names `Config`) overrides
+    /// this with the rule its own outline follows.
+    ///
+    /// A container is only ever the qualifier filter's input, so an
+    /// unrecognized shape must yield `None` or a name the server itself
+    /// reports — never a substring of the ancestor's name that happens to
+    /// look plausible.
+    fn outline_container(&self, name: &str, selected: &str) -> Option<String> {
+        (name == selected).then(|| name.to_string())
+    }
+
     /// The short word for a symbol kind in this server's language, for
     /// result headers and listings: `fn`, `struct`, `def`, `class`…
     fn kind_label(&self, kind: lsp_types::SymbolKind) -> &'static str {

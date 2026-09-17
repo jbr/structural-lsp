@@ -2,7 +2,12 @@
 //! anchor in a file) to one *identity*, or to a listing that says why
 //! there is not one.
 //!
-//! Identity, not names: `workspace/symbol` only *nominates*. Every exact
+//! Identity, not names: candidates only *nominate*. A bare name, or a
+//! `path` naming a directory, is nominated from the servers'
+//! `workspace/symbol`; a `path` naming a file is nominated from that file's
+//! own outline ([`file_scope`]) instead, so its candidates are the file's
+//! own symbols rather than a sample of a bounded cross-workspace response.
+//! Every exact
 //! candidate is sent to `textDocument/definition`, and the results are
 //! deduplicated by target — hits that navigate to the same place are one
 //! thing; hits that navigate to different places are listed as ambiguous,
@@ -39,6 +44,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 pub mod anchored;
+pub mod file_scope;
 pub mod qualify;
 
 /// What the filters excluded, carried to the listings.
@@ -116,7 +122,7 @@ fn resolve_symbol(
     let selected = state.select(scope.as_deref())?;
 
     let (exact, fuzzy, exclusions) =
-        discover(state, &selected, &qualified.name, root, scope.as_deref())?;
+        nominate(state, &selected, &qualified.name, root, scope.as_deref())?;
     let (exact, unqualified) = qualify::filter(exact, &qualified.qualifiers);
     if exact.is_empty() {
         let labels = |server: &str, kind: SymbolKind| kind_label(state, server, kind);
@@ -168,6 +174,33 @@ fn finish(
             &identity.origin.location,
         ))),
     }
+}
+
+/// Nominate candidates for the bare name: from a named file's own outline,
+/// when `path` names a file and that outline names the symbol; otherwise
+/// from the servers' symbol index, narrowed to the scope.
+///
+/// The index is the fallback rather than the first answer because its pool
+/// is bounded and fuzzy-ordered: a file scope that consulted it first could
+/// miss a definition the file plainly declares, and the qualifier would
+/// then have nothing to narrow (`docs/resolution.md`).
+fn nominate(
+    state: &mut Workspace,
+    selected: &[usize],
+    symbol: &str,
+    root: &Path,
+    scope: Option<&Path>,
+) -> Result<(Vec<Candidate>, Vec<Candidate>, Exclusions)> {
+    if let Some(file) = scope.filter(|path| path.is_file()) {
+        let exact = file_scope::nominate(state, selected, file, symbol)?;
+        if !exact.is_empty() {
+            // The candidates are the file's own, not a sample of a bounded
+            // cross-workspace response, and no scope was consulted that
+            // could have excluded a candidate.
+            return Ok((exact, Vec::new(), Exclusions::default()));
+        }
+    }
+    discover(state, selected, symbol, root, scope)
 }
 
 /// Sync every selected server's owned documents, wait for each, and merge

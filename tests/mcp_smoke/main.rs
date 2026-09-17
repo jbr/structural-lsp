@@ -6,7 +6,9 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 
 mod configured;
+mod file_scope;
 mod identity;
+mod mock_scope;
 mod rename;
 mod responsive;
 mod servers;

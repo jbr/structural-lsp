@@ -12,9 +12,10 @@ one. Implemented in `src/tools/resolution.rs` (+ `resolution/qualify.rs`,
 
 1. **Sync** every owned document from disk.
 2. **Wait** until each queried server has no outstanding work.
-3. **Nominate** — `workspace/symbol` on the bare name, through the adapter's
-   query rewriting. Candidates are partitioned into exact / fuzzy /
-   ambiguous; only exact-name matches can resolve.
+3. **Nominate** — the bare name becomes candidates from `workspace/symbol`
+   (through the adapter's query rewriting), or, when `path` names a file,
+   from that file's own outline (below). Candidates are partitioned into
+   exact / fuzzy / ambiguous; only exact-name matches can resolve.
 4. **Navigate** — every exact candidate's file is synced, its range checked
    against the text just read, and `textDocument/definition` asked at it.
 5. **Group by target.** Candidates that navigate to the same place are one
@@ -29,20 +30,76 @@ Which servers are asked: a `path` naming a file goes to the server for that
 file's language; otherwise every running server is asked and the candidates
 are merged, with cross-server collisions tagged by the server that owns each.
 
+## Nomination
+
+`workspace/symbol` is a **bounded, fuzzy-ordered pool over the whole
+workspace**, not a complete list: rust-analyzer truncates its answer (128
+results on the version measured) after ordering the matches by its own
+fuzzy score, so a common name's later definitions are simply not in it. That
+bound is what a file scope must not depend on.
+
+A `path` that names a **file** nominates from that file's own
+`textDocument/documentSymbol` instead, in `src/tools/resolution/file_scope.rs`:
+
+- the file is synced from disk first, so the outline is the server's view of
+  the text just read, and the answer is current;
+- a symbol's identity is the **name the server advertises**
+  (`DocumentSymbol.name`), and its own selection range is only the
+  navigation point handed to the pipeline. That name is checked against the
+  text at that range **at nomination**, before the candidate can reach a
+  qualifier filter or a listing, and checked again by `definition_of` before
+  navigating — so an outline whose range holds another identifier is an
+  error on the listing paths too, never a line printed from a range the
+  server no longer matches. rust-analyzer's `impl Config` node advertises
+  `impl Config` and is therefore not a candidate at all — a query for the
+  type finds the struct node;
+- a method's **container** is each enclosing node's contribution, outermost
+  first, joined by `::` (`nested::Deep`): the spelling the symbol index
+  reports and what a qualifier filters on. What a node contributes is its
+  own server's rule (`Adapter::outline_container`, `adapter/`): an ordinary
+  symbol's range must name the symbol itself, and rust-analyzer's `impl`
+  node contributes the type its header is written for — the *self type is
+  parsed out of the advertised header* and compared with the range exactly,
+  so `impl Label for Item` contributes `Item` and not the trait, and
+  `impl<T> Wrapper<T>` contributes `Wrapper<T>` and not `T`. A shape no rule
+  recognizes is an error, never the range's text taken to be a container — a
+  wrong container selects a different definition. Rejection is conservative:
+  a range shorter than a qualified self type (`impl crate::a::Item` with a
+  range naming only `Item`) yields no container rather than a component of
+  one;
+- only the hierarchical `DocumentSymbol[]` shape nominates. The flat
+  `SymbolInformation[]` shape carries no range that names each symbol, and a
+  server without `documentSymbol`, a null outline, or an outline that names
+  nothing exactly falls back to `workspace/symbol` narrowed to the file — so
+  a file scope is never weaker than a bare name, and once it has candidates
+  no index query happens at all.
+
+A file scope's candidates are therefore the file's own symbols rather than a
+sample of a bounded cross-workspace response — not a claim that the outline
+is exhaustive: it is the server's statement about one file, and an item a
+macro generated need not be listed. A qualifier that matches none of that
+file's candidates is reported as an unqualified listing of them, never with
+whatever the index would have offered. A **directory** scope still narrows
+the bounded index, as a bare name does (`../backlog/bare-name-staleness.md`
+is the other half of that gap).
+
 ## Qualified names
 
 `Config::new`, `Config.doubled`, `pkg/Greet`. The **last** segment is the
 bare name sent to the index; the earlier segments are a *filter* over the
-exact candidates by the `containerName` the server reported — not
-language-level path resolution. rust-analyzer and pyright report the impl or
+exact candidates by the container the server reported — the `containerName`
+of an index candidate, or the enclosing symbols a file's own outline names
+([Nomination](#nomination)) — not language-level path resolution. rust-analyzer and pyright report the impl or
 class type as a method's container (`new` → `Config`) and report **nothing**
 for a free function, so a module-path qualifier (`project::project_with`)
 cannot resolve (`../backlog/module-path-qualifiers.md`). A qualifier matches
 when the container's own segments end with it.
 
-Because the qualifier filters a pool it did not widen, a common method name
-whose pool is capped by the server's fuzzy search can fail to resolve even
-though the symbol exists (`../backlog/file-scoped-lookup.md`).
+Because the qualifier filters the pool it was given, a common method name
+whose pool is the bounded `workspace/symbol` response can fail to resolve
+even though the symbol exists — in a bare-name or directory scope. A `path`
+naming a file nominates from that file's own outline instead (see
+[Nomination](#nomination)), so the qualifier narrows the file's own symbols.
 
 ## Anchors
 
