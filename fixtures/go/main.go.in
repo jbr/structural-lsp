@@ -1,0 +1,5 @@
+package scratch
+
+func Run() string {
+	return Greet("world")
+}

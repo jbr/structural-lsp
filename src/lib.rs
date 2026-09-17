@@ -3,6 +3,7 @@
 //! semantic-edit-mcp's `lib.rs` pattern.
 
 pub mod config;
+pub mod fixtures;
 pub mod host;
 pub mod lsp;
 pub mod session;

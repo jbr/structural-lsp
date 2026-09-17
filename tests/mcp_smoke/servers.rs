@@ -3,7 +3,7 @@
 //! real-server tests.
 
 use mcplease::traits::Tool;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// A scratch copy of both fixtures under one root. Not `fixtures/` itself:
 /// rust-analyzer also looks for a `Cargo.toml` in the parent directories,
@@ -12,8 +12,7 @@ use std::path::{Path, PathBuf};
 fn scratch_root() -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-both-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let fixtures = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures"));
-    crate::copy_tree(fixtures, &root);
+    crate::fixtures_in(&root, &["rust", "python"]);
     std::fs::canonicalize(root).unwrap()
 }
 

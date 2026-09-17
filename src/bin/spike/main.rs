@@ -61,10 +61,14 @@ impl Server {
         }
     }
 
-    fn fixture_dir(self) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("fixtures")
-            .join(self.slug())
+    /// Where this server's fixture tree is written for the run.
+    ///
+    /// Materialized under the run's output directory rather than read from
+    /// the repository: the trees are a specification, not resident source
+    /// (`src/fixtures.rs`), and a spike run that edits one then edits its
+    /// own copy.
+    fn fixture_dir(self, out: &Path) -> PathBuf {
+        out.join(self.slug()).join("tree")
     }
 }
 
@@ -120,10 +124,12 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
     let raw = dir.join("raw");
     fs::create_dir_all(&raw)?;
 
-    let fixture = server.fixture_dir();
-    if !fixture.is_dir() {
-        bail!("fixture directory missing: {}", fixture.display());
-    }
+    let fixture = server.fixture_dir(&options.out);
+    let _ = fs::remove_dir_all(&fixture);
+    fs::create_dir_all(&fixture)?;
+    structural::fixtures::get(server.slug())
+        .ok_or_else(|| anyhow!("no fixture for {}", server.slug()))?
+        .materialize(&fixture)?;
 
     let adapter = server.adapter();
     let argv = adapter.command();

@@ -45,6 +45,17 @@ Four defects in `src/` came out of the first two runs
 (`../journal/2026-09-17-conformance-probe-findings.md`). Pointing it at a
 new language is a candidate list and a fixture.
 
+**The fixture trees are a specification, not resident source.**
+`src/fixtures.rs` holds one `.in` file per fixture file and materializes a
+tree into a scratch directory before anything reads it; nothing reads
+`fixtures/` in place. The suffix is what keeps a Python or Go tree from
+being part of *this* repository's semantic tree, which matters as soon as
+structural is pointed at itself: discovery would find every fixture
+language and warm a server for each. A scorecard therefore records the
+fixture revision beside the server version, and
+`cargo run --bin fixtures -- ../structural-fixtures` writes the trees
+somewhere to work on by hand.
+
 **Probes come in pairs where two mechanisms can answer the same question.**
 `qualified name` and `qualified name, in file` ask for the same symbol
 through the index and through the file's outline; `bare name` and `bare

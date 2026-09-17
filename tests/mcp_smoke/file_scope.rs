@@ -10,7 +10,7 @@
 //! Gated: spawns rust-analyzer and pyright.
 
 use mcplease::traits::Tool;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Types in `src/models.rs`: enough same-named definitions in one file that
 /// a bounded symbol-index response cannot hold them all.
@@ -101,10 +101,7 @@ fn scratch_root() -> PathBuf {
     );
     std::fs::write(root.join("src/lib.rs"), lib).unwrap();
     // The Python fixture tree too, so a file scope goes through pyright.
-    crate::copy_tree(
-        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/python")),
-        &root.join("python"),
-    );
+    crate::fixtures_in(&root, &["python"]);
     std::fs::canonicalize(root).unwrap()
 }
 

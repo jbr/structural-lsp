@@ -1,0 +1,9 @@
+package scratch
+
+import "testing"
+
+func TestGreet(t *testing.T) {
+	if Greet("x") != "hello x" {
+		t.Fatal("greet")
+	}
+}

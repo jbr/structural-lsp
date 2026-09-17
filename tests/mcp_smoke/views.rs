@@ -2,13 +2,12 @@
 //! fixtures themselves), through rust-analyzer, pyright and gopls. Gated.
 
 use mcplease::traits::Tool;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn scratch_root() -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-views-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let fixtures = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures"));
-    crate::copy_tree(fixtures, &root);
+    crate::fixtures_in(&root, &["rust", "python"]);
     std::fs::canonicalize(root).unwrap()
 }
 

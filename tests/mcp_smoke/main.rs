@@ -20,25 +20,40 @@ mod targeting;
 mod views;
 use stdio_server::Server;
 
-/// Copy a fixture tree, skipping build output.
-fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            if entry.file_name() == "target" {
-                continue;
-            }
-            copy_tree(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), target).unwrap();
-        }
+/// Write the named fixtures into `root`, each under its own language
+/// directory. The trees are specifications rather than resident source
+/// (`src/fixtures.rs`), so every test builds the one it needs.
+fn fixtures_in(root: &std::path::Path, languages: &[&str]) {
+    for language in languages {
+        let fixture = structural::fixtures::get(language).expect("a known fixture");
+        fixture
+            .materialize(&root.join(language))
+            .expect("materialize the fixture");
     }
 }
 
+/// A scratch copy of one fixture, at the root rather than nested.
+fn fixture_root_at(language: &str, tag: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("structural-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    structural::fixtures::get(language)
+        .expect("a known fixture")
+        .materialize(&root)
+        .expect("materialize the fixture");
+    std::fs::canonicalize(root).unwrap()
+}
+
+/// The Rust fixture, materialized once per process.
+///
+/// Once, because several cases share it read-only and one edits it: a
+/// second materialization would silently restore a file a test had just
+/// changed, and the staleness cases would then assert against a tree that
+/// had quietly reverted underneath them.
 fn rust_fixture_root() -> PathBuf {
-    std::fs::canonicalize(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/rust")).unwrap()
+    static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| fixture_root_at("rust", "rust-fixture"))
+        .clone()
 }
 
 #[test]

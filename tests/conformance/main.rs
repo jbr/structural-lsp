@@ -15,7 +15,9 @@
 //!
 //! Each result is **one observation on the server and version that ran**,
 //! per `process/testing.md`: not validation, and not a general guarantee.
-//! The version is recorded with the score for exactly that reason.
+//! The version is recorded with the score for exactly that reason, and so
+//! is the fixture revision, because the tree is materialized from
+//! `src/fixtures.rs` rather than resident in the repository.
 //!
 //! Candidate commands come from `reference/servers-list/` — see
 //! `scripts/reduce.py installed`, which prints the argv each source
@@ -25,229 +27,16 @@
 //! cargo test --test conformance -- --ignored --nocapture
 //! ```
 
-use mcplease::traits::Tool;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod languages;
+mod probe;
 mod report;
 
-use report::{Outcome, Scorecard};
-
-/// A server worth asking, with the argv the dataset recorded for it.
-///
-/// `builtin` marks a name `structural.toml` treats as an override of a
-/// built-in adapter rather than a generic entry: the probe keeps the
-/// built-in's readiness policy and capabilities, which is what that server
-/// gets in production.
-struct Candidate {
-    name: &'static str,
-    argv: &'static [&'static str],
-    /// How to ask this server its version, when that is a different
-    /// invocation than the server itself. `pyright-langserver --version`
-    /// tries to open a connection and errors; the version lives on the
-    /// sibling `pyright` binary.
-    version_argv: &'static [&'static str],
-    builtin: bool,
-}
-
-/// The Python candidates that are installed often enough to be worth the
-/// harness. `ruff server` is deliberately absent: lsp-mode marks it an
-/// add-on, and it serves diagnostics and formatting rather than the
-/// navigation `show`/`uses`/`action` are built on.
-const PYTHON: &[Candidate] = &[
-    Candidate {
-        name: "pyright",
-        argv: &["pyright-langserver", "--stdio"],
-        version_argv: &["pyright", "--version"],
-        builtin: true,
-    },
-    Candidate {
-        name: "basedpyright",
-        argv: &["basedpyright-langserver", "--stdio"],
-        version_argv: &["basedpyright", "--version"],
-        builtin: false,
-    },
-    Candidate {
-        name: "pylsp",
-        argv: &["pylsp"],
-        version_argv: &["pylsp", "--version"],
-        builtin: false,
-    },
-    // Not installed here, but the argv is what the sources record, so the
-    // probe picks them up on a machine that has them.
-    Candidate {
-        name: "jedi",
-        argv: &["jedi-language-server"],
-        version_argv: &["jedi-language-server", "--version"],
-        builtin: false,
-    },
-    // ty's errors are structural's, not ty's: it reports the whole
-    // declaration as a symbol's range, which the spec allows and
-    // `verify_name_at` refuses (backlog/symbol-range-convention.md).
-    Candidate {
-        name: "ty",
-        argv: &["ty", "server"],
-        version_argv: &["ty", "--version"],
-        builtin: false,
-    },
-    Candidate {
-        name: "pyrefly",
-        argv: &["pyrefly", "lsp"],
-        version_argv: &["pyrefly", "--version"],
-        builtin: false,
-    },
-];
-
-/// One question structural's tools need answered, and what a right answer
-/// looks like. The name is what the scorecard prints.
-struct Probe {
-    name: &'static str,
-    needs: &'static str,
-    run: fn(&mut structural::session::Session) -> Outcome,
-}
-
-const PROBES: &[Probe] = &[
-    Probe {
-        name: "bare name",
-        needs: "workspace/symbol",
-        run: |state| {
-            let answer = show(state, Some("choose"), None, None);
-            Outcome::judge(&answer, |text| {
-                text.contains("helper.py") && text.contains("def choose")
-            })
-        },
-    },
-    Probe {
-        name: "file-scoped name",
-        needs: "documentSymbol",
-        run: |state| {
-            let answer = show(state, Some("identity"), Some("helper.py"), None);
-            Outcome::judge(&answer, |text| text.contains("def identity"))
-        },
-    },
-    Probe {
-        name: "qualified name",
-        needs: "outline containers",
-        run: |state| {
-            let answer = show(state, Some("Config.doubled"), None, None);
-            Outcome::judge(&answer, |text| text.contains("def doubled"))
-        },
-    },
-    Probe {
-        // The same qualifier, resolved from the file's own outline instead
-        // of the index. `workspace/symbol` carries one optional
-        // `containerName`, and several servers leave it empty or name the
-        // module; `documentSymbol` nests, so the class is structural in the
-        // reply rather than a field a server may omit. A `no` on the
-        // previous column and a `yes` here says the container is missing
-        // from the *index*, which is a catalogue fact about the server and
-        // not a limit of qualified names.
-        name: "qualified name, in file",
-        needs: "outline nesting",
-        run: |state| {
-            let answer = show(state, Some("Config.doubled"), Some("helper.py"), None);
-            Outcome::judge(&answer, |text| text.contains("def doubled"))
-        },
-    },
-    Probe {
-        name: "cross-file uses",
-        needs: "references",
-        run: |state| {
-            let answer = uses(state, "choose");
-            // The definition is in helper.py and the only call is in
-            // main.py: a server that reports just the definition has not
-            // searched the project.
-            Outcome::judge(&answer, |text| text.contains("main.py"))
-        },
-    },
-    Probe {
-        name: "anchor to a local",
-        needs: "definition at a position",
-        run: |state| {
-            let answer = show(
-                state,
-                None,
-                Some("main.py"),
-                Some(("count = config.doubled()", "doubled")),
-            );
-            Outcome::judge(&answer, |text| text.contains("def doubled"))
-        },
-    },
-    Probe {
-        name: "rename preview",
-        needs: "rename WorkspaceEdit",
-        run: |state| {
-            let answer = rename_preview(state, "choose", "pick");
-            // Two files, because the call site is in the other one. A
-            // rename that rewrites only the definition would break the
-            // caller's code.
-            Outcome::judge(&answer, |text| {
-                text.contains("helper.py") && text.contains("main.py")
-            })
-        },
-    },
-    Probe {
-        name: "bare name, warm",
-        needs: "workspace/symbol after a file is open",
-        run: |state| {
-            // The same query as the first probe, run last. The probes share
-            // one session, so by here every fixture file has been opened by
-            // some earlier query. A `no` on the cold probe and a `yes` here
-            // says the server's symbol index is empty until a file is
-            // opened — a different catalogue fact from "cannot serve
-            // workspace/symbol", and the same shape as
-            // `backlog/bare-name-staleness.md`.
-            let answer = show(state, Some("choose"), None, None);
-            Outcome::judge(&answer, |text| {
-                text.contains("helper.py") && text.contains("def choose")
-            })
-        },
-    },
-];
-
-fn show(
-    state: &mut structural::session::Session,
-    symbol: Option<&str>,
-    path: Option<&str>,
-    anchor: Option<(&str, &str)>,
-) -> anyhow::Result<String> {
-    structural::tools::Show {
-        symbol: symbol.map(str::to_string),
-        path: path.map(str::to_string),
-        anchor: anchor.map(|(text, _)| text.to_string()),
-        focus: anchor.map(|(_, focus)| focus.to_string()),
-        view: None,
-    }
-    .execute(state, &mcplease::types::RequestContext::default())
-}
-
-fn uses(state: &mut structural::session::Session, symbol: &str) -> anyhow::Result<String> {
-    structural::tools::Uses {
-        symbol: Some(symbol.to_string()),
-        path: None,
-        anchor: None,
-        focus: None,
-    }
-    .execute(state, &mcplease::types::RequestContext::default())
-}
-
-fn rename_preview(
-    state: &mut structural::session::Session,
-    symbol: &str,
-    new_name: &str,
-) -> anyhow::Result<String> {
-    structural::tools::Action {
-        action: "rename".to_string(),
-        symbol: Some(symbol.to_string()),
-        path: None,
-        anchor: None,
-        focus: None,
-        new_name: Some(new_name.to_string()),
-        mode: None,
-        digest: None,
-    }
-    .execute(state, &mcplease::types::RequestContext::default())
-}
+use languages::{go::GO, python::PYTHON, rust::RUST};
+use probe::{Candidate, Language};
+use report::Scorecard;
 
 /// Whether a candidate is on `PATH`, and whether it will start.
 ///
@@ -330,23 +119,30 @@ fn quoted(what: &str) -> String {
     format!("\"{}\"", what.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-/// A scratch copy of the Python fixture with exactly one server configured.
+/// The language's fixture tree with exactly one server configured.
 ///
 /// The other built-ins are pointed at commands that do not exist: built-ins
 /// are on by default, and a second server answering the same names would
 /// make every probe ambiguous rather than measuring the one under test.
-fn scratch_root(candidate: &Candidate) -> PathBuf {
+fn scratch_root(language: &Language, candidate: &Candidate) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "structural-conformance-{}-{}",
+        "structural-conformance-{}-{}-{}",
+        language.name,
         candidate.name,
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
-    let fixtures = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/python"));
-    for entry in std::fs::read_dir(fixtures).unwrap() {
-        let entry = entry.unwrap();
-        std::fs::copy(entry.path(), root.join(entry.file_name())).unwrap();
+    structural::fixtures::get(language.fixture)
+        .expect("a known fixture")
+        .materialize(&root)
+        .unwrap();
+    for (path, text) in language.extra_files {
+        let target = root.join(path);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(target, text).unwrap();
     }
 
     let command = candidate
@@ -363,23 +159,37 @@ fn scratch_root(candidate: &Candidate) -> PathBuf {
         ));
     } else {
         toml.push_str(&format!(
-            "[servers.{}]\ncommand = [{command}]\nlanguages = [\"python\"]\n\n",
-            candidate.name
+            "[servers.{}]\ncommand = [{command}]\nlanguages = [\"{}\"]\n\n",
+            candidate.name, language.name
         ));
-        toml.push_str("[servers.pyright]\ncommand = [\"/nonexistent/pyright\"]\n\n");
     }
-    toml.push_str("[servers.rust-analyzer]\ncommand = [\"/nonexistent/rust-analyzer\"]\n");
+    for builtin in ["pyright", "rust-analyzer"] {
+        if builtin != candidate.name {
+            toml.push_str(&format!(
+                "[servers.{builtin}]\ncommand = [\"/nonexistent/{builtin}\"]\n\n"
+            ));
+        }
+    }
     std::fs::write(root.join("structural.toml"), toml).unwrap();
     std::fs::canonicalize(root).unwrap()
 }
 
-#[test]
-#[ignore = "spawns every installed Python server; run explicitly with -- --ignored --nocapture"]
-fn python_servers_answer_structurals_questions() {
-    let mut scorecard = Scorecard::new("python", PROBES.iter().map(|p| p.name).collect());
+/// Ask every installed candidate of one language every probe, and print the
+/// scorecard.
+///
+/// Asserts only that something was probed. A server that answers nothing is
+/// a finding to read; a run that probed no server at all means the harness
+/// did not work.
+fn measure(language: &Language) {
+    let fixture = structural::fixtures::get(language.fixture).expect("a known fixture");
+    let mut scorecard = Scorecard::new(
+        language.name,
+        language.probes.iter().map(|probe| probe.name).collect(),
+        fixture.revision(),
+    );
     let mut probed = 0;
 
-    for candidate in PYTHON {
+    for candidate in language.candidates {
         match reach(candidate.argv) {
             Reach::NotFound => {
                 scorecard.absent(candidate.name, candidate.argv.join(" "), None);
@@ -392,9 +202,13 @@ fn python_servers_answer_structurals_questions() {
             Reach::Runnable => {}
         }
         probed += 1;
-        let root = scratch_root(candidate);
+        let root = scratch_root(language, candidate);
         let mut state = structural::session::Session::new(root.clone());
-        let outcomes = PROBES.iter().map(|probe| (probe.run)(&mut state)).collect();
+        let outcomes = language
+            .probes
+            .iter()
+            .map(|probe| (probe.run)(&mut state))
+            .collect();
         scorecard.scored(
             candidate.name,
             candidate.argv.join(" "),
@@ -407,14 +221,30 @@ fn python_servers_answer_structurals_questions() {
 
     print!(
         "{}",
-        scorecard.render(PROBES.iter().map(|p| p.needs).collect())
+        scorecard.render(language.probes.iter().map(|probe| probe.needs).collect())
     );
 
-    // The harness is what is asserted, not the scores: a server that
-    // answers nothing is a finding to read, not a failure. Only a run that
-    // probed no server at all means the harness itself did not work.
     assert!(
         probed > 0,
-        "no candidate was on PATH; the probe measured nothing"
+        "no {} candidate was on PATH; the probe measured nothing",
+        language.name
     );
+}
+
+#[test]
+#[ignore = "spawns every installed Python server; run explicitly with -- --ignored --nocapture"]
+fn python_servers_answer_structurals_questions() {
+    measure(&PYTHON);
+}
+
+#[test]
+#[ignore = "spawns rust-analyzer; run explicitly with -- --ignored --nocapture"]
+fn rust_servers_answer_structurals_questions() {
+    measure(&RUST);
+}
+
+#[test]
+#[ignore = "spawns gopls; run explicitly with -- --ignored --nocapture"]
+fn go_servers_answer_structurals_questions() {
+    measure(&GO);
 }

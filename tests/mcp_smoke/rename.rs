@@ -2,7 +2,7 @@
 //! touches the fixtures). Gated: spawns rust-analyzer and pyright.
 
 use mcplease::traits::Tool;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Both fixtures under one root, the Rust one with a second module so a
 /// module rename has a file to move. One root per `tag`: these tests run in
@@ -12,8 +12,7 @@ use std::path::{Path, PathBuf};
 fn scratch_root(tag: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-rename-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let fixtures = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures"));
-    crate::copy_tree(fixtures, &root);
+    crate::fixtures_in(&root, &["rust", "python"]);
     let lib = root.join("rust/src/lib.rs");
     let text = std::fs::read_to_string(&lib).unwrap();
     std::fs::write(

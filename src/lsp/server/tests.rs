@@ -15,10 +15,11 @@ fn scratch_fixture(tag: &str) -> std::path::PathBuf {
     let base =
         std::env::temp_dir().join(format!("structural-session-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(base.join("src")).unwrap();
-    let manifest = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/rust");
-    std::fs::copy(format!("{manifest}/Cargo.toml"), base.join("Cargo.toml")).unwrap();
-    std::fs::copy(format!("{manifest}/src/lib.rs"), base.join("src/lib.rs")).unwrap();
+    std::fs::create_dir_all(&base).unwrap();
+    crate::fixtures::get("rust")
+        .expect("the rust fixture")
+        .materialize(&base)
+        .unwrap();
     base
 }
 

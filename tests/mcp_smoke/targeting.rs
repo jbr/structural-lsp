@@ -3,15 +3,14 @@
 //! pyright.
 
 use mcplease::traits::Tool;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Both fixtures under one root, plus a second type with a `new` in the
 /// Rust one so the bare name is ambiguous.
 fn scratch_root() -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-target-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let fixtures = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures"));
-    crate::copy_tree(fixtures, &root);
+    crate::fixtures_in(&root, &["rust", "python"]);
     let lib = root.join("rust/src/lib.rs");
     let mut text = std::fs::read_to_string(&lib).unwrap();
     text.push_str("\npub struct Other;\n\nimpl Other {\n    pub fn new() -> Self {\n        Other\n    }\n}\n");

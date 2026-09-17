@@ -9,26 +9,10 @@ fn scratch_module() -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-gopls-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(
-        root.join("go.mod"),
-        "module example.com/scratch\n\ngo 1.21\n",
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("greet.go"),
-        "package scratch\n\n// Greet says hello.\nfunc Greet(name string) string {\n\treturn \"hello \" + name\n}\n",
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("main.go"),
-        "package scratch\n\nfunc Run() string {\n\treturn Greet(\"world\")\n}\n",
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("greet_test.go"),
-        "package scratch\n\nimport \"testing\"\n\nfunc TestGreet(t *testing.T) {\n\tif Greet(\"x\") != \"hello x\" {\n\t\tt.Fatal(\"greet\")\n\t}\n}\n",
-    )
-    .unwrap();
+    structural::fixtures::get("go")
+        .expect("the go fixture")
+        .materialize(&root)
+        .unwrap();
     std::fs::write(
         root.join("structural.toml"),
         "[servers.gopls]\ncommand = [\"gopls\"]\nlanguages = [\"go\"]\n",

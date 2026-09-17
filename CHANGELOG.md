@@ -10,6 +10,10 @@ change, see [`journal/`](journal/); for what is left, see
 ## [Unreleased]
 
 ### Added
+- **Rust and Go conformance columns** (process/testing.md): the probe is per-language — rust-analyzer answers 8/8, gopls 6/8, and the Go failures are `backlog/server-spelled-qualified-names.md`.
+
+- **Fixtures as a specification** (src/fixtures.rs): the trees are checked in as `.in` text and materialized into scratch directories rather than living in the repository, so structural pointed at itself sees one language; `cargo run --bin fixtures -- <dir>` writes them out to work on by hand.
+
 - **Qualified-name scope note** (docs/resolution.md): a qualified name that missed the symbol index says that naming the declaring file in `path` resolves the qualifier from that file's outline — the index carries at most one `containerName` per symbol and several servers report none, where `documentSymbol` nests.
 
 - **Paired probe columns** (process/testing.md): `qualified name, in file` alongside `qualified name`, so a failing cell localizes to the index or the outline rather than being ambiguous between the server and this code.

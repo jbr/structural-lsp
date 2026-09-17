@@ -76,14 +76,20 @@ enum Row {
 pub struct Scorecard {
     language: String,
     probes: Vec<&'static str>,
+    /// The fixture tree the probes ran against
+    /// (`structural::fixtures::Fixture::revision`). The trees are
+    /// materialized rather than resident, so a score names the tree it
+    /// measured the same way it names the server version.
+    fixture: String,
     rows: Vec<Row>,
 }
 
 impl Scorecard {
-    pub fn new(language: &str, probes: Vec<&'static str>) -> Self {
+    pub fn new(language: &str, probes: Vec<&'static str>, fixture: String) -> Self {
         Scorecard {
             language: language.to_string(),
             probes,
+            fixture,
             rows: Vec::new(),
         }
     }
@@ -113,6 +119,11 @@ impl Scorecard {
              (process/testing.md). What a server advertises is not measured \
              here; what it answered is.\n\n",
         );
+        text.push_str(&format!(
+            "Fixture tree: `{}` · revision `{}` (materialized from \
+             src/fixtures.rs, not resident in the repository).\n\n",
+            self.language, self.fixture
+        ));
 
         text.push_str("| probe | needs |");
         for row in &self.rows {

@@ -1,0 +1,97 @@
+//! What a language is, for the probe: the servers worth asking, the tree to
+//! ask about, and the questions.
+//!
+//! The types are here and the answers are in `languages/`, one module per
+//! language, so adding a language is a data change against a harness that
+//! does not move.
+
+use crate::report::Outcome;
+use mcplease::traits::Tool;
+
+/// A server worth asking, with the argv the dataset recorded for it.
+///
+/// `builtin` marks a name `structural.toml` treats as an override of a
+/// built-in adapter rather than a generic entry: the probe keeps the
+/// built-in's readiness policy and capabilities, which is what that server
+/// gets in production.
+pub struct Candidate {
+    pub name: &'static str,
+    pub argv: &'static [&'static str],
+    /// How to ask this server its version, when that is a different
+    /// invocation than the server itself. `pyright-langserver --version`
+    /// tries to open a connection and errors; the version lives on the
+    /// sibling `pyright` binary.
+    pub version_argv: &'static [&'static str],
+    pub builtin: bool,
+}
+
+/// One question structural's tools need answered, and what a right answer
+/// looks like. The name is what the scorecard prints.
+pub struct Probe {
+    pub name: &'static str,
+    pub needs: &'static str,
+    pub run: fn(&mut structural::session::Session) -> Outcome,
+}
+
+/// A language's candidates, tree and questions.
+pub struct Language {
+    /// The name the scorecard prints and `structural.toml` configures.
+    pub name: &'static str,
+    /// The fixture in `src/fixtures.rs` this language is probed against.
+    pub fixture: &'static str,
+    /// Files added to that fixture for the probe alone, as
+    /// `(path, contents)`.
+    ///
+    /// The shared fixtures are asserted against by the smoke tests down to
+    /// reference counts and line numbers, so a probe that needs one more
+    /// call site adds it to its own scratch tree rather than to the tree
+    /// four other tests measure. `rename.rs` writes its doc-link site the
+    /// same way.
+    pub extra_files: &'static [(&'static str, &'static str)],
+    pub candidates: &'static [Candidate],
+    pub probes: &'static [Probe],
+}
+
+pub fn show(
+    state: &mut structural::session::Session,
+    symbol: Option<&str>,
+    path: Option<&str>,
+    anchor: Option<(&str, &str)>,
+) -> anyhow::Result<String> {
+    structural::tools::Show {
+        symbol: symbol.map(str::to_string),
+        path: path.map(str::to_string),
+        anchor: anchor.map(|(text, _)| text.to_string()),
+        focus: anchor.map(|(_, focus)| focus.to_string()),
+        view: None,
+    }
+    .execute(state, &mcplease::types::RequestContext::default())
+}
+
+pub fn uses(state: &mut structural::session::Session, symbol: &str) -> anyhow::Result<String> {
+    structural::tools::Uses {
+        symbol: Some(symbol.to_string()),
+        path: None,
+        anchor: None,
+        focus: None,
+    }
+    .execute(state, &mcplease::types::RequestContext::default())
+}
+
+pub fn rename_preview(
+    state: &mut structural::session::Session,
+    symbol: &str,
+    new_name: &str,
+) -> anyhow::Result<String> {
+    structural::tools::Action {
+        action: "rename".to_string(),
+        symbol: Some(symbol.to_string()),
+        path: None,
+        anchor: None,
+        focus: None,
+        new_name: Some(new_name.to_string()),
+        mode: None,
+        digest: None,
+    }
+    .execute(state, &mcplease::types::RequestContext::default())
+}
