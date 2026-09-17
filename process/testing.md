@@ -100,6 +100,19 @@ coverage only when the unit that makes it hold has validated it per server,
 with wording that says what was observed. When that unit ships, drop the
 case's feature gate; the backlog entry goes with the unit.
 
+## Standing failures
+
+`cargo test -- --ignored` has one: the identity acceptance, which runs
+against this repository and asserts `resolve` is one thing, while
+`reference/servers-list/scripts/` now also defines it in Python. The answer
+is correct and the expectation is stale
+(`../backlog/identity-test-uses-the-repo.md`). Two `stdio_mcp_*` cases also
+fail under the default thread count and pass with `--test-threads=1`; that
+is contention, not a defect.
+
+Both are worth knowing before reading a red suite, and neither should be
+allowed to stay: a suite with known failures cannot show a new one.
+
 ## Understood flakes
 
 The handle tests need a Python 3 that starts fast; `python3` behind a

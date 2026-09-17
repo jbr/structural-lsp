@@ -86,8 +86,9 @@ impl Adapter for RustAnalyzer {
     /// it is written for: the node is named `impl Config`, `impl Label for
     /// Config` or `impl<T> Wrapper<T>`, and its selection range names the
     /// type — the container its `workspace/symbol` reports for the methods
-    /// under it. [`outline`] parses that header and compares the self type it
-    /// names with the range exactly; an ordinary name is its own container.
+    /// under it. The sibling `outline` module parses that header and
+    /// compares the self type it names with the range exactly; an ordinary
+    /// name is its own container.
     fn outline_container(&self, name: &str, selected: &str) -> Option<String> {
         outline::container(name, selected)
     }
