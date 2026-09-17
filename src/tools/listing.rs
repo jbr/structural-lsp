@@ -59,6 +59,25 @@ pub fn header(kind_label: Option<&str>, name: &str, location: &str) -> String {
     }
 }
 
+/// What to say when a qualified name found nothing in the index, and no
+/// file scope was in effect.
+///
+/// `workspace/symbol` carries one optional `containerName`, and a server is
+/// conforming whether it names the class, names the module, or omits it:
+/// ty reports none, jedi indexes no class members at all, and pylsp has no
+/// index. `documentSymbol` nests instead, so a `path` naming the declaring
+/// file resolves the same qualifier from the file's own outline — every
+/// server the conformance probe asks answers it that way
+/// (`docs/resolution.md`). Empty when the caller already gave a scope, or
+/// when the name carried no qualifier and there is nothing to relocate.
+pub fn qualifier_scope_note(qualified: &Qualified, scoped: bool) -> &'static str {
+    if qualified.qualifiers.is_empty() || scoped {
+        ""
+    } else {
+        "note: the symbol index carries at most one container per symbol, and some servers report none; naming the declaring file in `path` resolves the qualifier from that file's outline instead\n"
+    }
+}
+
 /// Exact hits by name, none in a container matching the qualifier: listed
 /// with the containers the server reported, so the qualifier can be fixed.
 pub fn render_unqualified(

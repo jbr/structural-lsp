@@ -10,6 +10,10 @@ change, see [`journal/`](journal/); for what is left, see
 ## [Unreleased]
 
 ### Added
+- **Qualified-name scope note** (docs/resolution.md): a qualified name that missed the symbol index says that naming the declaring file in `path` resolves the qualifier from that file's outline — the index carries at most one `containerName` per symbol and several servers report none, where `documentSymbol` nests.
+
+- **Paired probe columns** (process/testing.md): `qualified name, in file` alongside `qualified name`, so a failing cell localizes to the index or the outline rather than being ambiguous between the server and this code.
+
 - **Conformance probe** (process/testing.md): `tests/conformance/` asks every installed server of a language the questions `show`, `uses` and `action` need, and prints a scorecard with each server's version — what it answered, not what it advertises.
 
 - **Bare-name staleness regression** (process/testing.md): feature-gated pending acceptance — an unopened-file edit and a newly-created file, each followed immediately by a bare-name query — observed failing on rust-analyzer, with the currentness wording qualified to match the implementation (docs/correctness.md).

@@ -134,6 +134,22 @@ const PROBES: &[Probe] = &[
         },
     },
     Probe {
+        // The same qualifier, resolved from the file's own outline instead
+        // of the index. `workspace/symbol` carries one optional
+        // `containerName`, and several servers leave it empty or name the
+        // module; `documentSymbol` nests, so the class is structural in the
+        // reply rather than a field a server may omit. A `no` on the
+        // previous column and a `yes` here says the container is missing
+        // from the *index*, which is a catalogue fact about the server and
+        // not a limit of qualified names.
+        name: "qualified name, in file",
+        needs: "outline nesting",
+        run: |state| {
+            let answer = show(state, Some("Config.doubled"), Some("helper.py"), None);
+            Outcome::judge(&answer, |text| text.contains("def doubled"))
+        },
+    },
+    Probe {
         name: "cross-file uses",
         needs: "references",
         run: |state| {

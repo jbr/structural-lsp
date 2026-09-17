@@ -16,8 +16,9 @@ cargo test --test conformance -- --ignored --nocapture   # the scorecard
 `tests/conformance/` is a measurement harness rather than a regression
 suite. It asks every installed server of a language the questions `show`,
 `uses` and `action` need — bare-name lookup, a file-scoped name, a
-qualified name, cross-file references, an anchor to a local, a rename
-preview — and prints a scorecard. It asserts only that it probed something:
+qualified name through the index and through a file's outline, cross-file
+references, an anchor to a local, a rename preview — and prints a
+scorecard. It asserts only that it probed something:
 **a low score is the finding, not a failure**, and a run that fails means
 the harness broke.
 
@@ -43,6 +44,17 @@ non-executable file all pass a lookup. Even `runnable` is not availability
 Four defects in `src/` came out of the first two runs
 (`../journal/2026-09-17-conformance-probe-findings.md`). Pointing it at a
 new language is a candidate list and a fixture.
+
+**Probes come in pairs where two mechanisms can answer the same question.**
+`qualified name` and `qualified name, in file` ask for the same symbol
+through the index and through the file's outline; `bare name` and `bare
+name, warm` ask the identical query cold and after a file is open. A column
+that differs between a pair localizes the finding to one mechanism, which a
+single column cannot: three servers fail the first qualified probe and all
+six pass the second, so what is missing is `containerName` in the index and
+not qualified names (`../docs/resolution.md`). A pair is worth adding
+whenever a `no` would otherwise be ambiguous between the server and this
+code.
 
 ## Tests are the instrument, not a formality
 

@@ -34,8 +34,8 @@ use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::tools::listing::{
-    AmbiguousEntry, location_line, render_ambiguous, render_fuzzy, render_not_found,
-    render_null_definition, render_unqualified,
+    AmbiguousEntry, location_line, qualifier_scope_note, render_ambiguous, render_fuzzy,
+    render_not_found, render_null_definition, render_unqualified,
 };
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
@@ -126,13 +126,15 @@ fn resolve_symbol(
     let (exact, unqualified) = qualify::filter(exact, &qualified.qualifiers);
     if exact.is_empty() {
         let labels = |server: &str, kind: SymbolKind| kind_label(state, server, kind);
-        return Ok(Resolved::Listed(if !unqualified.is_empty() {
+        let mut listed = if !unqualified.is_empty() {
             render_unqualified(root, &qualified, &unqualified, &labels)
         } else if fuzzy.is_empty() {
             render_not_found(&display, exclusions)
         } else {
             render_fuzzy(root, &display, &fuzzy, &labels, exclusions)
-        }));
+        };
+        listed.push_str(qualifier_scope_note(&qualified, scope.is_some()));
+        return Ok(Resolved::Listed(listed));
     }
 
     // Nomination is not identity: ask each exact candidate's server where

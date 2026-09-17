@@ -229,9 +229,19 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     );
 
     // Without the path there is only the index, and it knows nothing about
-    // the name: the file scope is what resolved it.
+    // the name: the file scope is what resolved it, and the miss says so
+    // rather than leaving the caller to discover the scope.
     let bare = ok(show(&mut state, Some("Tool::new"), None));
-    assert_eq!(bare, "no symbol named 'Tool::new'\n");
+    assert_eq!(
+        bare,
+        "no symbol named 'Tool::new'\n\
+         note: the symbol index carries at most one container per symbol, and some servers report none; naming the declaring file in `path` resolves the qualifier from that file's outline instead\n"
+    );
+
+    // The note is for a qualifier the index could not narrow. A bare name
+    // that missed has nothing to relocate, so it does not carry it.
+    let unqualified_miss = ok(show(&mut state, Some("Absent"), None));
+    assert_eq!(unqualified_miss, "no symbol named 'Absent'\n");
 
     // A qualifier the file's own symbols do not carry is listed from those
     // symbols, not substituted from the index.

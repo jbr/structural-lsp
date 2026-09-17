@@ -44,7 +44,9 @@ fn is_impl_header(name: &str) -> bool {
 /// carries a body or more than one item is not read as a header at all.
 fn impl_self_type(name: &str) -> Option<String> {
     let mut parser = Parser::new();
-    parser.set_language(&tree_sitter_rust::LANGUAGE.into()).ok()?;
+    parser
+        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .ok()?;
     let source = format!("{name} {{}}");
     let tree = parser.parse(&source, None)?;
     let root = tree.root_node();
@@ -135,10 +137,7 @@ mod tests {
         );
         assert_eq!(container("implementation", "mentation"), None);
         assert_eq!(container("impls", "impls"), Some("impls".to_string()));
-        assert_eq!(
-            container("Config", "Config"),
-            Some("Config".to_string())
-        );
+        assert_eq!(container("Config", "Config"), Some("Config".to_string()));
         assert_eq!(container("Config", "Other"), None);
     }
 

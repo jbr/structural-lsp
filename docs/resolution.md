@@ -111,6 +111,19 @@ even though the symbol exists — in a bare-name or directory scope. A `path`
 naming a file nominates from that file's own outline instead (see
 [Nomination](#nomination)), so the qualifier narrows the file's own symbols.
 
+The index is the weaker of the two pools for a qualifier, and by the
+protocol rather than by implementation quality: `SymbolInformation` carries
+**one optional `containerName`**, and what a server puts there is its own
+choice. Of the six Python servers the conformance probe asks
+(`../process/testing.md`), pyright and basedpyright name the class, jedi
+names the *module* and indexes no class members at all, ty reports no
+container for any symbol, and pylsp serves no index. `DocumentSymbol`
+nests instead, so the container is the reply's shape rather than a field a
+server may omit — and every one of those six resolves `Config.doubled`
+once `path` names the declaring file. A qualified name that misses the
+index therefore carries a `note:` saying so, because the caller cannot see
+which of the two pools answered.
+
 ## Anchors
 
 An anchor is source text quoted verbatim from `path`, and `focus` is the
