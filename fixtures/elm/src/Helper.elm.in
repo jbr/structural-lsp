@@ -1,0 +1,24 @@
+module Helper exposing (Config, choose, doubled, identity)
+
+
+type alias Config =
+    { limit : Int }
+
+
+doubled : Config -> Int
+doubled config =
+    config.limit * 2
+
+
+choose : Bool -> Int
+choose flag =
+    if flag then
+        1
+
+    else
+        2
+
+
+identity : Int -> Int
+identity value =
+    value

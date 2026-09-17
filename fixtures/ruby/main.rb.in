@@ -1,0 +1,11 @@
+require_relative "helper"
+
+def make
+  config = Config.new(DEFAULT_LIMIT)
+  count = config.doubled
+  count = identity(count)
+  offset = choose(true)
+  total = count + offset
+  label = Label.new.label
+  "#{label}: #{total}"
+end

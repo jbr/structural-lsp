@@ -1,0 +1,18 @@
+-module(helper).
+
+-export([choose/1, identity/1, doubled/1]).
+
+%% Pick one of two integers.
+choose(Flag) ->
+    case Flag of
+        true -> 1;
+        false -> 2
+    end.
+
+%% Return the value unchanged.
+identity(Value) ->
+    Value.
+
+%% Twice the limit.
+doubled(Limit) ->
+    Limit * 2.

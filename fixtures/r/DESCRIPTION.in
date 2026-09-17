@@ -1,0 +1,7 @@
+Package: structuralfixture
+Type: Package
+Title: Conformance fixture for the structural R probe
+Version: 0.0.0
+Description: Not installed; present so a root-finder that walks upward
+    looking for a package marker stops here instead of at some ancestor
+    directory.

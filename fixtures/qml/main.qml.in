@@ -1,0 +1,19 @@
+import QtQuick
+
+// Instantiates Helper and Config, and calls their functions, so choose,
+// identity and doubled all have a call site outside their own file.
+Item {
+    Helper {
+        id: helper
+    }
+
+    Config {
+        id: config
+    }
+
+    Component.onCompleted: {
+        var picked = helper.choose(true);
+        var same = helper.identity(picked);
+        var doubled = config.doubled();
+    }
+}

@@ -1,0 +1,9 @@
+source("helper.R")
+
+make <- function() {
+  config <- Config$new(limit = DEFAULT_LIMIT)
+  count <- config$doubled()
+  count <- identity(count)
+  offset <- choose(TRUE)
+  count + offset
+}

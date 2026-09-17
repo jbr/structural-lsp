@@ -1,6 +1,6 @@
 # What language servers actually do, measured
 
-Eleven servers across five languages, asked the same eight questions
+Nineteen servers across thirteen languages, asked the same eight questions
 through structural's tools on 2026-09-17. The harness is
 `../tests/conformance/`; the per-run scorecards are what it prints, and
 this is the reduction across them.
@@ -24,7 +24,33 @@ dimension is real even if the individual readings are not durable.
 | typescript | typescript-language-server | 4.3.3 | 6/8 |
 | cpp | clangd | 17.0.0 (Apple) | 5/8 |
 | python | pylsp | 1.15.0 | 3/8 |
+| bash | bash-language-server | 5.6.0 | 3/6 |
+| gleam | gleam | 1.18.1 | 2/8 |
+| qml | qmlls | 6.11.1 | 2/8 |
 | typescript | deno | 2.9.6 | 0/8 |
+| swift | sourcekit-lsp | — | 0/8 |
+| ruby | typeprof | 0.31.1 | 0/8 |
+| elm | elm-language-server | 2.7.0 | 0/8 |
+| erlang | erlang_ls | — | 0/8 |
+| r | R languageserver | R 4.6.1 | 0/8 |
+
+Bash is scored out of six: it has no types, methods or modules, so the two
+qualified-name probes have no Bash spelling and are absent rather than
+failed.
+
+## The finding that justifies the method
+
+**elm-language-server 2.7.0 advertises `workspaceSymbolProvider: true` in
+its `initialize` reply, and answers `workspace/symbol` with `-32601
+Unhandled method`.** Its other requests fail with `-32603` and an internal
+JavaScript error (`Cannot read properties of undefined (reading
+'getTree')`).
+
+structural gates that request on the advertised capability and sent it
+because the server said it could serve it. The gate is right and the claim
+was false. This is the premise the probe was built on — a capability list
+is a claim, and only asking settles it — arriving as a measurement rather
+than an argument.
 
 ## The dimensions servers vary in
 
@@ -33,11 +59,11 @@ per axis is a client that works with the servers it was written against.
 
 ### 1. When the symbol index is populated
 
-`workspace/symbol` is empty until something opens a file, on **five of the
-eleven**: pyright, basedpyright, pyrefly, clangd, and
+`workspace/symbol` is empty until something opens a file, on **six of the
+nineteen**: pyright, basedpyright, pyrefly, clangd,
 typescript-language-server (which answers with a TypeScript Server Error
-rather than an empty list). Every one of them answers the identical query
-once any file in the project is open.
+rather than an empty list), and bash-language-server. Every one of them
+answers the identical query once any file in the project is open.
 
 rust-analyzer, gopls, jedi and ty index without being asked. pylsp has no
 index at all.
@@ -103,14 +129,31 @@ dataset records `clangd --background-index …` as an alternate invocation
 with two sources behind it. The flags are not decoration, and "installed"
 does not imply "invoked the way the capability needs".
 
-### 8. Servers that answer nothing
+### 8. The shapes of not answering
 
-deno 2.9.6 answered **no** query in this sweep — `workspace/symbol`,
-`documentSymbol` on an open file, `definition`, `references`, all empty.
-Two hypotheses were tested and both failed: `initializationOptions:
-{"enable": true}`, and a `deno.json` in the workspace root. The cause is
-not established, and is recorded here as unexplained rather than guessed.
+Seven of the nineteen answered nothing, and they did it in **five
+distinguishable ways**. The distinction matters because structural's reply
+to the caller is the same sentence for three of them.
 
-That is itself the finding worth keeping: a server can be installed,
-runnable, and complete an LSP handshake while serving nothing. Availability
-means answering, and only asking establishes it.
+| shape | servers | what structural says |
+| --- | --- | --- |
+| initializes, serves empty for every request | deno 2.9.6, sourcekit-lsp, typeprof 0.31.1 | `no symbol named 'choose'` — indistinguishable from a missing symbol |
+| advertises a capability, then `-32601` on it | elm-language-server 2.7.0 | the error, surfaced |
+| internal error per request (`-32603`) | elm-language-server | the error, surfaced |
+| binary starts and exits | erlang_ls (`escript: exception error: undefined function erlang_ls:main/1`) | the error, surfaced |
+| process closes stdout during `initialize` | R (`languageserver` not installed in R) | connection failure, with the install hint |
+
+For deno, two hypotheses were tested directly and both failed:
+`initializationOptions: {"enable": true}`, and a `deno.json` in the
+workspace root. A third was not invented; the cause is unestablished.
+sourcekit-lsp and typeprof were not investigated past the measurement —
+sourcekit-lsp fails `anchor to a local` too, which needs no symbol name at
+all, so its zero is not the argument-label naming difference that Swift
+would otherwise predict.
+
+The bottom two rows are servers that a `PATH` lookup reports as installed
+and that a spawn reports as runnable. Only a handshake catches them.
+
+The top row is the one that matters: **a server can be installed, runnable,
+handshaken, and serve nothing**, and nothing downstream can tell that from
+an empty workspace. Availability means answering.

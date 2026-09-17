@@ -1,0 +1,18 @@
+module Main exposing (make)
+
+import Helper
+
+
+make : Int
+make =
+    let
+        config =
+            Helper.Config 3
+
+        count =
+            Helper.identity (Helper.doubled config)
+
+        offset =
+            Helper.choose True
+    in
+    count + offset

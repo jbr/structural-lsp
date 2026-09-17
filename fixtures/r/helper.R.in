@@ -1,0 +1,25 @@
+# Fixture module for the R conformance probe.
+
+DEFAULT_LIMIT <- 3
+
+# Config carries a limit, and doubles it. A Reference Class (R5): the
+# method lives inside the `methods` list literal passed to setRefClass, so
+# it is lexically nested under the class definition rather than associated
+# with it only by name or by a registration call.
+Config <- setRefClass(
+  "Config",
+  fields = list(limit = "numeric"),
+  methods = list(
+    doubled = function() {
+      return(limit * 2)
+    }
+  )
+)
+
+choose <- function(flag) {
+  if (flag) 1 else 2
+}
+
+identity <- function(value) {
+  value
+}

@@ -9,6 +9,7 @@ use crate::report::Outcome;
 pub const GO: Language = Language {
     name: "go",
     fixture: "go",
+    extensions: &[],
     // The shared Go fixture has no method to qualify, and adding one to
     // `greet.go` would move the line numbers `configured.rs` asserts. A
     // file of its own adds the symbol without touching that file.

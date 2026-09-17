@@ -1,0 +1,17 @@
+// Fixture helper: the declarations Caller.swift calls.
+
+struct Config {
+    var limit: Int
+
+    func doubled() -> Int {
+        return limit * 2
+    }
+}
+
+func choose(flag: Bool) -> Int {
+    return flag ? 1 : 2
+}
+
+func identity(value: Int) -> Int {
+    return value
+}

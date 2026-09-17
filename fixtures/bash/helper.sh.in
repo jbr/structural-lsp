@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# choose prints the second argument if the first is "true", the third
+# otherwise.
+choose() {
+	local flag="$1"
+	if [ "$flag" = "true" ]; then
+		echo "$2"
+	else
+		echo "$3"
+	fi
+}
+
+# identity prints its argument unchanged.
+identity() {
+	echo "$1"
+}

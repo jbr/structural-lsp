@@ -39,6 +39,15 @@ pub struct Language {
     pub name: &'static str,
     /// The fixture in `src/fixtures.rs` this language is probed against.
     pub fixture: &'static str,
+    /// File extensions for this language id, without the dot.
+    ///
+    /// `config.rs` knows extensions for eleven language ids and requires
+    /// any other to spell them out, so a language it does not know is
+    /// configurable but not guessable. Empty means "use what `config.rs`
+    /// knows", which is right for the ids in that table and an error for
+    /// the rest — the error names the syntax, so a wrong empty here is
+    /// loud.
+    pub extensions: &'static [&'static str],
     /// Files added to that fixture for the probe alone, as
     /// `(path, contents)`.
     ///

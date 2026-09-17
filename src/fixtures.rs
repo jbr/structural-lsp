@@ -89,6 +89,65 @@ pub const FIXTURES: &[Fixture] = &[
         ],
     },
     Fixture {
+        language: "swift",
+        files: &[
+            file!("swift/Package.swift"),
+            file!("swift/Sources/Scratch/Helper.swift"),
+            file!("swift/Sources/Scratch/Caller.swift"),
+        ],
+    },
+    Fixture {
+        language: "erlang",
+        files: &[
+            file!("erlang/rebar.config"),
+            file!("erlang/erlang_ls.config"),
+            file!("erlang/src/scratch.app.src"),
+            file!("erlang/src/helper.erl"),
+            file!("erlang/src/main.erl"),
+        ],
+    },
+    Fixture {
+        language: "elm",
+        files: &[
+            file!("elm/elm.json"),
+            file!("elm/src/Helper.elm"),
+            file!("elm/src/Main.elm"),
+        ],
+    },
+    Fixture {
+        language: "gleam",
+        files: &[
+            file!("gleam/gleam.toml"),
+            file!("gleam/src/helper.gleam"),
+            file!("gleam/src/main.gleam"),
+        ],
+    },
+    Fixture {
+        language: "ruby",
+        files: &[file!("ruby/helper.rb"), file!("ruby/main.rb")],
+    },
+    Fixture {
+        language: "bash",
+        files: &[file!("bash/helper.sh"), file!("bash/main.sh")],
+    },
+    Fixture {
+        language: "qml",
+        files: &[
+            file!("qml/.qmlls.ini"),
+            file!("qml/Helper.qml"),
+            file!("qml/Config.qml"),
+            file!("qml/main.qml"),
+        ],
+    },
+    Fixture {
+        language: "r",
+        files: &[
+            file!("r/DESCRIPTION"),
+            file!("r/helper.R"),
+            file!("r/main.R"),
+        ],
+    },
+    Fixture {
         language: "go",
         files: &[
             file!("go/go.mod"),

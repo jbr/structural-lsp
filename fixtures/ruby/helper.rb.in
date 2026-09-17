@@ -1,0 +1,27 @@
+# Fixture module: the same shape as every other language's helper.
+
+DEFAULT_LIMIT = 3
+
+class Config
+  def initialize(limit = DEFAULT_LIMIT)
+    @limit = limit
+  end
+
+  def doubled
+    @limit * 2
+  end
+end
+
+class Label
+  def label
+    "label"
+  end
+end
+
+def choose(flag)
+  flag ? 1 : 2
+end
+
+def identity(value)
+  value
+end

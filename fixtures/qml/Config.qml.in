@@ -1,0 +1,10 @@
+import QtQuick
+
+// Fixture component: something to qualify a name with (Config.doubled).
+QtObject {
+    property int limit: 3
+
+    function doubled() {
+        return limit * 2;
+    }
+}

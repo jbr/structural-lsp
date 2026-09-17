@@ -16,6 +16,7 @@ use crate::report::Outcome;
 pub const CPP: Language = Language {
     name: "cpp",
     fixture: "cpp",
+    extensions: &[],
     extra_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,

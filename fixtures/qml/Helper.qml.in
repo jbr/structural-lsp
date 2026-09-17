@@ -1,0 +1,15 @@
+import QtQuick
+
+// Fixture component: functions used from a second file (main.qml), so
+// cross-file references have somewhere to be found.
+QtObject {
+    id: helper
+
+    function choose(flag) {
+        return flag ? 1 : 2;
+    }
+
+    function identity(value) {
+        return value;
+    }
+}

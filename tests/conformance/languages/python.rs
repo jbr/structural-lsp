@@ -8,6 +8,7 @@ use crate::report::Outcome;
 pub const PYTHON: Language = Language {
     name: "python",
     fixture: "python",
+    extensions: &[],
     extra_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,

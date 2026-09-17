@@ -1,0 +1,9 @@
+import helper
+
+pub fn make() -> Int {
+  let config = helper.Config(3)
+  let count = helper.doubled(config)
+  let same = helper.identity(count)
+  let offset = helper.choose(True)
+  same + offset
+}

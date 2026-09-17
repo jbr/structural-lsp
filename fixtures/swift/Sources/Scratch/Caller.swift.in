@@ -1,0 +1,7 @@
+func make() -> Int {
+    let config = Config(limit: 3)
+    var count = config.doubled()
+    count = identity(value: count)
+    let offset = choose(flag: true)
+    return count + offset
+}

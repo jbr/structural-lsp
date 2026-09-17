@@ -12,6 +12,7 @@ use crate::report::Outcome;
 pub const TYPESCRIPT: Language = Language {
     name: "typescript",
     fixture: "typescript",
+    extensions: &[],
     extra_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,

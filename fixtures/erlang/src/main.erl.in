@@ -1,0 +1,9 @@
+-module(main).
+
+-export([run/0]).
+
+run() ->
+    Count = helper:doubled(3),
+    Same = helper:identity(Count),
+    Offset = helper:choose(true),
+    Same + Offset.

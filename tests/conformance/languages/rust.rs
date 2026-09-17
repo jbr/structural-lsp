@@ -13,6 +13,7 @@ use crate::report::Outcome;
 pub const RUST: Language = Language {
     name: "rust",
     fixture: "rust",
+    extensions: &[],
     // A second file, so cross-file references have somewhere to be. It is
     // `src/main.rs` rather than another module because Cargo picks that up
     // as a binary target on its own: a new module would have to be declared

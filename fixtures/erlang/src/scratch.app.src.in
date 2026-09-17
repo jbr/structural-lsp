@@ -1,0 +1,7 @@
+{application, scratch,
+ [{description, "Fixture application for the conformance probe."},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [kernel, stdlib]},
+  {env, []},
+  {modules, []}]}.

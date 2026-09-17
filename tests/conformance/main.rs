@@ -34,7 +34,10 @@ mod languages;
 mod probe;
 mod report;
 
-use languages::{cpp::CPP, go::GO, python::PYTHON, rust::RUST, typescript::TYPESCRIPT};
+use languages::{
+    bash::BASH, cpp::CPP, elm::ELM, erlang::ERLANG, gleam::GLEAM, go::GO, python::PYTHON, qml::QML,
+    r::R, ruby::RUBY, rust::RUST, swift::SWIFT, typescript::TYPESCRIPT,
+};
 use probe::{Candidate, Language};
 use report::Scorecard;
 
@@ -159,9 +162,22 @@ fn scratch_root(language: &Language, candidate: &Candidate) -> PathBuf {
         ));
     } else {
         toml.push_str(&format!(
-            "[servers.{}]\ncommand = [{command}]\nlanguages = [\"{}\"]\n\n",
+            "[servers.{}]\ncommand = [{command}]\nlanguages = [\"{}\"]\n",
             candidate.name, language.name
         ));
+        if !language.extensions.is_empty() {
+            let extensions = language
+                .extensions
+                .iter()
+                .map(|extension| quoted(extension))
+                .collect::<Vec<_>>()
+                .join(", ");
+            toml.push_str(&format!(
+                "extensions = {{ {} = [{extensions}] }}\n",
+                language.name
+            ));
+        }
+        toml.push('\n');
     }
     for builtin in ["pyright", "rust-analyzer"] {
         if builtin != candidate.name {
@@ -259,4 +275,52 @@ fn typescript_servers_answer_structurals_questions() {
 #[ignore = "spawns clangd; run explicitly with -- --ignored --nocapture"]
 fn cpp_servers_answer_structurals_questions() {
     measure(&CPP);
+}
+
+#[test]
+#[ignore = "spawns sourcekit-lsp; run explicitly with -- --ignored --nocapture"]
+fn swift_servers_answer_structurals_questions() {
+    measure(&SWIFT);
+}
+
+#[test]
+#[ignore = "spawns erlang_ls; run explicitly with -- --ignored --nocapture"]
+fn erlang_servers_answer_structurals_questions() {
+    measure(&ERLANG);
+}
+
+#[test]
+#[ignore = "spawns elm-language-server; run explicitly with -- --ignored --nocapture"]
+fn elm_servers_answer_structurals_questions() {
+    measure(&ELM);
+}
+
+#[test]
+#[ignore = "spawns gleam lsp; run explicitly with -- --ignored --nocapture"]
+fn gleam_servers_answer_structurals_questions() {
+    measure(&GLEAM);
+}
+
+#[test]
+#[ignore = "spawns typeprof; run explicitly with -- --ignored --nocapture"]
+fn ruby_servers_answer_structurals_questions() {
+    measure(&RUBY);
+}
+
+#[test]
+#[ignore = "spawns bash-language-server; run explicitly with -- --ignored --nocapture"]
+fn bash_servers_answer_structurals_questions() {
+    measure(&BASH);
+}
+
+#[test]
+#[ignore = "spawns qmlls; run explicitly with -- --ignored --nocapture"]
+fn qml_servers_answer_structurals_questions() {
+    measure(&QML);
+}
+
+#[test]
+#[ignore = "spawns R with languageserver; run explicitly with -- --ignored --nocapture"]
+fn r_servers_answer_structurals_questions() {
+    measure(&R);
 }

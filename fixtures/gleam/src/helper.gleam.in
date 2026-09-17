@@ -1,0 +1,18 @@
+pub type Config {
+  Config(limit: Int)
+}
+
+pub fn doubled(config: Config) -> Int {
+  config.limit * 2
+}
+
+pub fn choose(flag: Bool) -> Int {
+  case flag {
+    True -> 1
+    False -> 2
+  }
+}
+
+pub fn identity(value: Int) -> Int {
+  value
+}
