@@ -7,6 +7,43 @@ cargo clippy --all-targets -- -D warnings
 cargo doc --no-deps
 ```
 
+```sh
+cargo test --test conformance -- --ignored --nocapture   # the scorecard
+```
+
+## The conformance probe measures servers, not this code
+
+`tests/conformance/` is a measurement harness rather than a regression
+suite. It asks every installed server of a language the questions `show`,
+`uses` and `action` need — bare-name lookup, a file-scoped name, a
+qualified name, cross-file references, an anchor to a local, a rename
+preview — and prints a scorecard. It asserts only that it probed something:
+**a low score is the finding, not a failure**, and a run that fails means
+the harness broke.
+
+What it measures is what a server *answered*, never what it advertised. An
+`initialize` capability list is a claim, breadth of capability is
+uncorrelated with quality on this narrow path, and the rest of this code
+already treats a server's word as something to check against text it just
+read.
+
+Every cell is **one observation on the server and version that ran** — the
+same standing as a pending acceptance case below — so the version is
+recorded beside the score and a version that cannot be read is left blank
+rather than guessed. Candidate argv comes from `reference/servers-list/`
+(`scripts/reduce.py installed` prints it with a vote count per form), not
+from us.
+
+Reachability has three states and the middle one is the point: not on
+`PATH`, on `PATH` and will not start, and runnable. The probe spawns the
+real argv, because a broken shebang, a missing interpreter and a
+non-executable file all pass a lookup. Even `runnable` is not availability
+— that is settled by the handshake.
+
+Four defects in `src/` came out of the first two runs
+(`../journal/2026-09-17-conformance-probe-findings.md`). Pointing it at a
+new language is a candidate list and a fixture.
+
 ## Tests are the instrument, not a formality
 
 `src/test_support.rs` holds a Python mock language server that **records

@@ -24,6 +24,11 @@ pub struct Extent {
     /// The server's one-line detail (rust-analyzer: the signature), when
     /// the result shape carries one.
     pub detail: Option<String>,
+    /// The container the server itself named, which only the flat
+    /// `SymbolInformation` shape carries. The hierarchical shape says the
+    /// same thing by nesting, so this is `None` there and the enclosing
+    /// nodes are read instead.
+    pub container_name: Option<String>,
 }
 
 /// The innermost symbol whose range contains `position`, or `None` when no
@@ -86,6 +91,7 @@ pub fn tree(result: &Value) -> Result<Vec<Node>> {
                     range: symbol.location.range,
                     selection_range: None,
                     detail: None,
+                    container_name: symbol.container_name.clone(),
                 },
                 children: Vec::new(),
             })
@@ -103,6 +109,7 @@ fn nodes(symbols: &[DocumentSymbol]) -> Vec<Node> {
                 range: symbol.range,
                 selection_range: Some(symbol.selection_range),
                 detail: symbol.detail.clone(),
+                container_name: None,
             },
             children: symbol.children.as_deref().map(nodes).unwrap_or_default(),
         })
@@ -146,6 +153,7 @@ pub fn chain_at(result: &Value, position: Position) -> Result<Vec<Extent>> {
                 range: symbol.range,
                 selection_range: Some(symbol.selection_range),
                 detail: symbol.detail.clone(),
+                container_name: None,
             });
             level = symbol.children.as_deref().unwrap_or(&[]);
         }
@@ -166,6 +174,7 @@ pub fn chain_at(result: &Value, position: Position) -> Result<Vec<Extent>> {
                 range: symbol.location.range,
                 selection_range: None,
                 detail: None,
+                container_name: None,
             })
             .collect())
     }
@@ -199,6 +208,7 @@ fn innermost_hierarchical(symbols: &[DocumentSymbol], position: Position) -> Opt
         range: symbol.range,
         selection_range: Some(symbol.selection_range),
         detail: symbol.detail.clone(),
+        container_name: None,
     }))
 }
 
@@ -213,6 +223,7 @@ fn innermost_flat(symbols: &[SymbolInformation], position: Position) -> Option<E
             range: symbol.location.range,
             selection_range: None,
             detail: None,
+            container_name: symbol.container_name.clone(),
         })
 }
 

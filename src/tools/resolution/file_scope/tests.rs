@@ -258,22 +258,54 @@ fn an_enclosing_range_that_does_not_belong_to_its_node_is_an_error_not_a_contain
     );
 }
 
+/// The flat `SymbolInformation[]` shape has no range naming each symbol,
+/// so its declaration line is searched for the advertised name. pylsp
+/// 1.15.0 serves this shape, and before this a file scope could nominate
+/// nothing from it (`backlog/symbol-range-convention.md`).
 #[test]
-fn a_flat_outline_nominates_nothing() {
+fn a_flat_outline_nominates_from_the_declaration_line() {
+    // `location.range` spans the whole item; line 3 is `    fn new() {}`.
     let flat = json!([
         {
             "name": "new", "kind": 12,
-            "location": { "uri": "file:///ws/src/a.rs", "range": range(3, 4, 3, 15) },
+            "location": { "uri": "file:///ws/src/a.rs", "range": range(3, 0, 3, 15) },
             "containerName": "Item"
         }
     ]);
     let found = find_in(&RustAnalyzer, &flat, TEXT, "new").unwrap();
-    assert!(
-        found.is_empty(),
-        "no selection range names the symbol, so the index is the fallback"
+    assert_eq!(found.len(), 1, "the declaration line names `new`");
+    // The range handed on is the name's, not the item's: it is where the
+    // pipeline sends `definition`.
+    assert_eq!(
+        found[0].info.location.range,
+        lsp_types::Range {
+            start: lsp_types::Position::new(3, 7),
+            end: lsp_types::Position::new(3, 10),
+        },
+        "the nominated range is the name"
     );
+
     let null = find_in(&RustAnalyzer, &Value::Null, TEXT, "new").unwrap();
     assert!(null.is_empty());
+}
+
+#[test]
+fn a_flat_symbol_whose_line_does_not_name_it_nominates_nothing() {
+    // Line 0 is `struct Item {`, which does not hold `new`. A server and a
+    // file that disagree this way nominate nothing and leave the symbol
+    // index as the fallback, rather than guessing at a token.
+    let wrong_line = json!([
+        {
+            "name": "new", "kind": 12,
+            "location": { "uri": "file:///ws/src/a.rs", "range": range(0, 0, 0, 13) },
+            "containerName": "Item"
+        }
+    ]);
+    assert!(
+        find_in(&RustAnalyzer, &wrong_line, TEXT, "new")
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// Measured rust-analyzer shapes: an inherent impl, a trait impl and a

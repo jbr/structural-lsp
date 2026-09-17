@@ -117,6 +117,7 @@ mod tests {
             range: Range::new(Position::new(0, 0), Position::new(0, 0)),
             selection_range: None,
             detail: None,
+            container_name: None,
         }
     }
 

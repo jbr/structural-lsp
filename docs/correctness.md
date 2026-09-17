@@ -60,9 +60,25 @@ yet. This is what units 4 and 5 of the discovery work exist to close
 
 Every file an answer depends on is read from disk at the moment it is used,
 and every range a server returns into that file is checked: the symbol's name
-must sit there (or one of the adapter's reference aliases, such as `Self`).
-A mismatch means the server's view of that file is stale, and it is an
-**error** — never a retry, and never a listing built on it.
+must sit **within** it (or one of the adapter's reference aliases, such as
+`Self`). A range holding no such name means the server's view of that file is
+stale, and it is an **error** — never a retry, and never a listing built on
+it.
+
+Within, not equal to. `SymbolInformation.location.range` is specified as the
+range enclosing the symbol and has no `selectionRange` to carry the name
+separately, so a server may report a whole declaration
+(`def choose(flag: bool) -> int:`) where another reports just `choose`; both
+are conforming, and the tight range is a convention. The name is located
+inside the reported range at a token boundary, and that position — not the
+range's start — is what a follow-up `definition` or `references` request is
+sent at. Two occurrences of the name in one range is ambiguous and refused,
+because nothing ambiguous is silently picked.
+
+A **rename edit** is checked strictly, and that is not an inconsistency: an
+edit replaces its range, so a range wider than the name would rewrite the
+surrounding code. There, a mismatch really is the server's view disagreeing
+with the file.
 
 Where the check happens depends on what the candidate is for. A
 **file-scoped** candidate is checked when it is nominated, on the text

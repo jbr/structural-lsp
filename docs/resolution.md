@@ -67,12 +67,22 @@ A `path` that names a **file** nominates from that file's own
   a range shorter than a qualified self type (`impl crate::a::Item` with a
   range naming only `Item`) yields no container rather than a component of
   one;
-- only the hierarchical `DocumentSymbol[]` shape nominates. The flat
-  `SymbolInformation[]` shape carries no range that names each symbol, and a
-  server without `documentSymbol`, a null outline, or an outline that names
-  nothing exactly falls back to `workspace/symbol` narrowed to the file — so
-  a file scope is never weaker than a bare name, and once it has candidates
-  no index query happens at all.
+- both outline shapes nominate. The hierarchical `DocumentSymbol[]` shape
+  carries a `selectionRange` naming each symbol and says the container by
+  nesting. The flat `SymbolInformation[]` shape carries neither: its
+  `location.range` is the whole item, so the item's **declaration line** is
+  searched for the advertised name — every language here writes a name on
+  the first line of its declaration — and the container is read from the
+  `containerName` field the server sets, which is the same claim the symbol
+  index makes and is qualified on the same way. A declaration line that does
+  not name the symbol, or names it twice, nominates nothing: the whole item
+  is deliberately not searched, because a name recurs inside its own body
+  and an ambiguous nomination is not one. pyright, ty and jedi serve the
+  hierarchical shape; pylsp serves the flat one;
+- a server without `documentSymbol`, a null outline, or an outline that
+  names nothing exactly falls back to `workspace/symbol` narrowed to the
+  file — so a file scope is never weaker than a bare name, and once it has
+  candidates no index query happens at all.
 
 A file scope's candidates are therefore the file's own symbols rather than a
 sample of a bounded cross-workspace response — not a claim that the outline

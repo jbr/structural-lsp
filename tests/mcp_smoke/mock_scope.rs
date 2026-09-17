@@ -1,7 +1,8 @@
 //! A file scope resolves from the file's own outline, deterministically and
 //! without a real language server: a mock server whose `workspace/symbol`
 //! knows nothing at all still resolves a qualified name through
-//! `documentSymbol`, and its flat outline shape does not.
+//! `documentSymbol`, and its flat outline shape nominates from each
+//! symbol's declaration line and the container the server names in a field.
 //!
 //! The configured built-ins point at commands that do not exist, so the
 //! mock is the only server that runs; nothing here depends on rust-analyzer
@@ -67,8 +68,10 @@ def outline(uri):
         return TOOL_OUTLINE
     if uri.endswith("/src/flat.rs"):
         # The flat shape: no selection range names a symbol.
+        # The whole item, the way this shape reports it: no range names
+        # the symbol, and the container is a field rather than nesting.
         return [{"name": "new", "kind": 12, "containerName": "Tool",
-                 "location": {"uri": uri, "range": rng(6, 11, 6, 14)}}]
+                 "location": {"uri": uri, "range": rng(6, 4, 8, 5)}}]
     if uri.endswith("/src/stale.rs"):
         # A stale outline: it advertises `new` under `Tool`, but the range it
         # gives for `new` is where `old` is written in the file.
@@ -239,12 +242,21 @@ fn a_file_scope_resolves_without_the_symbol_index() {
          function new · src/tool.rs:7 · in Tool\n"
     );
 
-    // A flat outline carries no range that names each symbol, so it
-    // nominates nothing and the index is asked as before.
+    // A flat outline carries no range that names each symbol, so its
+    // declaration line is searched for the advertised name, and the
+    // container it names in a field is what the qualifier filters on.
     let flat = ok(show(&mut state, Some("Tool::new"), Some("src/flat.rs")));
+    assert!(
+        flat.starts_with("function new · src/flat.rs:7"),
+        "a flat outline nominates from the declaration line: {flat}"
+    );
+    // The container is the server's claim, and a qualifier it does not
+    // carry is refused from the file's own symbols rather than substituted.
+    let flat_wrong = ok(show(&mut state, Some("Other::new"), Some("src/flat.rs")));
     assert_eq!(
-        flat, "no symbol named 'Tool::new'\n",
-        "a flat outline must not be nominated from"
+        flat_wrong,
+        "no 'new' is in a container ending in `Other`; the 'new' candidates:\n\
+         function new · src/flat.rs:7 · in Tool\n"
     );
 
     // A stale outline — the queried name advertised over a range that holds

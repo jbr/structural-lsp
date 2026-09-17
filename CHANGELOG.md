@@ -10,6 +10,8 @@ change, see [`journal/`](journal/); for what is left, see
 ## [Unreleased]
 
 ### Added
+- **Conformance probe** (process/testing.md): `tests/conformance/` asks every installed server of a language the questions `show`, `uses` and `action` need, and prints a scorecard with each server's version — what it answered, not what it advertises.
+
 - **Bare-name staleness regression** (process/testing.md): feature-gated pending acceptance — an unopened-file edit and a newly-created file, each followed immediately by a bare-name query — observed failing on rust-analyzer, with the currentness wording qualified to match the implementation (docs/correctness.md).
 - **`action` with `rename`** (docs/tools.md): a semantic change previewed with a digest over the files it touches, applied only when the digest still matches, with the servers re-synced afterwards.
 - **Rename caveat note** (docs/tools.md): an adapter-declared `rename_note` rides as a `note:` line on every rename preview and applied summary — rust-analyzer's rename edit covers code only, so the caller is told to check doc comments for the old name.
@@ -25,6 +27,7 @@ change, see [`journal/`](journal/); for what is left, see
 - **The threaded LSP handle** (docs/transport.md): one server on reader/owner/writer threads with every queue bounded, one inactivity backstop as the only timer, and a `$/structural/ping` liveness probe so a quiet-but-busy server is not mistaken for a broken one.
 - **`show`** (docs/tools.md): a symbol resolved to its definition's decorated source — doc comments and attributes included — with the extent from the server's `documentSymbol` and tree-sitter widening it over leading decorations.
 
+
 ### Changed
 - **Resolution is by identity, not by name** (docs/resolution.md): every exact `workspace/symbol` candidate is sent to `definition` and the results grouped by target, so candidates that navigate to the same place are one answer and candidates that differ are an ambiguous listing with kinds, paths and signatures. Nothing is silently picked.
 - **Answers are trimmed to what an agent needs** (docs/correctness.md): one header line plus the body on the happy path, one line per listing entry, `note:` lines only when something is degraded, and the standing caveats stated once in the tool descriptions rather than in every result.
@@ -32,6 +35,10 @@ change, see [`journal/`](journal/); for what is left, see
 - **Every source file stays under about 500 lines** (CLAUDE.md), with tests in a sibling module.
 
 ### Fixed
+- **A symbol range wider than the name resolves** (docs/correctness.md): `SymbolInformation.location.range` is the range enclosing the symbol, so a whole-declaration range is conforming; the name is located within it and the follow-up request is sent at the name. A range holding no occurrence is still refused, and two are ambiguous. The refusal no longer claims staleness it has not established.
+- **`workspace/symbol` is not sent to a server that did not offer it** (docs/servers.md): a `-32601` used to end the whole query, including file-scoped ones that never needed the index.
+- **A refused outline degrades `uses` instead of failing it** (docs/tools.md): the enclosing-item column is dropped with a note saying why, distinguishing a server without `documentSymbol` from one that would not outline an unopened document.
+- **The flat `SymbolInformation[]` outline nominates** (docs/resolution.md): its declaration line names the symbol and its `containerName` field names the container, so a file scope resolves against servers that serve that shape.
 - **A blocked tool call no longer blocks MCP `ping`** (journal/2026-09-14-generic-kernel-and-tools.md): mcplease's stdio server answers `ping`, `initialize` and `tools/list` on its reader thread while tool calls queue, so waiting as long as a server needs does not make the mount unresponsive.
 - **A failed connection keeps answering with its reason**: the owner thread lingers as a tombstone instead of exiting, which had turned every later error into "connection closed".
 - **A notification blocked behind a server that stopped reading had no backstop**: pending writes are now tracked and expired like requests. Found by deleting the crate-wide `allow(dead_code)`.

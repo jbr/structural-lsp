@@ -33,26 +33,29 @@
 //! taken to be a container, because a container feeds the qualifier filter
 //! and a wrong one selects a different definition.
 //!
-//! Only the hierarchical `DocumentSymbol[]` shape nominates: the flat
-//! `SymbolInformation[]` shape carries no range that names each symbol, so
-//! a file scope falls back to the symbol index rather than guessing from an
-//! `location.range` that may span the whole item.
+//! The flat `SymbolInformation[]` shape carries no range that names each
+//! symbol, only `location.range` for the whole item. Its **declaration
+//! line** is searched for the advertised name instead — every language here
+//! writes a declaration's name on its first line — and a line that does not
+//! name the symbol, or names it twice, nominates nothing. The whole item is
+//! deliberately not searched: a name recurs inside its own body, and an
+//! ambiguous nomination is not one. pylsp 1.15.0 serves this shape.
 
 use crate::lsp::adapter::Adapter;
-use crate::lsp::definition::{Candidate, verify_name_at};
+use crate::lsp::definition::{Candidate, NameLocation, locate_name_at, verify_name_at};
 use crate::lsp::outline::{self, Node};
 use crate::lsp::positions::{Encoding, position_to_offset};
 use crate::lsp::server::LspServer;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
-use lsp_types::{Range, SymbolInformation, Uri};
+use lsp_types::{Position, Range, SymbolInformation, Uri};
 use serde_json::Value;
 use std::path::Path;
 
 /// The candidates the selected servers' outlines of `file` give for
 /// `symbol`, in outline order, after the pipeline's sync-and-wait. Empty
 /// when there is no outline to nominate from (no `documentSymbol`
-/// capability, a null result, the flat shape) or it advertises nothing with
+/// capability, a null result) or it advertises nothing with
 /// exactly that name — the caller falls back to the servers' symbol index,
 /// so a file scope is never weaker than a bare name. An outline range that
 /// does not match the name it is claimed for is an error, not an empty
@@ -146,9 +149,18 @@ fn collect<'a>(
     out: &mut Vec<Candidate>,
 ) -> Result<()> {
     for node in symbols {
-        // A symbol with no range that names it (the flat shape) cannot be
-        // nominated from or used as a container; its children still can be.
-        let Some(range) = node.extent.selection_range else {
+        // The flat `SymbolInformation[]` shape carries no range that names
+        // the symbol, only the whole item's. Its declaration line does name
+        // it, so that line is searched instead: pylsp 1.15.0 serves this
+        // shape and nothing in a file scope could be nominated from it
+        // before (docs/resolution.md). A node whose declaration line does
+        // not name it, or names it twice, yields no range and is skipped —
+        // its children are still collected.
+        let Some(range) = node
+            .extent
+            .selection_range
+            .or_else(|| declaration_range(file, node))
+        else {
             collect(&node.children, ancestors, file, out)?;
             continue;
         };
@@ -177,6 +189,46 @@ fn collect<'a>(
     Ok(())
 }
 
+/// The range naming a flat-shape symbol, found on the first line of the
+/// item the server reported.
+///
+/// Only that line is searched. A name recurs freely inside its own body —
+/// a recursive call, `self.limit = limit` — and searching the whole item
+/// would make such symbols ambiguous and so unresolvable. Every language
+/// structural serves puts a declaration's name on its first line, so the
+/// line is where the answer is and the rest is noise.
+///
+/// `None` when the line does not name the symbol, or names it twice: this
+/// is nomination, and a nomination that cannot say which token it means is
+/// not one (docs/correctness.md).
+fn declaration_range(file: &NamedFile<'_>, node: &Node) -> Option<Range> {
+    let start = Position::new(node.extent.range.start.line, 0);
+    let end = Position::new(node.extent.range.start.line, u32::MAX);
+    let line = Range { start, end };
+    // The item's first line, clamped to the file: `u32::MAX` is past every
+    // line end, and `locate_name_at` would refuse a range outside the text.
+    let line = clamp_to_line(file.text, line)?;
+    match locate_name_at(file.text, line, &node.extent.name, file.encoding).ok()? {
+        NameLocation::At(at) => Some(Range {
+            start: at,
+            end: Position::new(
+                at.line,
+                at.character + node.extent.name.chars().count() as u32,
+            ),
+        }),
+        NameLocation::Unnamed => None,
+    }
+}
+
+/// `range` with its end pulled back to the real end of that line.
+fn clamp_to_line(text: &str, range: Range) -> Option<Range> {
+    let line = text.lines().nth(range.start.line as usize)?;
+    Some(Range {
+        start: range.start,
+        end: Position::new(range.start.line, line.chars().count() as u32),
+    })
+}
+
 /// The candidate an outline symbol is: its own name and kind, the range
 /// that names it as the navigation point, and the container its enclosing
 /// symbols name.
@@ -187,7 +239,12 @@ fn candidate(
     file: &NamedFile<'_>,
 ) -> Result<Candidate> {
     let name = node.extent.name.as_str();
-    let container_name = container(ancestors, file)?;
+    // Nesting first: the hierarchical shape says the container by putting
+    // the symbol under it, and the adapter's rule reads that. The flat
+    // shape has no nesting and names the container in a field instead,
+    // which is the same claim the symbol index makes and is qualified on
+    // the same way (docs/resolution.md).
+    let container_name = container(ancestors, file)?.or_else(|| node.extent.container_name.clone());
     // Built as the shape the servers report rather than field by field:
     // `SymbolInformation`'s `deprecated` field is itself deprecated in
     // lsp-types 0.97 (`tags` supersedes it) and still has to be provided.
