@@ -34,26 +34,57 @@ pub struct FileGroup {
     pub hits: Vec<HitLine>,
 }
 
+/// Why a file's hits carry no enclosing item.
+pub enum OutlineGap {
+    /// The server does not advertise `documentSymbol` at all.
+    Unsupported,
+    /// The server advertises it and would not outline this document. ty
+    /// 0.0.81 answers `-32602 Document … is not open in the session`: a
+    /// file this query only read is not one it opened, and the server
+    /// serves outlines only for documents it was given. The reason is
+    /// carried rather than flattened, because "does not support
+    /// documentSymbol" would be a false claim about such a server.
+    Refused(String),
+}
+
 /// Read one file with hits from disk, check every hit against that text
 /// when `expect` names what should sit there, and build its lines: 1-based
-/// line, enclosing item, trimmed source. The bool says whether the server
-/// gave an outline at all.
+/// line, enclosing item, trimmed source. The second value is present when
+/// the hits carry no enclosing item, and says why.
 ///
 /// The file is read, not synced: syncing would make every file a broad
 /// query touches an owned document for the rest of the session. The hits
 /// came from the server's view; what is checked is that the disk text
 /// agrees with it at every range.
+///
+/// A refused outline degrades the answer instead of ending it. The
+/// enclosing item is decoration on a hit line; the hits themselves came
+/// from `references` and are verified against the disk text either way, so
+/// losing the column is a note, not a failure.
 pub fn lines_for(
     server: &LspServer,
     root: &Path,
     file: &FileHits,
     expect: Option<&str>,
-) -> Result<(Vec<HitLine>, bool)> {
+) -> Result<(Vec<HitLine>, Option<OutlineGap>)> {
     let encoding = server.encoding();
     let aliases = server.adapter().reference_aliases();
     let text = std::fs::read_to_string(&file.path)
         .with_context(|| format!("reading {} for its references", file.path.display()))?;
-    let outline = server.document_symbol(file.uri.as_str())?;
+    let (outline, gap) = match server.document_symbol(file.uri.as_str()) {
+        Ok(Some(outline)) => (Some(outline), None),
+        Ok(None) => (None, Some(OutlineGap::Unsupported)),
+        Err(error) => (
+            None,
+            Some(OutlineGap::Refused(
+                format!("{error:#}")
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
+            )),
+        ),
+    };
     let mut lines = Vec::with_capacity(file.hits.len());
     for hit in &file.hits {
         if let Some(symbol) = expect {
@@ -86,7 +117,7 @@ pub fn lines_for(
         });
     }
     lines.sort_by_key(|line| line.line);
-    Ok((lines, outline.is_some()))
+    Ok((lines, gap))
 }
 
 /// The line holding `position`, trimmed; long lines are cut with a marker.

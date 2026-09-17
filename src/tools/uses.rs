@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 mod render;
-use crate::tools::hits::{FileGroup, HitLine, lines_for};
+use crate::tools::hits::{FileGroup, HitLine, OutlineGap, lines_for};
 use render::render_uses;
 
 /// Hits listed before the rest is reported as a count.
@@ -150,12 +150,15 @@ fn references_of(state: &mut Workspace, root: &Path, found: &Found) -> Result<St
     let mut production = Vec::new();
     let mut tests = Vec::new();
     let mut notes = Vec::new();
-    let mut no_outline = false;
+    let mut outline_gap: Option<OutlineGap> = None;
     let mut files = grouped.files;
     files.sort_by(|a, b| a.path.cmp(&b.path));
     for file in files {
-        let (lines, outlined) = lines_for(server, root, &file, Some(symbol))?;
-        no_outline |= !outlined;
+        let (lines, gap) = lines_for(server, root, &file, Some(symbol))?;
+        // The first gap is the one reported: a second file refused for the
+        // same reason adds nothing, and one note per file would bury the
+        // hits the query was asked for.
+        outline_gap = outline_gap.or(gap);
         let display = relative_display(root, &file.path);
         let path_is_test = crate::tools::classify::path_is_test(&file.path);
         let (test_hits, other_hits): (Vec<HitLine>, Vec<HitLine>) = lines
@@ -170,11 +173,17 @@ fn references_of(state: &mut Workspace, root: &Path, found: &Found) -> Result<St
             }
         }
     }
-    if no_outline {
-        notes.push(format!(
+    match &outline_gap {
+        Some(OutlineGap::Unsupported) => notes.push(format!(
             "{} does not support documentSymbol; hits carry no enclosing item",
             server.name()
-        ));
+        )),
+        Some(OutlineGap::Refused(why)) => notes.push(format!(
+            "{} would not outline every file with hits ({why}); those hits carry no \
+             enclosing item",
+            server.name()
+        )),
+        None => {}
     }
     if grouped.out_of_root > 0 {
         notes.push(format!(
