@@ -72,6 +72,23 @@ pub const FIXTURES: &[Fixture] = &[
         files: &[file!("rust/Cargo.toml"), file!("rust/src/lib.rs")],
     },
     Fixture {
+        language: "typescript",
+        files: &[
+            file!("typescript/tsconfig.json"),
+            file!("typescript/helper.ts"),
+            file!("typescript/main.ts"),
+        ],
+    },
+    Fixture {
+        language: "cpp",
+        files: &[
+            file!("cpp/compile_flags.txt"),
+            file!("cpp/helper.hpp"),
+            file!("cpp/helper.cpp"),
+            file!("cpp/main.cpp"),
+        ],
+    },
+    Fixture {
         language: "go",
         files: &[
             file!("go/go.mod"),

@@ -34,7 +34,7 @@ mod languages;
 mod probe;
 mod report;
 
-use languages::{go::GO, python::PYTHON, rust::RUST};
+use languages::{cpp::CPP, go::GO, python::PYTHON, rust::RUST, typescript::TYPESCRIPT};
 use probe::{Candidate, Language};
 use report::Scorecard;
 
@@ -247,4 +247,16 @@ fn rust_servers_answer_structurals_questions() {
 #[ignore = "spawns gopls; run explicitly with -- --ignored --nocapture"]
 fn go_servers_answer_structurals_questions() {
     measure(&GO);
+}
+
+#[test]
+#[ignore = "spawns every installed TypeScript server; run explicitly with -- --ignored --nocapture"]
+fn typescript_servers_answer_structurals_questions() {
+    measure(&TYPESCRIPT);
+}
+
+#[test]
+#[ignore = "spawns clangd; run explicitly with -- --ignored --nocapture"]
+fn cpp_servers_answer_structurals_questions() {
+    measure(&CPP);
 }

@@ -1,0 +1,12 @@
+// Fixture header: the declarations main.cpp calls.
+#pragma once
+
+struct Config {
+    int limit;
+
+    int doubled() const;
+};
+
+int choose(bool flag);
+
+int identity(int value);

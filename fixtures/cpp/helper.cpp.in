@@ -1,0 +1,13 @@
+#include "helper.hpp"
+
+int Config::doubled() const {
+    return limit * 2;
+}
+
+int choose(bool flag) {
+    return flag ? 1 : 2;
+}
+
+int identity(int value) {
+    return value;
+}

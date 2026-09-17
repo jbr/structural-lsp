@@ -1,0 +1,29 @@
+// Fixture module: the same shape as every other language's helper.
+
+export const DEFAULT_LIMIT = 3;
+
+export class Config {
+    limit: number;
+
+    constructor(limit: number = DEFAULT_LIMIT) {
+        this.limit = limit;
+    }
+
+    doubled(): number {
+        return this.limit * 2;
+    }
+}
+
+export class Label {
+    label(): string {
+        return "label";
+    }
+}
+
+export function choose(flag: boolean): number {
+    return flag ? 1 : 2;
+}
+
+export function identity(value: number): number {
+    return value;
+}

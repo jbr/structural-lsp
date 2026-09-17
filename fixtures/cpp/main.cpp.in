@@ -1,0 +1,9 @@
+#include "helper.hpp"
+
+int make() {
+    Config config{3};
+    int count = config.doubled();
+    count = identity(count);
+    int offset = choose(true);
+    return count + offset;
+}

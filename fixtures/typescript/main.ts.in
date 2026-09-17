@@ -1,0 +1,12 @@
+// Entry module: the call sites cross-file references have to find.
+
+import { Config, DEFAULT_LIMIT, Label, choose, identity } from "./helper";
+
+export function make(): string {
+    const config = new Config(DEFAULT_LIMIT);
+    let count = config.doubled();
+    count = identity(count);
+    const offset = choose(true);
+    const label = new Label().label();
+    return `${label}: ${count + offset}`;
+}

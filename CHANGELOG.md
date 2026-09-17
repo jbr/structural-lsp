@@ -10,6 +10,8 @@ change, see [`journal/`](journal/); for what is left, see
 ## [Unreleased]
 
 ### Added
+- **TypeScript and C++ conformance columns** (process/testing.md): eleven servers across five languages measured, reduced to the dimensions they vary in (reference/lsp-server-conventions.md) and four aggregate units (backlog/generic-baseline/).
+
 - **Rust and Go conformance columns** (process/testing.md): the probe is per-language — rust-analyzer answers 8/8, gopls 6/8, and the Go failures are `backlog/server-spelled-qualified-names.md`.
 
 - **Fixtures as a specification** (src/fixtures.rs): the trees are checked in as `.in` text and materialized into scratch directories rather than living in the repository, so structural pointed at itself sees one language; `cargo run --bin fixtures -- <dir>` writes them out to work on by hand.
