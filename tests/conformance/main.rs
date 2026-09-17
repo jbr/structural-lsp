@@ -81,6 +81,9 @@ const PYTHON: &[Candidate] = &[
         version_argv: &["jedi-language-server", "--version"],
         builtin: false,
     },
+    // ty's errors are structural's, not ty's: it reports the whole
+    // declaration as a symbol's range, which the spec allows and
+    // `verify_name_at` refuses (backlog/symbol-range-convention.md).
     Candidate {
         name: "ty",
         argv: &["ty", "server"],
