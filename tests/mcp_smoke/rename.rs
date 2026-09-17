@@ -5,9 +5,12 @@ use mcplease::traits::Tool;
 use std::path::{Path, PathBuf};
 
 /// Both fixtures under one root, the Rust one with a second module so a
-/// module rename has a file to move.
-fn scratch_root() -> PathBuf {
-    let root = std::env::temp_dir().join(format!("structural-rename-{}", std::process::id()));
+/// module rename has a file to move. One root per `tag`: these tests run in
+/// parallel and each one deletes its root on entry and on exit, so a shared
+/// root makes them delete each other's tree mid-run — which surfaces as a
+/// stale-server error, not as the collision it is.
+fn scratch_root(tag: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("structural-rename-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let fixtures = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures"));
     crate::copy_tree(fixtures, &root);
@@ -70,10 +73,71 @@ fn digest_of(preview: &str) -> String {
         .to_string()
 }
 
+/// The real pipeline — progress accounting plus the adapter's readiness —
+/// against the real rust-analyzer: the rename succeeds on code, and the
+/// adapter's caveat rides on the preview and the applied summary. Whether
+/// this version's edit happens to rewrite the doc link is not asserted:
+/// the caveat says "may" precisely so the test holds either way.
+#[test]
+#[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
+fn the_rename_answer_carries_the_server_caveat() {
+    let root = scratch_root("caveat");
+    // A doc-comment intra-doc link to the symbol being renamed, so the
+    // caveat has something to point at.
+    let lib = root.join("rust/src/lib.rs");
+    let text = std::fs::read_to_string(&lib).unwrap();
+    std::fs::write(
+        &lib,
+        format!(
+            "{text}\n/// Links [`choose`] in the docs.\n\
+             pub fn doc_link_site() {{ let _ = choose(Mode::Fast); }}\n"
+        ),
+    )
+    .unwrap();
+    let mut state = structural::session::Session::new(root.clone());
+
+    let preview = action(&mut state, "choose", "rust", "pick", None, None);
+    assert!(
+        preview.contains(
+            "note: rust-analyzer rename may leave intra-doc links unchanged; check doc comments for `choose`.\n"
+        ),
+        "{preview}"
+    );
+    assert!(preview.contains("digest: "), "{preview}");
+    let digest = digest_of(&preview);
+
+    let applied = action(
+        &mut state,
+        "choose",
+        "rust",
+        "pick",
+        Some("apply"),
+        Some(&digest),
+    );
+    assert!(
+        applied.starts_with("applied: rename choose → pick"),
+        "{applied}"
+    );
+    assert!(
+        applied.ends_with(
+            "note: rust-analyzer rename may leave intra-doc links unchanged; check doc comments for `choose`.\n"
+        ),
+        "{applied}"
+    );
+    let text = std::fs::read_to_string(&lib).unwrap();
+    assert!(
+        text.contains("pub fn pick(mode: Mode) -> usize {") && text.contains("= pick(Mode::Fast);"),
+        "the code rename succeeded: {text}"
+    );
+
+    drop(state);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn rename_previews_then_applies_with_a_matching_digest() {
-    let root = scratch_root();
+    let root = scratch_root("digest");
     let mut state = structural::session::Session::new(root.clone());
 
     // Preview: the definition and the call, both lines shown, nothing
@@ -142,7 +206,10 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     );
     assert_eq!(
         applied,
-        "applied: rename choose → pick · fn choose · rust/src/lib.rs:45 · 2 edits · 1 file\nrust/src/lib.rs · 2 edits\n"
+        "applied: rename choose → pick · fn choose · rust/src/lib.rs:45 · 2 edits · 1 file\n\
+         rust/src/lib.rs · 2 edits\n\
+         note: rust-analyzer rename may leave intra-doc links unchanged; \
+         check doc comments for `choose`.\n"
     );
     let text = std::fs::read_to_string(&lib).unwrap();
     assert!(

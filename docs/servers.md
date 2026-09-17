@@ -27,6 +27,7 @@ a command and its languages:
 | `hover_params` | how `view = "type"` asks for a type |
 | `reference_aliases` | names a reference may legitimately appear under (`Self`) |
 | `kind_label` | the word shown for a `SymbolKind` |
+| `rename_note` | a one-line caveat attached to this server's rename answers, when its rename has a known blind spot (rust-analyzer: intra-doc links) |
 
 ## Readiness
 
@@ -56,7 +57,12 @@ the `Quiescence` policy observes, and `hoverRange`, which is what lets
 `view = "type"` answer with the type of a whole expression rather than the
 thing under one position. Its extra views are `expanded` (macro expansion at
 the focus) and `related-tests` (which returns a runnable cargo command per
-test).
+test). Its rename edit covers code references only — the reference search
+does not visit doc comments — so `rename_note` attaches a one-line caveat to
+every answer that carries an edit, telling the caller to check doc comments
+for the old name rather than trusting the edit ([tools.md](tools.md)). An
+answer with no edit to describe — the server cannot rename here, or returned
+nothing — carries no caveat.
 
 **pyright.** No extensions, no readiness signal beyond standard progress, and
 the standard capability profile.

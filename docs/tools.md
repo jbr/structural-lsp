@@ -89,6 +89,14 @@ the server's own `workspace/applyEdit`. Writes are sequential, not
 transactional; a forced shutdown mid-apply reports failure without claiming a
 rollback ([shutdown.md](shutdown.md)).
 
+A server whose rename has a known blind spot declares a caveat
+(`rename_note` on the adapter, [servers.md](servers.md)); it rides as a
+`note:` line on the preview and the applied summary alike, and on the fresh
+preview a stale digest returns. The caveat is the adapter's standing policy
+about the server's rename, phrased with "may", not a claim about any one
+edit — a plan that does rewrite an intra-doc link carries it truthfully, and
+a server without a declared blind spot adds no note.
+
 ## What every answer carries
 
 Rendering lives apart from logic (`show/render.rs`, `uses/render.rs`,

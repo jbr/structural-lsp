@@ -181,6 +181,19 @@ pub trait Adapter: Send + Sync {
         Vec::new()
     }
 
+    /// A one-line caveat attached to this server's rename previews and
+    /// applied summaries, when its rename has a known blind spot the
+    /// caller should check by hand (docs/tools.md). `None` by default: no
+    /// claim either way. The caveat is this server's standing policy, not
+    /// a statement about any one edit — a rename whose edit does rewrite
+    /// doc links must still be able to carry it truthfully, so the wording
+    /// says "may", and the old name is interpolated here where the words
+    /// live.
+    fn rename_note(&self, old_name: &str) -> Option<String> {
+        let _ = old_name;
+        None
+    }
+
     /// The **container** a symbol's enclosing outline node gives it, from
     /// that node's advertised `name` and the text `selected` at its
     /// selection range, or `None` when this server's outline gives no

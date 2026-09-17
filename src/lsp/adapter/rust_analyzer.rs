@@ -103,6 +103,17 @@ impl Adapter for RustAnalyzer {
         vec!["Self"]
     }
 
+    /// rust-analyzer resolves intra-doc links (`[`fn_name`]`) but its
+    /// reference search does not visit doc comments, so its rename edit
+    /// covers code only (docs/servers.md): the answer carries this caveat
+    /// so the caller greps the docs rather than trusting full coverage
+    /// (docs/tools.md).
+    fn rename_note(&self, old_name: &str) -> Option<String> {
+        Some(format!(
+            "rust-analyzer rename may leave intra-doc links unchanged; check doc comments for `{old_name}`."
+        ))
+    }
+
     fn kind_label(&self, kind: SymbolKind) -> &'static str {
         match kind {
             SymbolKind::FUNCTION | SymbolKind::METHOD => "fn",
@@ -242,6 +253,19 @@ mod tests {
         assert_eq!(
             options.pointer("/workspace/symbol/search/excludeImports"),
             Some(&json!(true))
+        );
+    }
+    #[test]
+    fn the_rename_answer_carries_the_doc_link_caveat() {
+        // rust-analyzer's rename edit does not cover intra-doc links
+        // (docs/servers.md); the note interpolates the old name and says
+        // "may", so it stays true if a version ever rewrites one.
+        let adapter = RustAnalyzer;
+        assert_eq!(
+            adapter.rename_note("project_with").as_deref(),
+            Some(
+                "rust-analyzer rename may leave intra-doc links unchanged; check doc comments for `project_with`."
+            )
         );
     }
 }

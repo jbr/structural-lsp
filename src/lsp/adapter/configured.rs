@@ -92,4 +92,37 @@ impl Adapter for Configured {
             None => super::default_kind_label(kind),
         }
     }
+
+    fn rename_note(&self, old_name: &str) -> Option<String> {
+        match &self.base {
+            Some(base) => base.rename_note(old_name),
+            None => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::rust_analyzer::RustAnalyzer;
+    use super::*;
+
+    fn configured(base: Option<Arc<dyn Adapter>>) -> Configured {
+        Configured {
+            name: "rust-analyzer".into(),
+            command: vec!["mock".into()],
+            languages: vec![Language::new("rust", &["rs"])],
+            backstop: Duration::from_secs(60),
+            base,
+        }
+    }
+
+    #[test]
+    fn an_override_of_a_builtin_keeps_its_rename_note_and_a_generic_server_has_none() {
+        assert!(
+            configured(Some(Arc::new(RustAnalyzer)))
+                .rename_note("choose")
+                .is_some()
+        );
+        assert!(configured(None).rename_note("choose").is_none());
+    }
 }

@@ -86,7 +86,10 @@ pub(super) fn run(
     }
     let encoding = server.encoding();
     let server_name = server.name().to_string();
-    let prepared = prepare(&root, &plan, &old_name, encoding, &server_name)?;
+    // The server's own rename caveat, the same on the preview and the
+    // applied summary; not digest input (it does not depend on the plan).
+    let note = server.adapter().rename_note(&old_name);
+    let prepared = prepare(&root, &plan, &old_name, encoding, &server_name, note)?;
     let title = format!("rename {old_name} → {new_name} · {header}");
 
     match mode {
@@ -117,6 +120,7 @@ fn prepare(
     old_name: &str,
     encoding: crate::lsp::positions::Encoding,
     server: &str,
+    note: Option<String>,
 ) -> Result<Prepared> {
     let mut files = Vec::with_capacity(plan.files.len());
     let mut digest_inputs: Vec<(&std::path::PathBuf, String, &[lsp_types::TextEdit])> = Vec::new();
@@ -179,6 +183,7 @@ fn prepare(
         files,
         renames: plan.renames.clone(),
         digest,
+        note,
     })
 }
 
