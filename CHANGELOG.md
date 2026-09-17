@@ -10,6 +10,7 @@ change, see [`journal/`](journal/); for what is left, see
 ## [Unreleased]
 
 ### Added
+- **Bare-name staleness regression** (process/testing.md): feature-gated pending acceptance — an unopened-file edit and a newly-created file, each followed immediately by a bare-name query — observed failing on rust-analyzer, with the currentness wording qualified to match the implementation (docs/correctness.md).
 - **`action` with `rename`** (docs/tools.md): a semantic change previewed with a digest over the files it touches, applied only when the digest still matches, with the servers re-synced afterwards.
 - **`show` views** (docs/tools.md): `outline`, `implementations`, `incoming-calls`, `outgoing-calls`, `type` (via rust-analyzer's `hoverRange`, so an anchor yields the type of the expression), plus rust-analyzer's `expanded` and `related-tests`, which returns a runnable cargo command per test.
 - **File-scoped nomination** (docs/resolution.md): a `path` naming a file nominates from that file's own `documentSymbol` instead of filtering the servers' bounded `workspace/symbol` response, so a common qualified name resolves from the file that declares it — the candidate is the name the server advertises and the file's own text is what verifies it; a directory scope still narrows the index.

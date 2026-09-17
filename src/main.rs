@@ -46,9 +46,12 @@ Candidates come from the language servers' fuzzy symbol index (bounded, \
 not proven exhaustive) or, when `path` names a file, from that file's own \
 outline; neither is proven exhaustive. Only exact names resolve, and several \
 distinct definitions are listed rather than picked. \
-Every answer is current: owned files are re-synced from disk and the servers \
-are waited for before each query. The workspace root is fixed at server \
-start; `path` only scopes inside it.";
+Owned files are re-synced from disk and the servers are waited for before \
+each query. A query whose target names a file syncs that file before it \
+reads it; the workspace-index lookup behind bare-name and directory-scoped \
+queries can miss a recent edit to a file no query has opened, and the \
+failure is silent (\"no such symbol\"). The workspace root is fixed at \
+server start; `path` only scopes inside it.";
 
         let config =
             mcplease::ServerConfig::new(mcplease::server_info!()).with_instructions(instructions);

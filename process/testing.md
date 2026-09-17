@@ -42,6 +42,27 @@ Bound long runs with `gtimeout` and background them. **Do not call an
 unbounded `wait`** — a stuck run cost an hour once. `cargo test -- --ignored`
 spawns real servers and is slow.
 
+## Pending acceptance cases
+
+Some acceptance cases assert behavior that does not hold yet — they are
+written for the unit that will make it hold. They are compiled only under
+the `pending-acceptance` cargo feature (today: the bare-name freshness
+cases in `tests/mcp_smoke/staleness.rs`), so `cargo test` and the standing
+`cargo test -- --ignored` cannot run them — the cases are not even built —
+and the suite stays green until they are asked for:
+
+```sh
+cargo test --features pending-acceptance --no-run          # compile check
+cargo test --features pending-acceptance -- --ignored -- pending_
+```
+
+A failure keeps the case pending — that is the honest signal, not a broken
+suite. A pass is one observation on the server and version that ran, not
+validation and not a general guarantee: promote a case to ordinary ignored
+coverage only when the unit that makes it hold has validated it per server,
+with wording that says what was observed. When that unit ships, drop the
+case's feature gate; the backlog entry goes with the unit.
+
 ## Understood flakes
 
 The handle tests need a Python 3 that starts fast; `python3` behind a

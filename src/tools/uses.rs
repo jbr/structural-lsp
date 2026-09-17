@@ -46,10 +46,13 @@ const MAX_HITS: usize = 100;
 /// An ambiguous or unknown target returns the same listing `show` gives.
 /// The declaration itself is not a reference. References follow symbol
 /// identity, not text, so renames, re-exports and method calls are found
-/// and same-named strangers are not. The answer is current: owned files
-/// are re-synced from disk and the server is waited for before every
-/// query. `path` scopes where the *symbol* is looked up, not where its
-/// references are listed.
+/// and same-named strangers are not. Owned files are re-synced from disk
+/// and the server is waited for before every query. An anchor resolves
+/// inside its `path` file, and a `symbol` with a `path` naming a file
+/// nominates from that file's own outline; a bare `symbol`, or a
+/// directory-scoped one, is a workspace-index lookup that can miss a
+/// recent edit to a file no query has opened. `path` scopes where the
+/// *symbol* is looked up, not where its references are listed.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "uses")]
 #[group(skip)]

@@ -97,7 +97,8 @@ Rendering lives apart from logic (`show/render.rs`, `uses/render.rs`,
 (which servers answered), and notes only when something is degraded — a cap
 hit, a body truncated, a view unsupported, a server not running with its
 install hint. The standing caveats — the fuzzy index is not proven
-exhaustive, only exact names resolve, the root is fixed — are stated once in
+exhaustive, only exact names resolve, the root is fixed, a bare-name query
+can miss a recent edit to a file no query has opened — are stated once in
 the tool descriptions and in the MCP server instructions, not repeated per
 answer.
 

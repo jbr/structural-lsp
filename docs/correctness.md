@@ -51,9 +51,9 @@ restarted server owns nothing until something syncs to it again.
 
 The known gap: a **bare-name query owns no file**, so `workspace/symbol` can
 answer from an index that has not seen a recent external edit, and the
-failure is silent (the honest-looking answer is "no such symbol"). Path-
-scoped queries are current; bare-name ones are not yet. This is what units 4
-and 5 of the discovery work exist to close
+failure is silent (the honest-looking answer is "no such symbol"). A `path`
+naming a file is current; bare-name and directory-scoped queries are not
+yet. This is what units 4 and 5 of the discovery work exist to close
 (`../backlog/bare-name-staleness.md`).
 
 ## Ranges are verified against the text just read

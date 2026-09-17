@@ -13,6 +13,7 @@ mod rename;
 mod responsive;
 mod servers;
 mod shutdown;
+mod staleness;
 mod stdio_server;
 mod targeting;
 mod views;

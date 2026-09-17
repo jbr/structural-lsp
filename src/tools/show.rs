@@ -50,9 +50,12 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// a `path` naming a file — from that file's own outline; neither is proven
 /// exhaustive. Only exact-name matches resolve, and several distinct
 /// definitions are listed rather than picked. A qualifier (`Config::new`)
-/// narrows by the container the symbol sits in.
-/// owned files are re-synced from disk and the servers are waited for
-/// before every query. The workspace root is fixed at server start.
+/// narrows by the container the symbol sits in. Owned files are re-synced
+/// from disk and the servers are waited for before every query. A query
+/// whose target names a file syncs that file before it reads it, while the
+/// workspace-index lookup behind a bare-name or directory-scoped query can
+/// miss a recent edit to a file no query has opened. The workspace root is
+/// fixed at server start.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "show")]
 #[group(skip)]

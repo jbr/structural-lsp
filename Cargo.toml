@@ -3,6 +3,13 @@ name = "structural"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Compiles the pending freshness acceptance in tests/mcp_smoke/staleness.rs.
+# Off by default: neither `cargo test` nor `cargo test -- --ignored` runs
+# known-outcome-unproven cases; they are run explicitly with `--features
+# pending-acceptance` (process/testing.md).
+pending-acceptance = []
+
 [dependencies]
 anyhow = "1"
 clap = "4.6"
