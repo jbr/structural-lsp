@@ -80,6 +80,18 @@ edit replaces its range, so a range wider than the name would rewrite the
 surrounding code. There, a mismatch really is the server's view disagreeing
 with the file.
 
+An **outline container's** selection range gets the same within-not-equal
+rule, for the same reason arriving from the other shape: R's
+`languageserver` selects `Config <- setRefClass(` for a node it advertises
+as `Config`. The advertised name is located in the selected text at a token
+boundary, which is also what keeps `Item` from matching a range naming
+`Item2`. Several occurrences is refused as everywhere else — and R's own
+fixture produces exactly that, since `Config <- setRefClass(` reaches the
+`"Config"` argument on the next line. The refusal says what was advertised
+and what was read and names no cause: a range that does not name the node
+and one that names it twice both arrive there, and the wording that picked
+one was wrong for the other.
+
 Where the check happens depends on what the candidate is for. A
 **file-scoped** candidate is checked when it is nominated, on the text
 already in hand, before a qualifier filter or a listing can use it, and its

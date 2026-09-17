@@ -21,6 +21,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["typeprof", "--lsp", "--stdio"],
     version_argv: &["typeprof", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

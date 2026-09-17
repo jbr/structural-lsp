@@ -15,6 +15,9 @@ pub struct Configured {
     /// server-specific knowledge (policy, capabilities, query rewriting)
     /// still comes from there. `None` for a wholly user-defined server.
     pub base: Option<Arc<dyn Adapter>>,
+    /// `settings` from this entry, answered to `workspace/configuration`.
+    /// `None` defers to the built-in, if there is one.
+    pub configuration: Option<Value>,
 }
 
 impl Adapter for Configured {
@@ -44,6 +47,16 @@ impl Adapter for Configured {
         match &self.base {
             Some(base) => base.initialization_options(),
             None => serde_json::json!({}),
+        }
+    }
+
+    fn workspace_configuration(&self) -> Value {
+        match (&self.configuration, &self.base) {
+            // An entry's own `settings` wins over the built-in's, so a
+            // server that needs different settings here can say so.
+            (Some(configuration), _) => configuration.clone(),
+            (None, Some(base)) => base.workspace_configuration(),
+            (None, None) => Value::Null,
         }
     }
 
@@ -165,6 +178,7 @@ mod tests {
             languages: vec![Language::new("rust", &["rs"])],
             backstop: Duration::from_secs(60),
             base,
+            configuration: None,
         }
     }
 

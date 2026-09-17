@@ -24,12 +24,19 @@ const CANDIDATES: &[Candidate] = &[
         argv: &["typescript-language-server", "--stdio"],
         version_argv: &["typescript-language-server", "--version"],
         builtin: false,
+        settings: "",
     },
     Candidate {
         name: "deno",
         argv: &["deno", "lsp"],
         version_argv: &["deno", "--version"],
         builtin: false,
+        // Measured: deno 2.9.6 serves **nothing** for the whole session
+        // without this, and ignores the same value in the initialization
+        // options — `workspace/configuration` is the only channel it reads
+        // (`../../../docs/servers.md`). `unstable` and the inlay-hint
+        // settings an editor also sets make no difference to these probes.
+        settings: "{ enable = true }",
     },
 ];
 

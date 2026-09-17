@@ -45,6 +45,10 @@ change, see [`journal/`](journal/); for what is left, see
 - **Every source file stays under about 500 lines** (CLAUDE.md), with tests in a sibling module.
 
 ### Fixed
+- **A server that needs client settings can be given them** (docs/servers.md): `settings` in a `structural.toml` entry answers the server's `workspace/configuration` request, which some servers read and nothing else substitutes for — deno 2.9.6 served nothing at all for a whole session without it, and answers 6 of 8 probes with it.
+
+- **An outline container's range may be wider than the name** (docs/correctness.md): the advertised name is located inside the selected text at a token boundary instead of compared for equality, so a server that selects a whole assignment reports a container; zero or several occurrences still refuse, and the refusal no longer names a cause it has not established.
+
 - **A configured override of a built-in keeps all of its knowledge** (docs/servers.md): `Configured` did not forward `outline_container`, `extra_views`, `extra_view_request`, `render_extra_view`, `hover_params` or `reference_aliases`, so naming rust-analyzer in `structural.toml` to point at a specific binary silently lost impl containers, the `expanded`/`related-tests`/`type` views and `Self` aliases.
 
 - **A symbol range wider than the name resolves** (docs/correctness.md): `SymbolInformation.location.range` is the range enclosing the symbol, so a whole-declaration range is conforming; the name is located within it and the follow-up request is sent at the name. A range holding no occurrence is still refused, and two are ambiguous. The refusal no longer claims staleness it has not established.

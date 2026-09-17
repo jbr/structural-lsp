@@ -41,6 +41,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["sourcekit-lsp"],
     version_argv: &["sourcekit-lsp", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

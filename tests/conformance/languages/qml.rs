@@ -33,6 +33,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["qmlls"],
     version_argv: &["qmlls", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

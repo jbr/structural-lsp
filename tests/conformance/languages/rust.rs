@@ -35,6 +35,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["rust-analyzer"],
     version_argv: &["rust-analyzer", "--version"],
     builtin: true,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

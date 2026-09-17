@@ -53,6 +53,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["erlang_ls", "--transport", "stdio"],
     version_argv: &["erlang_ls", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

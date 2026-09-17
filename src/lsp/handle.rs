@@ -134,6 +134,16 @@ pub struct Settings {
     /// How long a graceful `shutdown`/`exit` may take before the child is
     /// killed regardless.
     pub shutdown_grace: Duration,
+    /// What to answer a server's `workspace/configuration` request with,
+    /// one copy per requested item. `Null` is "no opinion", which hands the
+    /// server its own defaults.
+    ///
+    /// The one field here that is not a bound. It belongs to the
+    /// connection because the answer must be ready when the request
+    /// arrives, which is before any caller is involved: deno 2.9.6 asks
+    /// during startup and serves **nothing at all** for the rest of the
+    /// session when the answer is `null` (docs/servers.md).
+    pub configuration: Value,
 }
 
 impl Default for Settings {
@@ -147,6 +157,7 @@ impl Default for Settings {
             backstop: Duration::from_secs(90),
             probe_after: Duration::from_secs(20),
             shutdown_grace: Duration::from_secs(5),
+            configuration: Value::Null,
         }
     }
 }

@@ -293,15 +293,24 @@ fn container(ancestors: &[(&str, Range)], file: &NamedFile<'_>) -> Result<Option
         // the type the impl is written for. A shape that rule does not
         // recognize is an error — the container is never taken to be
         // whatever text the range happens to hold.
+        //
+        // The message states what was read and stops there. Two different
+        // things bring it here — a range that does not name the node at
+        // all, and one that names it more than once, which R's
+        // `languageserver` does by selecting `Config <- setRefClass(`
+        // through the `"Config"` argument on the next line — and naming
+        // either as *the* cause would be a diagnosis this has not
+        // established (docs/correctness.md).
         let container = file.adapter.outline_container(name, &selected).with_context(|| {
             format!(
-                "{}'s outline names the symbol enclosing `{}` in {} as `{}`, but its range names \
-                 `{}`; the outline does not describe the file as read from disk",
+                "{}'s outline names the symbol enclosing `{}` in {} as `{}`, and the text at its \
+                 range is `{}`; that is not a pairing this server's outline rule recognizes, so \
+                 what encloses it cannot be read",
                 file.server,
                 file.symbol,
                 file.path.display(),
                 name,
-                selected
+                crate::lsp::definition::elided(&selected)
             )
         })?;
         parts.push(container);

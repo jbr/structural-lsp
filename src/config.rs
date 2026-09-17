@@ -20,6 +20,7 @@
 use crate::lsp::adapter::{self, Adapter, DEFAULT_BACKSTOP, Language, configured::Configured};
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -47,6 +48,10 @@ pub struct ServerEntry {
     #[serde(default)]
     pub extensions: BTreeMap<String, Vec<String>>,
     pub backstop_secs: Option<u64>,
+    /// Answered to this server's `workspace/configuration` request, one
+    /// copy per requested item. Some servers serve nothing until it
+    /// arrives (docs/servers.md).
+    pub settings: Option<toml::Value>,
 }
 
 /// Extensions for language ids a user is likely to name without spelling
@@ -130,6 +135,19 @@ fn languages_of(name: &str, entry: &ServerEntry) -> Result<Vec<Language>> {
         .collect()
 }
 
+/// `settings` as JSON, since that is what goes on the wire.
+fn configuration_of(name: &str, entry: &ServerEntry) -> Result<Option<Value>> {
+    entry
+        .settings
+        .clone()
+        .map(|settings| {
+            serde_json::to_value(settings).with_context(|| {
+                format!("[servers.{name}]: `settings` is not representable as JSON")
+            })
+        })
+        .transpose()
+}
+
 fn override_builtin(builtin: Arc<dyn Adapter>, entry: ServerEntry) -> Result<Configured> {
     let name = builtin.name().to_string();
     let command = if entry.command.is_empty() {
@@ -146,12 +164,14 @@ fn override_builtin(builtin: Arc<dyn Adapter>, entry: ServerEntry) -> Result<Con
         .backstop_secs
         .map(Duration::from_secs)
         .unwrap_or_else(|| builtin.backstop());
+    let configuration = configuration_of(&name, &entry)?;
     Ok(Configured {
         name,
         command,
         languages,
         backstop,
         base: Some(builtin),
+        configuration,
     })
 }
 
@@ -163,6 +183,7 @@ fn generic(name: String, entry: ServerEntry) -> Result<Configured> {
         bail!("[servers.{name}]: `languages` is required for a server that is not built in");
     }
     let languages = languages_of(&name, &entry)?;
+    let configuration = configuration_of(&name, &entry)?;
     Ok(Configured {
         name,
         command: entry.command,
@@ -172,6 +193,7 @@ fn generic(name: String, entry: ServerEntry) -> Result<Configured> {
             .map(Duration::from_secs)
             .unwrap_or(DEFAULT_BACKSTOP),
         base: None,
+        configuration,
     })
 }
 

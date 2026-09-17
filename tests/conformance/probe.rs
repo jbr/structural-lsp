@@ -23,6 +23,15 @@ pub struct Candidate {
     /// sibling `pyright` binary.
     pub version_argv: &'static [&'static str],
     pub builtin: bool,
+    /// `settings` for this candidate's `structural.toml` entry, as TOML
+    /// written verbatim into the table.
+    ///
+    /// A server that serves nothing without client configuration is
+    /// measured with the configuration, since the column is about what the
+    /// server answers rather than about what a bare entry gets. What the
+    /// setting has to be is itself a catalogue fact
+    /// (`backlog/discovery/selection.md`).
+    pub settings: &'static str,
 }
 
 /// One question structural's tools need answered, and what a right answer

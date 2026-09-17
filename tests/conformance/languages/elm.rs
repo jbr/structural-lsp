@@ -32,6 +32,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["elm-language-server"],
     version_argv: &["elm-language-server", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

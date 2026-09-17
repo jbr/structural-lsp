@@ -214,6 +214,7 @@ impl Owner {
             &request.method,
             request.params.as_ref(),
             &self.workspace_folders,
+            &self.settings.configuration,
         );
         let response = match reply {
             Reply::Success(value) => JsonRpcResponse::success(request.id.clone(), value),

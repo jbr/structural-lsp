@@ -38,17 +38,26 @@ pub fn server_request_reply(
     method: &str,
     params: Option<&Value>,
     workspace_folders: &Value,
+    configuration: &Value,
 ) -> Reply {
     match method {
-        // One entry per requested item; null means "no opinion", which hands
-        // the server its own defaults.
+        // One entry per requested item. `Null` is "no opinion", which hands
+        // the server its own defaults — and for some servers the default is
+        // to serve nothing: deno 2.9.6 answers every request empty for the
+        // whole session unless this carries `{"enable": true}`
+        // (docs/servers.md).
+        //
+        // The same value answers every item, whatever `section` each names.
+        // No server measured here wants different settings per section, and
+        // a per-section table would be a shape invented ahead of a case for
+        // it; `section` is available in `params` when one turns up.
         "workspace/configuration" => {
             let items = params
                 .and_then(|p| p.get("items"))
                 .and_then(Value::as_array)
                 .map(Vec::len)
                 .unwrap_or(0);
-            Reply::Success(Value::Array(vec![Value::Null; items]))
+            Reply::Success(Value::Array(vec![configuration.clone(); items]))
         }
         "window/workDoneProgress/create" => Reply::Success(Value::Null),
         "workspace/workspaceFolders" => Reply::Success(workspace_folders.clone()),
@@ -67,19 +76,48 @@ mod tests {
         json!([{ "uri": "file:///tmp/ws", "name": "ws" }])
     }
 
+    /// No configured settings: the reply that hands a server its defaults.
+    fn no_opinion() -> Value {
+        Value::Null
+    }
+
     #[test]
-    fn configuration_answers_one_null_per_item() {
+    fn configuration_answers_one_entry_per_item() {
         let params = json!({ "items": [{}, {}] });
         assert_eq!(
-            server_request_reply("workspace/configuration", Some(&params), &folders()),
+            server_request_reply(
+                "workspace/configuration",
+                Some(&params),
+                &folders(),
+                &no_opinion()
+            ),
             Reply::Success(json!([Value::Null, Value::Null]))
+        );
+    }
+
+    /// Configured settings answer every item, whatever section it names.
+    /// deno 2.9.6 serves nothing for the whole session without this, and
+    /// ignores the same value in the initialization options
+    /// (docs/servers.md).
+    #[test]
+    fn configured_settings_answer_every_requested_section() {
+        let params = json!({ "items": [{ "section": "deno" }, { "section": "typescript" }] });
+        let settings = json!({ "enable": true });
+        assert_eq!(
+            server_request_reply(
+                "workspace/configuration",
+                Some(&params),
+                &folders(),
+                &settings
+            ),
+            Reply::Success(json!([{ "enable": true }, { "enable": true }]))
         );
     }
 
     #[test]
     fn configuration_without_items_answers_an_empty_array() {
         assert_eq!(
-            server_request_reply("workspace/configuration", None, &folders()),
+            server_request_reply("workspace/configuration", None, &folders(), &no_opinion()),
             Reply::Success(json!([]))
         );
     }
@@ -87,7 +125,12 @@ mod tests {
     #[test]
     fn progress_create_answers_explicit_null() {
         assert_eq!(
-            server_request_reply("window/workDoneProgress/create", None, &folders()),
+            server_request_reply(
+                "window/workDoneProgress/create",
+                None,
+                &folders(),
+                &no_opinion()
+            ),
             Reply::Success(Value::Null)
         );
     }
@@ -95,7 +138,12 @@ mod tests {
     #[test]
     fn workspace_folders_answers_the_offered_folders() {
         assert_eq!(
-            server_request_reply("workspace/workspaceFolders", None, &folders()),
+            server_request_reply(
+                "workspace/workspaceFolders",
+                None,
+                &folders(),
+                &no_opinion()
+            ),
             Reply::Success(folders())
         );
     }
@@ -104,7 +152,7 @@ mod tests {
     fn register_and_unregister_answer_null() {
         for method in ["client/registerCapability", "client/unregisterCapability"] {
             assert_eq!(
-                server_request_reply(method, None, &folders()),
+                server_request_reply(method, None, &folders(), &no_opinion()),
                 Reply::Success(Value::Null)
             );
         }
@@ -115,7 +163,12 @@ mod tests {
         let params =
             json!({ "edit": { "changes": { "file:///tmp/ws/a.rs": [{ "newText": "x" }] } } });
         assert_eq!(
-            server_request_reply("workspace/applyEdit", Some(&params), &folders()),
+            server_request_reply(
+                "workspace/applyEdit",
+                Some(&params),
+                &folders(),
+                &no_opinion()
+            ),
             Reply::Success(json!({ "applied": false }))
         );
     }
@@ -124,7 +177,7 @@ mod tests {
     fn unknown_methods_get_method_not_found() {
         // `JsonRpcError::method_not_found`'s own message wording.
         assert_eq!(
-            server_request_reply("test/unknown", None, &folders()),
+            server_request_reply("test/unknown", None, &folders(), &no_opinion()),
             Reply::Error(-32601, "unknown method: test/unknown".to_string())
         );
     }

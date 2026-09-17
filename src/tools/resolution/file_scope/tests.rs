@@ -252,8 +252,12 @@ fn an_enclosing_range_that_does_not_belong_to_its_node_is_an_error_not_a_contain
     let text = format!("{error:#}");
     assert!(text.contains("`impl Other`"), "{text}");
     assert!(text.contains("`Item`"), "{text}");
+    // What was advertised and what was read, and no claim about which is
+    // wrong: a range naming nothing and a range naming the node twice both
+    // arrive here, and the message that named a cause named it wrongly for
+    // one of them (docs/correctness.md).
     assert!(
-        text.contains("does not describe the file as read from disk"),
+        text.contains("not a pairing this server's outline rule recognizes"),
         "{text}"
     );
 }

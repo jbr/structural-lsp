@@ -106,6 +106,18 @@ pub trait Adapter: Send + Sync {
     }
 
     /// The `experimental` block of the client capabilities, or `Null`.
+    /// What to answer this server's `workspace/configuration` request
+    /// with. `Null` is "no opinion".
+    ///
+    /// Separate from [`Adapter::initialization_options`] because servers
+    /// read the two differently and one does not substitute for the other:
+    /// deno 2.9.6 ignores `enable` in the initialization options and serves
+    /// nothing for the whole session, and answers every query once the same
+    /// `{"enable": true}` arrives as a configuration reply (docs/servers.md).
+    fn workspace_configuration(&self) -> Value {
+        Value::Null
+    }
+
     fn experimental_capabilities(&self) -> Value {
         Value::Null
     }
@@ -210,8 +222,19 @@ pub trait Adapter: Send + Sync {
     /// unrecognized shape must yield `None` or a name the server itself
     /// reports — never a substring of the ancestor's name that happens to
     /// look plausible.
+    ///
+    /// The default accepts a selection range **wider than the name**, on
+    /// the same terms `locate_name_at` accepts one from the symbol index
+    /// (docs/correctness.md): the advertised name must occur in the
+    /// selected text exactly once and at identifier boundaries. R's
+    /// `languageserver` selects a whole assignment — `Config` is advertised
+    /// and `Config <- setRefClass(` is selected — which is the outline's
+    /// version of the range convention `SymbolInformation` has no
+    /// `selectionRange` to settle. Zero occurrences is a disagreement and
+    /// several are undecidable, so both stay `None`, and the boundary check
+    /// is what keeps `Item` from matching `Item2`.
     fn outline_container(&self, name: &str, selected: &str) -> Option<String> {
-        (name == selected).then(|| name.to_string())
+        crate::lsp::definition::sole_token(selected, name).map(|_| name.to_string())
     }
 
     /// The short word for a symbol kind in this server's language, for
@@ -345,6 +368,41 @@ mod tests {
         );
         let with = standard_capabilities(&["utf-8", "utf-16"], json!({ "x": true }));
         assert_eq!(with.pointer("/experimental/x"), Some(&json!(true)));
+    }
+
+    #[test]
+    fn an_outline_container_may_be_selected_with_more_than_its_name() {
+        struct Generic;
+        impl Adapter for Generic {
+            fn name(&self) -> &str {
+                "generic"
+            }
+            fn command(&self) -> Vec<String> {
+                vec!["generic".to_string()]
+            }
+            fn languages(&self) -> Vec<Language> {
+                vec![Language::new("r", &["R"])]
+            }
+        }
+        let container = |name: &str, selected: &str| Generic.outline_container(name, selected);
+
+        // The name alone, and the name inside a wider selection: R's
+        // `languageserver` selects the assignment that defines the class.
+        assert_eq!(container("Config", "Config"), Some("Config".to_string()));
+        assert_eq!(
+            container("Config", "Config <- setRefClass("),
+            Some("Config".to_string())
+        );
+
+        // A selection that does not name the node is a disagreement, and a
+        // longer identifier that merely contains the name is not an
+        // occurrence of it.
+        assert_eq!(container("Config", "Other"), None);
+        assert_eq!(container("Item", "Item2"), None);
+        assert_eq!(container("Item", "an_Item"), None);
+
+        // Twice is undecidable rather than the first one.
+        assert_eq!(container("Config", "Config <- f(Config)"), None);
     }
 
     #[test]

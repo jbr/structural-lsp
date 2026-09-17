@@ -147,6 +147,9 @@ impl LspServer {
             .split_first()
             .context("an adapter's command must name an executable")?;
         let settings = Settings {
+            // Answered to `workspace/configuration`, which a server may
+            // send during startup and before any caller exists.
+            configuration: adapter.workspace_configuration(),
             backstop: adapter.backstop(),
             ..Settings::default()
         };

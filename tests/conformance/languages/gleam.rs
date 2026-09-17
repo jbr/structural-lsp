@@ -36,6 +36,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["gleam", "lsp"],
     version_argv: &["gleam", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

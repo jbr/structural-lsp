@@ -36,6 +36,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["gopls"],
     version_argv: &["gopls", "version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

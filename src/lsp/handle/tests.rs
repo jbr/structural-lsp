@@ -9,6 +9,7 @@ use std::sync::atomic::AtomicBool;
 /// only the tests that set their own can trip it.
 fn test_settings() -> Settings {
     Settings {
+        configuration: serde_json::Value::Null,
         probe_after: Duration::from_secs(60),
         inbound_cap: 64,
         writer_cap: 8,

@@ -368,6 +368,25 @@ pub fn locate_name_at(
     )?))
 }
 
+/// The single whole-token occurrence of `name` in `text`, or `None` for
+/// zero or several.
+///
+/// The same rule [`locate_name_at`] applies to a range wider than the name
+/// (docs/correctness.md), exposed for callers that hold text rather than a
+/// range: a container's selection range is the other place a server may
+/// report more than the name.
+pub fn sole_token(text: &str, name: &str) -> Option<usize> {
+    if name.is_empty() {
+        return None;
+    }
+    let mut occurrences = text
+        .match_indices(name)
+        .filter(|(at, _)| is_whole_token(text, *at, name.len()))
+        .map(|(at, _)| at);
+    let first = occurrences.next()?;
+    occurrences.next().is_none().then_some(first)
+}
+
 /// Whether the `len` bytes at `at` are bounded by non-identifier characters
 /// — so `choose` in `def choose(` matches and the one in `chooser` does not.
 fn is_whole_token(haystack: &str, at: usize, len: usize) -> bool {
@@ -377,7 +396,7 @@ fn is_whole_token(haystack: &str, at: usize, len: usize) -> bool {
 }
 
 /// A whole declaration can be long, and the text lands in an error message.
-fn elided(found: &str) -> String {
+pub fn elided(found: &str) -> String {
     let line = found.lines().next().unwrap_or(found);
     if line.chars().count() > 60 {
         format!("{}…", line.chars().take(59).collect::<String>())

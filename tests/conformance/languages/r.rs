@@ -64,6 +64,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["R", "--slave", "-e", "languageserver::run()"],
     version_argv: &["R", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

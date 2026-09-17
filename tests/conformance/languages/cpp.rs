@@ -27,6 +27,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["clangd"],
     version_argv: &["clangd", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[

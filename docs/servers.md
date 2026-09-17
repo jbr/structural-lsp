@@ -86,10 +86,35 @@ languages = ["go"]               # required; extensions from the table below
 extensions = { go = ["go"] }     # or spell them out
 ```
 
+### Settings a server will not start without
+
+`workspace/configuration` is answered with one entry per requested item,
+and the entry is `settings` from the server's `structural.toml` table —
+`null` when there is none, which hands the server its own defaults.
+
+For some servers the default is to serve nothing. deno 2.9.6 answers every
+request empty for the whole session unless the reply carries
+`{"enable": true}`, and **ignores the same value in the initialization
+options**: the configuration reply is the only channel it reads. Measured
+both ways; with the setting it answers 6 of 8 probes and without it 0
+(`../reference/lsp-server-conventions.md`).
+
+```toml
+[servers.deno]
+command = ["deno", "lsp"]
+languages = ["typescript"]
+settings = { enable = true }
+```
+
+The same value answers every item whatever `section` it names. No server
+measured here wants different settings per section, and a per-section table
+would be a shape invented ahead of a case for it; `section` is in the
+request when one turns up.
+
 An entry named for a built-in **overrides** its command, languages or
 backstop and keeps everything else — readiness policy, capabilities,
 initialization options, query rewriting, install hint, extra views, hover
-params, reference aliases, outline containers. Any other entry is a generic
+params, reference aliases, outline containers, settings. Any other entry is a generic
 server, which needs `command` and `languages`.
 
 `Configured` keeps that promise one hand-written method at a time: each one

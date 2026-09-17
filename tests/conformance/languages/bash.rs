@@ -33,6 +33,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     argv: &["bash-language-server", "start"],
     version_argv: &["bash-language-server", "--version"],
     builtin: false,
+    settings: "",
 }];
 
 const PROBES: &[Probe] = &[
