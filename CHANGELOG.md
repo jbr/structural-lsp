@@ -45,6 +45,8 @@ change, see [`journal/`](journal/); for what is left, see
 - **Every source file stays under about 500 lines** (CLAUDE.md), with tests in a sibling module.
 
 ### Fixed
+- **A cold symbol index no longer reads as a missing symbol** (docs/servers.md): a launcher opens one file the server serves and asks for its outline before publishing it, so a bare name resolves on a fresh session — pyright and basedpyright answer 8 of 8 probes where they answered 7, and five more servers gained their cold bare-name column.
+
 - **A server that needs client settings can be given them** (docs/servers.md): `settings` in a `structural.toml` entry answers the server's `workspace/configuration` request, which some servers read and nothing else substitutes for — deno 2.9.6 served nothing at all for a whole session without it, and answers 6 of 8 probes with it.
 
 - **An outline container's range may be wider than the name** (docs/correctness.md): the advertised name is located inside the selected text at a token boundary instead of compared for equality, so a server that selects a whole assignment reports a container; zero or several occurrences still refuse, and the refusal no longer names a cause it has not established.

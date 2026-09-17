@@ -228,6 +228,45 @@ impl LspServer {
         self.handle().capture_events()
     }
 
+    /// Open one file this server serves, so its symbol index is populated.
+    ///
+    /// Seven of nineteen servers measured answer `workspace/symbol` with
+    /// nothing until some document is open, and answer the identical query
+    /// once one is (`reference/lsp-server-conventions.md`). Without this a
+    /// bare name — the most common query shape — is answered `no symbol
+    /// named 'x'` on a fresh session about a symbol plainly in the tree.
+    ///
+    /// **Any** file warms it: opening one file makes symbols defined in
+    /// files never opened resolve. So this is one file read per server and
+    /// not a guess about where the answer is (`server/warm.rs`).
+    ///
+    /// Done once, as part of becoming ready, and never as a retry after an
+    /// empty answer — re-asking a query that missed is the retry loop the
+    /// contract forbids (`docs/correctness.md`). A server with no file of
+    /// its language in the tree warms nothing, which is not an error, and a
+    /// file that cannot be read is left to the query that names it.
+    pub fn warm_index(&mut self) -> Option<PathBuf> {
+        if !self.supports("workspaceSymbolProvider") {
+            return None;
+        }
+        let file = warm::first_served_file(&self.root.clone(), self.adapter.as_ref())?;
+        self.sync(&file).ok()?;
+        // Opening it is not enough for every server. pyright schedules the
+        // analysis an open implies and populates its workspace index from
+        // it, so a bare `didOpen` followed immediately by a query still
+        // races: the index is empty until something makes the server look
+        // at the document. One request against it does, and it is the
+        // request an editor sends on open anyway.
+        if let Ok(uri) = path_uri(&file) {
+            let _ = self.document_symbol(&uri);
+        }
+        // Then the same wait every query does — for the server to have no
+        // outstanding work, bounded only by the inactivity backstop
+        // (docs/correctness.md). Not a settle sleep.
+        self.wait_ready().ok()?;
+        Some(file)
+    }
+
     /// Push the on-disk text of every document this server owns, so the
     /// next query runs against its current view of them. Returns how many
     /// documents had to be (re)fed.
@@ -531,6 +570,8 @@ pub fn path_uri(path: &Path) -> Result<String> {
         .map(|url| url.to_string())
         .map_err(|_| anyhow::anyhow!("path {} is not absolute", path.display()))
 }
+
+mod warm;
 
 #[cfg(test)]
 mod tests;

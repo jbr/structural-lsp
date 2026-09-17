@@ -236,6 +236,12 @@ impl Entry {
             Ok(server) => server,
             Err(error) => return launch.failed(format!("{error:#}")),
         };
+        // Populate the symbol index before anything can query it: several
+        // servers answer `workspace/symbol` with nothing until a document
+        // is open (docs/servers.md). On the launcher's own thread and
+        // before the workspace lock is taken, so a tree walk and a file
+        // read cannot delay an unrelated query.
+        let _warmed = server.warm_index();
         // The workspace lock, or nothing if it stays held past the bound. A
         // query holding this lock is unbounded in real time by design, so
         // waiting for it would make a shutdown wait with it.

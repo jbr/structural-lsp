@@ -86,6 +86,36 @@ languages = ["go"]               # required; extensions from the table below
 extensions = { go = ["go"] }     # or spell them out
 ```
 
+### The index is warmed at launch
+
+Several servers answer `workspace/symbol` with nothing until some document
+is open, and answer the identical query once one is — pyright,
+basedpyright, pyrefly, clangd, typescript-language-server,
+bash-language-server and R among nineteen measured
+(`../reference/lsp-server-conventions.md`). Without a warm-up, a bare name
+— the most common query shape — is answered `no symbol named 'x'` on a
+fresh session about a symbol plainly in the tree.
+
+So a launcher opens **one** file before the server is published:
+`LspServer::warm_index`, gated on the advertised `workspaceSymbolProvider`,
+picking the first file the adapter serves in a bounded, deterministic walk
+(`src/lsp/server/warm.rs`). Any file will do — opening one makes symbols
+defined in files never opened resolve — so the cost is one file read per
+server, not one per file in the tree.
+
+The open alone is not enough. pyright schedules the analysis an open
+implies and fills its index from that, so a `didOpen` followed immediately
+by a query still races it; the warm-up sends one `documentSymbol` against
+the file it opened, which is what an editor sends on open anyway, and then
+waits the same wait every query waits. There is no sleep and no retry: a
+query that missed is never re-asked (`correctness.md`).
+
+It happens on the launcher's own thread and before the workspace lock is
+taken, so neither the walk nor the read can delay an unrelated query. A
+workspace with no file of that server's language warms nothing, which is
+not an error, and a server that does not advertise the capability is
+skipped — pylsp, which has no index at all.
+
 ### Settings a server will not start without
 
 `workspace/configuration` is answered with one entry per requested item,
