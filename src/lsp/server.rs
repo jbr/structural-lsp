@@ -350,7 +350,18 @@ impl LspServer {
     /// `workspace/symbol`, with the adapter's query rewriting, decoded into
     /// candidates as the server reported them (no completeness claim is
     /// made anywhere downstream).
+    ///
+    /// Empty when the server did not advertise the capability, the same way
+    /// [`Self::document_symbol`] answers `None`. Sending it anyway earns a
+    /// `-32601`, and that error used to end the whole query: pylsp 1.15.0
+    /// serves documents but has no symbol index, and a *file-scoped* query
+    /// that never needed the index failed on it. A server that cannot
+    /// nominate from an index contributes no candidates; the other servers
+    /// still do, and the file's own outline still does.
     pub fn workspace_symbol(&self, query: &str) -> Result<Vec<SymbolInformation>> {
+        if !self.supports("workspaceSymbolProvider") {
+            return Ok(Vec::new());
+        }
         let query = self.adapter.symbol_query(query);
         let result = self
             .handle()

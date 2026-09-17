@@ -6,9 +6,9 @@
 //! `Location[]`, `LocationLink[]`, `LocationLink`, `null`, `[]` — every shape
 //! the spec allows). The MCP tool layer composes these with the session.
 
-use crate::lsp::positions::{Encoding, position_to_offset};
+use crate::lsp::positions::{Encoding, offset_to_position, position_to_offset};
 use anyhow::{Context, Result, bail};
-use lsp_types::{Location, Range, SymbolInformation, Uri};
+use lsp_types::{Location, Position, Range, SymbolInformation, Uri};
 use serde_json::Value;
 #[cfg(test)]
 use serde_json::json;
@@ -277,34 +277,118 @@ pub fn group_by_target(found: Vec<(Candidate, DefinitionSet)>) -> Vec<Identity> 
     identities
 }
 
-/// Check that `name` is exactly what sits at `range` in `text` — the text
-/// the server was just given for that file. A server range that no longer
-/// names the symbol means the answer came from a stale index; the caller
-/// reports that rather than navigating from it. An empty range (a module
-/// declaration resolving to the top of its file) names nothing and passes.
-pub fn verify_name_at(text: &str, range: Range, name: &str, encoding: Encoding) -> Result<()> {
+/// Where a server's reported range puts the symbol's name.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NameLocation {
+    /// The range names no token: empty, or the whole file — a module whose
+    /// definition *is* its file. There is nothing to check and nothing to
+    /// navigate from but the range itself.
+    Unnamed,
+    /// The name is at this position. Equal to the range's start when the
+    /// range is exactly the name, and inside it when the range is wider.
+    At(Position),
+}
+
+impl NameLocation {
+    /// The position to send a follow-up request at, given the range this
+    /// came from.
+    pub fn position(&self, range: Range) -> Position {
+        match self {
+            NameLocation::Unnamed => range.start,
+            NameLocation::At(position) => *position,
+        }
+    }
+}
+
+/// Find `name` within `range` in `text` — the text the server was just
+/// given for that file — and say where it is.
+///
+/// The check is that the server's index agrees with the text just read: a
+/// range holding no such name means the answer came from a stale index, and
+/// the caller reports that rather than navigating from it
+/// (docs/correctness.md).
+///
+/// **A wider range is not staleness.** `SymbolInformation.location.range` is
+/// specified as the range enclosing the symbol, so a server may report a
+/// whole declaration — `def choose(flag: bool) -> int:` — where another
+/// reports just `choose`. `DocumentSymbol` carries `selectionRange` for the
+/// name and `SymbolInformation` has nowhere to put it, so the tight range
+/// is a convention, not a requirement. Both shapes resolve here, and the
+/// position returned is the name's either way, because that is what a
+/// `definition` or `references` request has to be sent at.
+///
+/// Two occurrences of the name inside one range is ambiguous, and nothing
+/// ambiguous is silently picked (`backlog/symbol-range-convention.md`).
+pub fn locate_name_at(
+    text: &str,
+    range: Range,
+    name: &str,
+    encoding: Encoding,
+) -> Result<NameLocation> {
     let start = position_to_offset(text, range.start, encoding)
         .context("the reported range starts outside the file as read from disk")?;
     let end = position_to_offset(text, range.end, encoding)
         .context("the reported range ends outside the file as read from disk")?;
     if start == end || (start == 0 && end == text.len()) {
-        // Nothing, or the whole file: a module whose definition *is* its
-        // file (rust-analyzer reports either shape) names no token.
-        return Ok(());
+        return Ok(NameLocation::Unnamed);
     }
     if end < start {
         bail!("the reported range is inverted");
     }
     let found = &text[start..end];
     if found == name {
-        Ok(())
-    } else {
+        return Ok(NameLocation::At(range.start));
+    }
+    if name.is_empty() {
+        bail!("the reported name is empty");
+    }
+    let mut occurrences = found
+        .match_indices(name)
+        .filter(|(at, _)| is_whole_token(found, *at, name.len()));
+    let (first, _) = occurrences.next().ok_or_else(|| {
+        anyhow::anyhow!(
+            "expected `{name}` at {}:{}, found `{}`",
+            range.start.line + 1,
+            range.start.character + 1,
+            elided(found)
+        )
+    })?;
+    if occurrences.next().is_some() {
         bail!(
-            "expected `{name}` at {}:{}, found `{found}`",
+            "`{name}` occurs more than once in the range reported at {}:{}, so which one the \
+             server meant is not decidable",
             range.start.line + 1,
             range.start.character + 1
-        )
+        );
     }
+    Ok(NameLocation::At(offset_to_position(
+        text,
+        start + first,
+        encoding,
+    )?))
+}
+
+/// Whether the `len` bytes at `at` are bounded by non-identifier characters
+/// — so `choose` in `def choose(` matches and the one in `chooser` does not.
+fn is_whole_token(haystack: &str, at: usize, len: usize) -> bool {
+    let boundary =
+        |character: Option<char>| !character.is_some_and(|c| c.is_alphanumeric() || c == '_');
+    boundary(haystack[..at].chars().next_back()) && boundary(haystack[at + len..].chars().next())
+}
+
+/// A whole declaration can be long, and the text lands in an error message.
+fn elided(found: &str) -> String {
+    let line = found.lines().next().unwrap_or(found);
+    if line.chars().count() > 60 {
+        format!("{}…", line.chars().take(59).collect::<String>())
+    } else {
+        line.to_string()
+    }
+}
+
+/// Check that `range` names `name` in `text`, discarding where.
+pub fn verify_name_at(text: &str, range: Range, name: &str, encoding: Encoding) -> Result<()> {
+    locate_name_at(text, range, name, encoding).map(|_| ())
 }
 
 /// Whether `range` is the whole of `text`: a definition target that is a

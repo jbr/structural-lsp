@@ -38,7 +38,10 @@ while True:
         if os.environ.get('HOLD_INIT'):
             event('initialization pending')
         else:
-            reply(msg, {'capabilities': {}})
+            # The stuck query below is a workspace/symbol this mock never
+            # answers, so it has to advertise the capability: structural
+            # does not send a request a server did not offer.
+            reply(msg, {'capabilities': {'workspaceSymbolProvider': True}})
     elif method == 'initialized':
         send({'jsonrpc': '2.0', 'method': 'experimental/serverStatus', 'params': {'quiescent': True}})
     elif method == 'workspace/symbol':

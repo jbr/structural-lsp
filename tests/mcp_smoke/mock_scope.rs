@@ -88,7 +88,13 @@ while True:
             reply(msg, {"capabilities": {
                 "documentSymbolProvider": True, "definitionProvider": True}})
         elif method == "workspace/symbol":
-            reply(msg, [])
+            # Never reached: this mock does not advertise
+            # workspaceSymbolProvider, and structural does not send a
+            # request a server did not offer. pylsp 1.15.0 answers exactly
+            # this way, and the error used to end the whole query — a
+            # file-scoped one included, which never needed the index.
+            send({"jsonrpc": "2.0", "id": msg["id"], "error": {
+                "code": -32601, "message": "Method Not Found: workspace/symbol"}})
         elif method == "textDocument/documentSymbol":
             reply(msg, outline(msg["params"]["textDocument"]["uri"]))
         elif method == "textDocument/definition":

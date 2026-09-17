@@ -28,7 +28,7 @@
 
 use crate::lsp::definition::{
     Candidate, DefinitionSet, DefinitionTarget, Identity, Origin, Partition, Resolution,
-    group_by_target, parse_definition_result, partition, verify_name_at,
+    group_by_target, locate_name_at, parse_definition_result, partition, verify_name_at,
 };
 use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
@@ -257,10 +257,14 @@ fn definition_of(
         .ok_or_else(|| anyhow::anyhow!("candidate URI is not a readable file path"))?;
     let range = candidate.info.location.range;
     let synced = server.sync(&file)?;
-    verify_name_at(&synced.text, range, symbol, server.encoding()).with_context(|| {
+    // A range wider than the name is not staleness: `location.range` is
+    // specified as the range enclosing the symbol, and servers differ on
+    // whether they tighten it to the name (docs/correctness.md). The
+    // position the definition request needs is the name's, wherever in the
+    // range it sits.
+    let at = locate_name_at(&synced.text, range, symbol, server.encoding()).with_context(|| {
         format!(
-            "{}'s location for '{symbol}' ({}) does not match the file on disk; the server's \
-             view was stale — retry after it re-indexes",
+            "{}'s location for '{symbol}' ({}) does not name it in the file on disk",
             candidate.server,
             location_line(root, &candidate.info.location.uri, range.start)
         )
@@ -269,7 +273,7 @@ fn definition_of(
     // server answers against the text we read. Wait for no outstanding work
     // again: the sync may have started some.
     server.wait_ready()?;
-    let raw = server.definition(&synced.uri, range.start)?;
+    let raw = server.definition(&synced.uri, at.position(range))?;
     parse_definition_result(raw).with_context(|| {
         format!(
             "{} returned an unrecognizable definition result",
@@ -303,8 +307,7 @@ pub fn sync_target(
     )
     .with_context(|| {
         format!(
-            "{}'s definition target for '{name}' ({}) does not match the file on disk; \
-                 the server's view was stale — retry after it re-indexes",
+            "{}'s definition target for '{name}' ({}) does not name it in the file on disk",
             identity.server,
             location_line(root, &target.uri, target.selection_range.start)
         )

@@ -342,6 +342,55 @@ fn verify_name_at_accepts_the_name_and_empty_ranges_only() {
     );
 }
 
+/// A range wider than the name resolves, and answers with the name's own
+/// position — `SymbolInformation.location.range` is the range enclosing the
+/// symbol, so a whole declaration is a conforming answer and a
+/// `definition` request still has to be sent at the name
+/// (`backlog/symbol-range-convention.md`).
+#[test]
+fn locate_name_at_finds_the_name_inside_a_whole_declaration_range() {
+    let text = "pub struct Config {\n    pub limit: usize,\n}\n";
+    let r = |sl, sc, el, ec| lsp_types::Range {
+        start: lsp_types::Position::new(sl, sc),
+        end: lsp_types::Position::new(el, ec),
+    };
+    // The tight range: the position is the range's own start.
+    match locate_name_at(text, r(0, 11, 0, 17), "Config", Encoding::Utf16).unwrap() {
+        NameLocation::At(position) => assert_eq!(position, lsp_types::Position::new(0, 11)),
+        NameLocation::Unnamed => panic!("the range names Config"),
+    }
+    // The declaration line: the same position, found inside it.
+    match locate_name_at(text, r(0, 0, 0, 19), "Config", Encoding::Utf16).unwrap() {
+        NameLocation::At(position) => assert_eq!(position, lsp_types::Position::new(0, 11)),
+        NameLocation::Unnamed => panic!("the range contains Config"),
+    }
+    // A range that does not hold the name at all is the disagreement the
+    // check exists for, and it stays an error.
+    assert!(locate_name_at(text, r(1, 4, 1, 20), "Config", Encoding::Utf16).is_err());
+}
+
+#[test]
+fn locate_name_at_requires_a_token_boundary_and_refuses_two_occurrences() {
+    let r = |sl, sc, el, ec| lsp_types::Range {
+        start: lsp_types::Position::new(sl, sc),
+        end: lsp_types::Position::new(el, ec),
+    };
+    // `choose` inside `chooser` is a different name, so the wider range
+    // holds no occurrence of it.
+    let text = "def chooser(flag):\n    return 1\n";
+    let error = locate_name_at(text, r(0, 0, 0, 18), "choose", Encoding::Utf16).unwrap_err();
+    assert!(
+        error.to_string().contains("found `def chooser(flag):`"),
+        "{error}"
+    );
+
+    // Two occurrences in one range: which one the server meant is not
+    // decidable, and nothing ambiguous is silently picked.
+    let text = "def choose(choose: int):\n    return 1\n";
+    let error = locate_name_at(text, r(0, 0, 0, 24), "choose", Encoding::Utf16).unwrap_err();
+    assert!(error.to_string().contains("more than once"), "{error}");
+}
+
 fn candidate(server: &str, name: &str, path: &str, line: u32) -> Candidate {
     Candidate {
         server: server.to_string(),
