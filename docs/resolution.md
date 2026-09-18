@@ -125,6 +125,14 @@ same thing, not claims that have to agree:
   are trimmed of punctuation, never the middle, and a name with no
   separator in it is never reinterpreted.
 
+- the **file the symbol is in**, for languages whose module is a file:
+  `helper.choose` in `src/helper.gleam`, `Config.doubled` in `Config.qml`.
+  gleam and qmlls nominate a symbol and report no container from any other
+  source, because there is no enclosing node to report. The stem is read
+  from the candidate's own path, so it is a fact about where the symbol is
+  rather than a guess about what it is called, and it is one source among
+  several that never overrides another.
+
 That second source also decides what counts as an **exact** candidate: a
 name matches when its last segment is the name asked for. The identity that
 results carries the name being resolved rather than the one advertised,

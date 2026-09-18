@@ -125,11 +125,37 @@ pub fn filter(
         let sources = [
             candidate.info.container_name.clone(),
             advertised_container(&candidate.info.name, &qualified.name),
+            file_container(candidate),
         ];
         sources
             .iter()
             .any(|source| container_matches(source.as_deref(), &qualified.qualifiers))
     })
+}
+
+/// The container a symbol's **file** gives it, for languages whose module
+/// is a file: `helper.choose` in `src/helper.gleam`, `Config.doubled` in
+/// `Config.qml`.
+///
+/// gleam and qmlls nominate a symbol from a file's outline and report no
+/// container from any other source, because there is no enclosing node to
+/// report — the module is the file, and the file name is not in the reply.
+/// The stem is read from the candidate's own path rather than inferred, so
+/// this is a fact about where the symbol is, not a guess about what it is
+/// called.
+///
+/// It is offered as one source among several and never overrides another.
+/// A language whose files are not modules gains a qualifier that happens to
+/// work; a query where a file and a type share a name matches both and is
+/// listed as ambiguous, which is the contract everywhere else
+/// (`docs/correctness.md`).
+fn file_container(candidate: &Candidate) -> Option<String> {
+    candidate
+        .canonical_path
+        .as_ref()?
+        .file_stem()?
+        .to_str()
+        .map(str::to_string)
 }
 
 #[cfg(test)]
@@ -235,6 +261,49 @@ mod tests {
 
         // Neither says it: listed, not silently dropped.
         let (kept, unqualified) = filter(vec![candidate("Doubled", Some("Other"))], &asked);
+        assert!(kept.is_empty());
+        assert_eq!(unqualified.len(), 1);
+    }
+
+    /// gleam and qmlls report no container at all: the module is the file,
+    /// and the file name is not in the reply.
+    #[test]
+    fn a_module_that_is_a_file_qualifies_from_the_path() {
+        let candidate = |name: &str, path: &str| Candidate {
+            server: "s".into(),
+            info: serde_json::from_value(serde_json::json!({
+                "name": name,
+                "kind": 12,
+                "location": {
+                    "uri": "file:///x",
+                    "range": {
+                        "start": { "line": 0, "character": 0 },
+                        "end": { "line": 0, "character": 0 }
+                    }
+                },
+            }))
+            .expect("a SymbolInformation"),
+            canonical_path: Some(std::path::PathBuf::from(path)),
+            exact: true,
+        };
+
+        let (kept, _) = filter(
+            vec![candidate("choose", "/ws/src/helper.gleam")],
+            &parse("helper.choose").unwrap(),
+        );
+        assert_eq!(kept.len(), 1, "the module is the file");
+
+        let (kept, _) = filter(
+            vec![candidate("doubled", "/ws/Config.qml")],
+            &parse("Config.doubled").unwrap(),
+        );
+        assert_eq!(kept.len(), 1, "the component is the file");
+
+        // Another file's symbol is not in this module.
+        let (kept, unqualified) = filter(
+            vec![candidate("choose", "/ws/src/other.gleam")],
+            &parse("helper.choose").unwrap(),
+        );
         assert!(kept.is_empty());
         assert_eq!(unqualified.len(), 1);
     }

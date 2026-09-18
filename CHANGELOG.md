@@ -45,7 +45,7 @@ change, see [`journal/`](journal/); for what is left, see
 - **Every source file stays under about 500 lines** (CLAUDE.md), with tests in a sibling module.
 
 ### Fixed
-- **A qualifier resolves from the name a server advertised** (docs/resolution.md): a container may be in `containerName`, in an outline's nesting, or inside the symbol's own name, and any of them confirming the qualifier is enough — gopls spells a method `Config.Doubled` and `(Config).Doubled`, and answers 8 of 8 probes where it answered 6.
+- **A qualifier resolves from any source that carries it** (docs/resolution.md): `containerName`, an outline's nesting, the symbol's own name, or the file when a module is a file — any one confirming the qualifier is enough. gopls spells a method `Config.Doubled` and answers 8 of 8 probes where it answered 6; gleam and qmlls resolve a file-scoped qualified name they could not.
 
 - **`implementations` renders a derive as one row** (docs/tools.md): a derived trait is one implementation result per trait, all at the `#[derive(…)]` line with nothing to tell them apart, so the identical rows fold into the one that names the traits and a `note:` says how many folded; the header keeps the server's count.
 
