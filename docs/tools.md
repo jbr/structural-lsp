@@ -35,11 +35,21 @@ silent.
 | --- | --- |
 | `definition` (default) | the decorated source |
 | `outline` | the target's children, or a whole file's symbols with only `path` |
-| `implementations` | `textDocument/implementation`, rendered as `uses` renders hits |
+| `implementations` | `textDocument/implementation`, rendered as `uses` renders hits, with results at one line folded into one row |
 | `incoming-calls` / `outgoing-calls` | the call hierarchy, one line per caller/callee with its call sites under it |
 | `type` | `textDocument/hover` reduced to its code blocks. With an anchor, rust-analyzer answers with the type of the expression the focus spans (`hoverRange`); other servers answer at its start. |
 | `expanded` | rust-analyzer only: macro expansion at the focus |
 | `related-tests` | rust-analyzer only: the tests related to the target, each with a runnable cargo command |
+
+**Several results at one line are one row.** A Rust derive is one
+implementation per derived trait and one `textDocument/implementation`
+result per trait, every one pointing at the `#[derive(…)]` line, with
+nothing in the reply to say which is which. Rendered one per result that is
+N identical rows carrying what one carries. They fold into the row that
+shows the derive attribute — which names the traits — and a `note:` states
+how many folded. The header keeps the server's count, because that is the
+server's answer to "how many implementations", and nothing is inferred
+about which result was which.
 
 An unavailable view gets one of three distinct answers: the view name is
 unknown (and the known ones are listed), no running server supports it, or it

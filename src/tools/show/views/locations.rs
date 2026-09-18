@@ -5,7 +5,7 @@ use super::unsupported;
 use crate::lsp::definition::{DefinitionSet, parse_definition_result};
 use crate::lsp::references::{Hit, group_by_file};
 use crate::workspace::Workspace;
-use crate::tools::hits::{FileGroup, lines_for, render_groups};
+use crate::tools::hits::{FileGroup, collapse_identical, lines_for, render_groups};
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
 use anyhow::{Context, Result};
@@ -59,8 +59,19 @@ pub(super) fn implementations(state: &mut Workspace, root: &Path, target: Target
         files.len(),
         if files.len() == 1 { "" } else { "s" }
     );
+    // A derive is several implementations at one location and the server
+    // says nothing about which is which, so the identical rows are folded
+    // into the one that carries the `#[derive(…)]` line naming them. The
+    // header keeps the server's count (crate::tools::hits).
+    let collapsed = collapse_identical(&mut groups);
     let mut budget = super::MAX_LINES;
     let omitted = render_groups(&mut text, &groups, &mut budget);
+    if collapsed > 0 {
+        text.push_str(&format!(
+            "note: {collapsed} more reported at a line already shown, with nothing \
+             distinguishing them\n"
+        ));
+    }
     if omitted > 0 {
         text.push_str(&format!(
             "note: {omitted} more not shown (listing cap {})\n",

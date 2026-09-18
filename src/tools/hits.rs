@@ -11,6 +11,7 @@ use crate::tools::classify;
 use crate::tools::listing::relative_display;
 use anyhow::{Context, Result};
 use lsp_types::Position;
+use std::collections::HashSet;
 use std::path::Path;
 
 /// One hit, ready to print.
@@ -138,6 +139,34 @@ pub fn source_line(text: &str, position: Position, encoding: Encoding) -> String
 }
 
 /// Print groups while the budget lasts; returns how many hits went unshown.
+/// Collapse rows that are the same line of the same file, returning how
+/// many were removed.
+///
+/// A server may report several results at one location. rust-analyzer does
+/// it for a derive: `#[derive(Clone, Copy, Debug, PartialEq, Eq)]` is five
+/// implementations and five `textDocument/implementation` results, every
+/// one pointing at the `#[derive(…)]` line, with nothing to say which
+/// derived trait each is. Rendered one per result that is five identical
+/// rows carrying no more information than one — and the same view rendered
+/// another type's derive as a single row, so the two disagreed.
+///
+/// The count stays in the header, where it is the server's answer to "how
+/// many", and the row that survives is the derive attribute itself, which
+/// names the traits. Nothing is inferred about which result is which,
+/// because the server did not say.
+pub fn collapse_identical(groups: &mut [FileGroup]) -> usize {
+    let mut collapsed = 0;
+    for group in groups {
+        let before = group.hits.len();
+        let mut seen: HashSet<(u32, String)> = HashSet::new();
+        group
+            .hits
+            .retain(|hit| seen.insert((hit.line, hit.text.clone())));
+        collapsed += before - group.hits.len();
+    }
+    collapsed
+}
+
 pub fn render_groups(text: &mut String, groups: &[FileGroup], budget: &mut usize) -> usize {
     let mut omitted = 0;
     for group in groups {
@@ -160,4 +189,75 @@ pub fn render_groups(text: &mut String, groups: &[FileGroup], budget: &mut usize
         }
     }
     omitted
+}
+
+#[cfg(test)]
+mod collapse_tests {
+    use super::*;
+
+    fn hit(line: u32, text: &str) -> HitLine {
+        HitLine {
+            line,
+            item: Some("ToolOutcome".to_string()),
+            is_test: false,
+            text: text.to_string(),
+        }
+    }
+
+    /// rust-analyzer's shape: five derived traits, five results, one line.
+    #[test]
+    fn identical_rows_of_one_line_become_one() {
+        let derive = "#[derive(Clone, Copy, Debug, PartialEq, Eq)]";
+        let mut groups = vec![FileGroup {
+            path: "src/log.rs".to_string(),
+            hits: vec![hit(940, derive), hit(940, derive), hit(940, derive)],
+        }];
+        assert_eq!(collapse_identical(&mut groups), 2);
+        assert_eq!(groups[0].hits, vec![hit(940, derive)]);
+    }
+
+    /// Real implementations at their own lines are untouched, and so is a
+    /// derive beside them — the case that already rendered one row, which
+    /// is why the two disagreed.
+    #[test]
+    fn distinct_lines_are_kept() {
+        let mut groups = vec![FileGroup {
+            path: "src/log.rs".to_string(),
+            hits: vec![
+                hit(940, "#[derive(Debug)]"),
+                hit(950, "impl Display for Notify {"),
+                hit(970, "impl Clone for Notify {"),
+            ],
+        }];
+        assert_eq!(collapse_identical(&mut groups), 0);
+        assert_eq!(groups[0].hits.len(), 3);
+    }
+
+    /// The same text on different lines is two hits, not a duplicate.
+    #[test]
+    fn the_same_text_at_another_line_is_not_a_duplicate() {
+        let mut groups = vec![FileGroup {
+            path: "src/log.rs".to_string(),
+            hits: vec![hit(10, "#[derive(Debug)]"), hit(20, "#[derive(Debug)]")],
+        }];
+        assert_eq!(collapse_identical(&mut groups), 0);
+    }
+
+    /// Files are collapsed independently, and the count is the total.
+    #[test]
+    fn each_file_collapses_on_its_own() {
+        let mut groups = vec![
+            FileGroup {
+                path: "a.rs".to_string(),
+                hits: vec![hit(1, "#[derive(Debug)]"), hit(1, "#[derive(Debug)]")],
+            },
+            FileGroup {
+                path: "b.rs".to_string(),
+                hits: vec![hit(1, "#[derive(Debug)]")],
+            },
+        ];
+        assert_eq!(collapse_identical(&mut groups), 1);
+        assert_eq!(groups[0].hits.len(), 1);
+        assert_eq!(groups[1].hits.len(), 1);
+    }
 }

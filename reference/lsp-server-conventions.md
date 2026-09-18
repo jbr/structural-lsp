@@ -27,7 +27,7 @@ dimension is real even if the individual readings are not durable.
 | bash | bash-language-server | 5.6.0 | 3/6 |
 | gleam | gleam | 1.18.1 | 2/8 |
 | qml | qmlls | 6.11.1 | 2/8 |
-| typescript | deno | 2.9.6 | 0/8 |
+| typescript | deno | 2.9.6 | 7/8 (0/8 before `settings = { enable = true }`) |
 | swift | sourcekit-lsp | — | 0/8 |
 | ruby | typeprof | 0.31.1 | 0/8 |
 | elm | elm-language-server | 2.7.0 | 0/8 |
@@ -137,19 +137,26 @@ to the caller is the same sentence for three of them.
 
 | shape | servers | what structural says |
 | --- | --- | --- |
-| initializes, serves empty for every request | deno 2.9.6, sourcekit-lsp, typeprof 0.31.1 | `no symbol named 'choose'` — indistinguishable from a missing symbol |
+| initializes, serves empty for every request | sourcekit-lsp, typeprof 0.31.1 (and deno, until its cause was found) | `no symbol named 'choose'` — indistinguishable from a missing symbol |
 | advertises a capability, then `-32601` on it | elm-language-server 2.7.0 | the error, surfaced |
 | internal error per request (`-32603`) | elm-language-server | the error, surfaced |
 | binary starts and exits | erlang_ls (`escript: exception error: undefined function erlang_ls:main/1`) | the error, surfaced |
 | process closes stdout during `initialize` | R (`languageserver` not installed in R) | connection failure, with the install hint |
 
-For deno, two hypotheses were tested directly and both failed:
-`initializationOptions: {"enable": true}`, and a `deno.json` in the
-workspace root. A third was not invented; the cause is unestablished.
-sourcekit-lsp and typeprof were not investigated past the measurement —
-sourcekit-lsp fails `anchor to a local` too, which needs no symbol name at
-all, so its zero is not the argument-label naming difference that Swift
-would otherwise predict.
+deno is out of that row and worth keeping as the worked example. Two
+hypotheses were tested and failed — `initializationOptions: {"enable":
+true}`, and a `deno.json` marker — and the third was the answer: deno reads
+`enable` only from a `workspace/configuration` reply, which structural
+answered with nulls. With `settings = { enable = true }` it answers 7 of 8
+(`../docs/servers.md`).
+
+**That is the reading to carry to every other zero.** A server in the wild
+answering nothing is more likely unconfigured, or pointed at a project that
+was never built, than broken: Swift wants a built package, elm a populated
+package cache, gleam and qml a build directory. This scorecard cannot tell
+"serves nothing" from "was never set up for this tree" — both are the same
+empty cell — so a `0/8` here is a question, and quoting one as a verdict
+about a server would be reading more than it says.
 
 The bottom two rows are servers that a `PATH` lookup reports as installed
 and that a spawn reports as runnable. Only a handshake catches them.

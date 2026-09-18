@@ -116,6 +116,33 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
         "{impls}"
     );
 
+    // A derive is one implementation per derived trait, every one reported
+    // at the `#[derive(…)]` line with nothing to tell them apart. The
+    // header keeps the server's count and the rows are folded into the one
+    // that names the traits, with a note for what was folded
+    // (backlog/implementations-derive-rows.md, shipped).
+    let derived = show(
+        &mut state,
+        "implementations",
+        Some("Config"),
+        Some("rust"),
+        None,
+        None,
+    );
+    let derive_rows = derived
+        .lines()
+        .filter(|line| line.contains("#[derive("))
+        .count();
+    assert_eq!(derive_rows, 1, "the derive is one row\n{derived}");
+    assert!(
+        derived.contains("#[derive(Debug, Clone)]"),
+        "the row that survives names the traits\n{derived}"
+    );
+    assert!(
+        derived.contains("note: 1 more reported at a line already shown"),
+        "what was folded is stated\n{derived}"
+    );
+
     // Calls both ways.
     let incoming = show(
         &mut state,
