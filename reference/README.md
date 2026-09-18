@@ -16,6 +16,12 @@ deleted. It is read when a decision needs evidence, not every session.
   methods and commands real language servers ship beyond the LSP spec, rated
   for agent use. The source of `expanded`, `related-tests` and `hoverRange`
   (`view = "type"`).
+- [`server-root-discovery.md`](server-root-discovery.md) — whether a language
+  server finds its own project root when started inside one. rust-analyzer
+  and gopls both walk up and index the whole enclosing project, measured
+  September 2026; the client's filter, not the server, is what narrows an
+  answer. The evidence behind the root rule in
+  [`../backlog/discovery/selection.md`](../backlog/discovery/selection.md).
 - [`servers-list/`](servers-list/) — thirteen editor inventories (Eglot,
   lsp-mode, lsp-bridge, nvim-lspconfig, Helix, vim-lsp-settings,
   kakoune-lsp, Kate, OpenCode, Zed, mason-registry) extracted from source and
