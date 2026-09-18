@@ -137,7 +137,16 @@ pub(super) fn from_anchor(
             )
         })
         .collect();
-    finish(state, root, identities, &focus_text, Exclusions::default())
+    // An anchor resolves the token it names, so the name being
+    // resolved and the name shown are the same text.
+    finish(
+        state,
+        root,
+        identities,
+        &focus_text,
+        &focus_text,
+        Exclusions::default(),
+    )
 }
 
 /// The text at the target's own range, read from disk: what the focus

@@ -31,7 +31,44 @@ impl Qualified {
 fn segments(text: &str) -> Vec<&str> {
     text.split("::")
         .flat_map(|part| part.split(['.', '/']))
+        .map(trim_to_identifier)
         .collect()
+}
+
+/// A segment with anything that cannot be part of an identifier trimmed
+/// from its ends.
+///
+/// gopls spells a method `(Config).Doubled` in an outline and
+/// `Config.Doubled` in the index; the parentheses are punctuation in the
+/// server's own spelling, not part of the type's name. Trimming the ends
+/// only — never the middle — keeps `Config` and leaves anything with
+/// interior punctuation alone, so this cannot quietly turn one name into
+/// another.
+fn trim_to_identifier(segment: &str) -> &str {
+    segment.trim_matches(|c: char| !(c.is_alphanumeric() || c == '_'))
+}
+
+/// The segments of a name a **server advertised**, when its last segment is
+/// `name`: the earlier ones are that server's own spelling of the
+/// container.
+///
+/// `SymbolInformation.name` is not specified to be a bare identifier, and
+/// gopls puts the receiver in it. The last segment must be the name being
+/// resolved and the split must have produced more than one segment, so a
+/// name with no separator in it is never reinterpreted.
+pub fn advertised_container(advertised: &str, name: &str) -> Option<String> {
+    let parts = segments(advertised);
+    let (last, earlier) = parts.split_last()?;
+    if *last != name || earlier.is_empty() {
+        return None;
+    }
+    Some(earlier.join("::"))
+}
+
+/// Whether a name a server advertised resolves the name being asked for:
+/// equal, or equal in its last segment.
+pub fn advertises(advertised: &str, name: &str) -> bool {
+    advertised == name || advertised_container(advertised, name).is_some()
 }
 
 /// Parse `symbol`: non-empty, no empty segments.
@@ -73,12 +110,25 @@ pub fn container_matches(container: Option<&str>, qualifiers: &[String]) -> bool
 
 /// Split exact candidates into those whose container matches the
 /// qualifiers and those whose does not.
+///
+/// A container has more than one possible source and servers disagree about
+/// which they use (`docs/resolution.md`): the `containerName` field, or the
+/// server's own spelling of the symbol's name. Either confirming the
+/// qualifier is enough — they are alternative places to say the same thing,
+/// not claims that have to agree — and a candidate no source confirms is
+/// listed rather than silently dropped, as before.
 pub fn filter(
     candidates: Vec<Candidate>,
-    qualifiers: &[String],
+    qualified: &Qualified,
 ) -> (Vec<Candidate>, Vec<Candidate>) {
     candidates.into_iter().partition(|candidate| {
-        container_matches(candidate.info.container_name.as_deref(), qualifiers)
+        let sources = [
+            candidate.info.container_name.clone(),
+            advertised_container(&candidate.info.name, &qualified.name),
+        ];
+        sources
+            .iter()
+            .any(|source| container_matches(source.as_deref(), &qualified.qualifiers))
     })
 }
 
@@ -104,6 +154,89 @@ mod tests {
         assert!(parse("").is_err());
         assert!(parse("Config::").is_err());
         assert!(parse("::new").is_err());
+    }
+
+    /// gopls spells the receiver into the name: `Config.Doubled` from the
+    /// index, `(Config).Doubled` from an outline. Both name `Doubled` and
+    /// both say its container is `Config`.
+    #[test]
+    fn a_server_may_spell_the_container_into_the_name() {
+        for advertised in ["Config.Doubled", "(Config).Doubled", "Config::Doubled"] {
+            assert!(advertises(advertised, "Doubled"), "{advertised}");
+            assert_eq!(
+                advertised_container(advertised, "Doubled").as_deref(),
+                Some("Config"),
+                "{advertised}"
+            );
+        }
+        // Several segments are kept in order, so a module path qualifies
+        // the same way a type does.
+        assert_eq!(
+            advertised_container("pkg/inner.Doubled", "Doubled").as_deref(),
+            Some("pkg::inner")
+        );
+    }
+
+    /// The last segment must be the name asked for, and a name with no
+    /// separator is never reinterpreted.
+    #[test]
+    fn only_the_last_segment_resolves_and_a_plain_name_is_untouched() {
+        assert!(advertises("Doubled", "Doubled"));
+        assert_eq!(advertised_container("Doubled", "Doubled"), None);
+        // The name is the container's, not the symbol's.
+        assert!(!advertises("Config.Doubled", "Config"));
+        // A different trailing segment is a different symbol.
+        assert!(!advertises("Config.Other", "Doubled"));
+        // Interior punctuation is left alone: only the ends are trimmed.
+        assert_eq!(
+            advertised_container("a-b.Doubled", "Doubled").as_deref(),
+            Some("a-b")
+        );
+    }
+
+    /// Either source confirming the qualifier is enough, because they are
+    /// alternative places to say the same thing: ty reports no container at
+    /// all, gopls reports the package in `containerName` and the type in
+    /// the name.
+    #[test]
+    fn either_container_source_satisfies_the_qualifier() {
+        // From JSON, as the rest of the crate builds these: the struct
+        // literal would name a deprecated field.
+        let candidate = |name: &str, container: Option<&str>| Candidate {
+            server: "s".into(),
+            info: serde_json::from_value(serde_json::json!({
+                "name": name,
+                "kind": 6,
+                "location": {
+                    "uri": "file:///x",
+                    "range": {
+                        "start": { "line": 0, "character": 0 },
+                        "end": { "line": 0, "character": 0 }
+                    }
+                },
+                "containerName": container,
+            }))
+            .expect("a SymbolInformation"),
+            canonical_path: None,
+            exact: true,
+        };
+        let asked = parse("Config::Doubled").unwrap();
+
+        // The field says it (pyright's shape).
+        let (kept, _) = filter(vec![candidate("Doubled", Some("Config"))], &asked);
+        assert_eq!(kept.len(), 1, "containerName confirms it");
+
+        // The name says it and the field names the package (gopls's shape).
+        let (kept, _) = filter(
+            vec![candidate("Config.Doubled", Some("example.com/scratch"))],
+            &asked,
+        );
+        assert_eq!(kept.len(), 1, "the advertised name confirms it");
+
+        // Neither says it: listed, not silently dropped.
+        let (kept, unqualified) = filter(vec![candidate("Doubled", Some("Other"))], &asked);
+        assert!(kept.is_empty());
+        assert_eq!(unqualified.len(), 1);
     }
 
     #[test]

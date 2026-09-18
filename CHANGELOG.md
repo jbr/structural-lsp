@@ -45,6 +45,8 @@ change, see [`journal/`](journal/); for what is left, see
 - **Every source file stays under about 500 lines** (CLAUDE.md), with tests in a sibling module.
 
 ### Fixed
+- **A qualifier resolves from the name a server advertised** (docs/resolution.md): a container may be in `containerName`, in an outline's nesting, or inside the symbol's own name, and any of them confirming the qualifier is enough — gopls spells a method `Config.Doubled` and `(Config).Doubled`, and answers 8 of 8 probes where it answered 6.
+
 - **`implementations` renders a derive as one row** (docs/tools.md): a derived trait is one implementation result per trait, all at the `#[derive(…)]` line with nothing to tell them apart, so the identical rows fold into the one that names the traits and a `note:` says how many folded; the header keeps the server's count.
 
 - **A cold symbol index no longer reads as a missing symbol** (docs/servers.md): a launcher opens one file the server serves and asks for its outline before publishing it, so a bare name resolves on a fresh session — pyright and basedpyright answer 8 of 8 probes where they answered 7, and five more servers gained their cold bare-name column.

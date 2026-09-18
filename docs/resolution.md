@@ -111,6 +111,26 @@ even though the symbol exists — in a bare-name or directory scope. A `path`
 naming a file nominates from that file's own outline instead (see
 [Nomination](#nomination)), so the qualifier narrows the file's own symbols.
 
+A container has **more than one source**, and either confirming the
+qualifier is enough — they are alternative places for a server to say the
+same thing, not claims that have to agree:
+
+- `containerName` on the index candidate, or the enclosing symbols a file's
+  own outline names;
+- the **name the server advertised**, when that name's last segment is the
+  one being resolved. `SymbolInformation.name` is not specified to be a
+  bare identifier and gopls puts the receiver in it — `Config.Doubled` from
+  the index, `(Config).Doubled` from an outline — so the earlier segments
+  are that server's spelling of the container. Only the ends of a segment
+  are trimmed of punctuation, never the middle, and a name with no
+  separator in it is never reinterpreted.
+
+That second source also decides what counts as an **exact** candidate: a
+name matches when its last segment is the name asked for. The identity that
+results carries the name being resolved rather than the one advertised,
+because that is what the file's own text holds at the range and what a
+rename would replace.
+
 The index is the weaker of the two pools for a qualifier, and by the
 protocol rather than by implementation quality: `SymbolInformation` carries
 **one optional `containerName`**, and what a server puts there is its own

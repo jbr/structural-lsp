@@ -150,7 +150,14 @@ pub fn partition(
                 continue;
             }
         }
-        let exact = info.name == symbol;
+        // Exact by the name's **last segment**, not by the whole string. A
+        // server may spell the container into the name it advertises —
+        // gopls says `Config.Doubled` in the index and `(Config).Doubled`
+        // in an outline — and `SymbolInformation.name` is not specified to
+        // be a bare identifier. A name with no separator in it is
+        // unaffected, and the range is verified against the file either way
+        // (docs/resolution.md).
+        let exact = crate::tools::resolution::qualify::advertises(&info.name, symbol);
         let candidate = Candidate {
             server: server.to_string(),
             canonical_path: canonical,

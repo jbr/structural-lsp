@@ -123,7 +123,7 @@ fn resolve_symbol(
 
     let (exact, fuzzy, exclusions) =
         nominate(state, &selected, &qualified.name, root, scope.as_deref())?;
-    let (exact, unqualified) = qualify::filter(exact, &qualified.qualifiers);
+    let (exact, unqualified) = qualify::filter(exact, &qualified);
     if exact.is_empty() {
         let labels = |server: &str, kind: SymbolKind| kind_label(state, server, kind);
         let mut listed = if !unqualified.is_empty() {
@@ -144,7 +144,14 @@ fn resolve_symbol(
         let set = definition_of(state, root, &qualified.name, &candidate)?;
         found.push((candidate, set));
     }
-    finish(state, root, group_by_target(found), &display, exclusions)
+    finish(
+        state,
+        root,
+        group_by_target(found),
+        &qualified.name,
+        &display,
+        exclusions,
+    )
 }
 
 /// One identity is the resolution; several are the ambiguous listing; one
@@ -153,6 +160,7 @@ fn finish(
     state: &mut Workspace,
     root: &Path,
     mut identities: Vec<Identity>,
+    name: &str,
     display: &str,
     exclusions: Exclusions,
 ) -> Result<Resolved> {
@@ -164,8 +172,13 @@ fn finish(
     }
     let identity = identities.pop().expect("exactly one");
     match identity.target.clone() {
+        // The name being resolved, not the one the server advertised for
+        // it. A server may spell the container into the name — gopls says
+        // `Config.Doubled` — and this name is checked against the file's
+        // own text and is what a rename would replace, where only the
+        // identifier is present (docs/resolution.md).
         Some(target) => Ok(Resolved::One(Box::new(Found {
-            name: identity.origin.name.clone(),
+            name: name.to_string(),
             identity,
             target,
         }))),
