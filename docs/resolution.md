@@ -2,8 +2,8 @@
 
 Every tool shares one pipeline: a *target* — a name, or an anchor quoted from
 a file — becomes one **identity**, or a listing that says why there is not
-one. Implemented in `src/tools/resolution.rs` (+ `resolution/qualify.rs`,
-`resolution/anchored.rs`), over the pure helpers in `src/lsp/definition.rs`,
+one. Implemented in `src/tools/resolution.rs` (+ `resolution/nominate.rs`,
+`resolution/qualify.rs`, `resolution/anchored.rs`), over the pure helpers in `src/lsp/definition.rs`,
 `src/lsp/anchor.rs`, `src/lsp/outline.rs` and `src/lsp/shape.rs`.
 
 ## Identity, not names
@@ -92,6 +92,30 @@ file's candidates is reported as an unqualified listing of them, never with
 whatever the index would have offered. A **directory** scope still narrows
 the bounded index, as a bare name does (`../backlog/bare-name-staleness.md`
 is the other half of that gap).
+
+### A language with no index
+
+`workspaceSymbolProvider` is optional, and a server may serve documents and
+no index at all: pylsp, gleam and qmlls each do
+(`../reference/lsp-server-conventions.md`). Nothing is sent to such a
+server — the capability is consulted before the request — so it contributes
+no candidates, and a name defined in its language misses. Without a note,
+that miss is spelled the same way as a name that is not in the tree.
+
+A listing whose nomination could not ask every language therefore carries a
+`note:` naming the languages with no index, and says that a name in one of
+them resolves when `path` names its file — which is the path a file scope
+takes anyway, from the file's own outline. The note names languages and not
+servers: which executable serves a language is not the caller's problem, and
+the
+actionable part is the language and the `path` around it. It is omitted when
+`path` already named a file, since that is the thing it would ask for.
+
+The note is an availability statement, not a diagnosis: a bare name is sent
+to every running server, so a workspace holding both an indexed and an
+unindexed language carries the note on any miss, whichever language the name
+was in. The alternative — refusing the query — is wrong whenever another
+running server does have an index and answered.
 
 ## Qualified names
 

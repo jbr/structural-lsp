@@ -235,13 +235,26 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     assert_eq!(
         bare,
         "no symbol named 'Tool::new'\n\
+         note: no symbol index is available for rust; a name defined there resolves only when `path` names its file\n\
          note: the symbol index carries at most one container per symbol, and some servers report none; naming the declaring file in `path` resolves the qualifier from that file's outline instead\n"
     );
 
-    // The note is for a qualifier the index could not narrow. A bare name
-    // that missed has nothing to relocate, so it does not carry it.
+    // A server with no index answers every name the same way it answers an
+    // absent one, so the miss says which languages had no index to ask. The
+    // qualifier note is for a container the index could not narrow, and a
+    // bare name that missed has nothing to relocate, so it does not carry
+    // that one.
     let unqualified_miss = ok(show(&mut state, Some("Absent"), None));
-    assert_eq!(unqualified_miss, "no symbol named 'Absent'\n");
+    assert_eq!(
+        unqualified_miss,
+        "no symbol named 'Absent'\n\
+         note: no symbol index is available for rust; a name defined there resolves only when `path` names its file\n"
+    );
+
+    // Naming a file is the thing the note asks for, so a miss inside one
+    // does not repeat it.
+    let in_file = ok(show(&mut state, Some("Absent"), Some("src/tool.rs")));
+    assert_eq!(in_file, "no symbol named 'Absent'\n");
 
     // A qualifier the file's own symbols do not carry is listed from those
     // symbols, not substituted from the index.

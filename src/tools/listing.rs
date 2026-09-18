@@ -78,6 +78,31 @@ pub fn qualifier_scope_note(qualified: &Qualified, scoped: bool) -> &'static str
     }
 }
 
+/// What to say when a running server has no workspace symbol index at all,
+/// and the query was a name rather than a file.
+///
+/// `workspaceSymbolProvider` is optional, and three of the servers the
+/// conformance probe asks — pylsp, gleam and qmlls — serve documents and no
+/// index (`reference/lsp-server-conventions.md`). A bare name is
+/// nominated from the index, so for those languages it cannot reach a
+/// symbol that is there, and without this the miss is spelled the same way
+/// as a symbol that is not.
+///
+/// The languages are named and the servers are not: which executable serves
+/// a language is not the caller's problem, and the actionable part is the
+/// language and the `path` that routes around it. Empty when the caller
+/// already named a file, which is the thing this would ask for.
+pub fn no_index_note(unindexed: &[String], file_scoped: bool) -> String {
+    if unindexed.is_empty() || file_scoped {
+        return String::new();
+    }
+    format!(
+        "note: no symbol index is available for {}; a name defined there resolves only when \
+         `path` names its file\n",
+        unindexed.join(", ")
+    )
+}
+
 /// Exact hits by name, none in a container matching the qualifier: listed
 /// with the containers the server reported, so the qualifier can be fixed.
 pub fn render_unqualified(

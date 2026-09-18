@@ -10,6 +10,8 @@ change, see [`journal/`](journal/); for what is left, see
 ## [Unreleased]
 
 ### Added
+- **No-index note** (docs/resolution.md): a name that missed says which languages have no symbol index to ask — pylsp, gleam and qmlls serve documents and no index — and that naming their file in `path` resolves from its outline, instead of reporting the symbol absent.
+
 - **TypeScript and C++ conformance columns** (process/testing.md): eleven servers across five languages measured, reduced to the dimensions they vary in (reference/lsp-server-conventions.md) and four aggregate units (backlog/generic-baseline/).
 
 - **Rust and Go conformance columns** (process/testing.md): the probe is per-language — rust-analyzer answers 8/8, gopls 6/8, and the Go failures are `backlog/server-spelled-qualified-names.md`.

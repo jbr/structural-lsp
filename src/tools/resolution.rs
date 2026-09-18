@@ -27,16 +27,17 @@
 //! otherwise every running server is asked and the candidates are merged.
 
 use crate::lsp::definition::{
-    Candidate, DefinitionSet, DefinitionTarget, Identity, Origin, Partition, Resolution,
-    group_by_target, locate_name_at, parse_definition_result, partition, verify_name_at,
+    Candidate, DefinitionSet, DefinitionTarget, Identity, Origin, group_by_target, locate_name_at,
+    parse_definition_result, verify_name_at,
 };
 use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::tools::listing::{
-    AmbiguousEntry, location_line, qualifier_scope_note, render_ambiguous, render_fuzzy,
-    render_not_found, render_null_definition, render_unqualified,
+    AmbiguousEntry, location_line, no_index_note, qualifier_scope_note, render_ambiguous,
+    render_fuzzy, render_not_found, render_null_definition, render_unqualified,
 };
+use crate::tools::resolution::nominate::{Nominated, nominate};
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use lsp_types::SymbolKind;
@@ -45,6 +46,7 @@ use std::path::{Path, PathBuf};
 
 pub mod anchored;
 pub mod file_scope;
+pub mod nominate;
 pub mod qualify;
 
 /// What the filters excluded, carried to the listings.
@@ -121,8 +123,12 @@ fn resolve_symbol(
     let display = qualified.display();
     let selected = state.select(scope.as_deref())?;
 
-    let (exact, fuzzy, exclusions) =
-        nominate(state, &selected, &qualified.name, root, scope.as_deref())?;
+    let Nominated {
+        exact,
+        fuzzy,
+        exclusions,
+        unindexed,
+    } = nominate(state, &selected, &qualified.name, root, scope.as_deref())?;
     let (exact, unqualified) = qualify::filter(exact, &qualified);
     if exact.is_empty() {
         let labels = |server: &str, kind: SymbolKind| kind_label(state, server, kind);
@@ -133,6 +139,12 @@ fn resolve_symbol(
         } else {
             render_fuzzy(root, &display, &fuzzy, &labels, exclusions)
         };
+        // Why the index had nothing comes before what a container could
+        // have narrowed: a language with no index never offered one.
+        listed.push_str(&no_index_note(
+            &unindexed,
+            scope.as_deref().is_some_and(Path::is_file),
+        ));
         listed.push_str(qualifier_scope_note(&qualified, scope.is_some()));
         return Ok(Resolved::Listed(listed));
     }
@@ -189,70 +201,6 @@ fn finish(
             &identity.origin.location,
         ))),
     }
-}
-
-/// Nominate candidates for the bare name: from a named file's own outline,
-/// when `path` names a file and that outline names the symbol; otherwise
-/// from the servers' symbol index, narrowed to the scope.
-///
-/// The index is the fallback rather than the first answer because its pool
-/// is bounded and fuzzy-ordered: a file scope that consulted it first could
-/// miss a definition the file plainly declares, and the qualifier would
-/// then have nothing to narrow (`docs/resolution.md`).
-fn nominate(
-    state: &mut Workspace,
-    selected: &[usize],
-    symbol: &str,
-    root: &Path,
-    scope: Option<&Path>,
-) -> Result<(Vec<Candidate>, Vec<Candidate>, Exclusions)> {
-    if let Some(file) = scope.filter(|path| path.is_file()) {
-        let exact = file_scope::nominate(state, selected, file, symbol)?;
-        if !exact.is_empty() {
-            // The candidates are the file's own, not a sample of a bounded
-            // cross-workspace response, and no scope was consulted that
-            // could have excluded a candidate.
-            return Ok((exact, Vec::new(), Exclusions::default()));
-        }
-    }
-    discover(state, selected, symbol, root, scope)
-}
-
-/// Sync every selected server's owned documents, wait for each, and merge
-/// their `workspace/symbol` candidates: exact matches, fuzzy matches, and
-/// what the root and scope filters excluded.
-fn discover(
-    state: &mut Workspace,
-    selected: &[usize],
-    symbol: &str,
-    root: &Path,
-    scope: Option<&Path>,
-) -> Result<(Vec<Candidate>, Vec<Candidate>, Exclusions)> {
-    // The wait is unbounded except by the inactivity backstop: a busy server
-    // is waited for, a silent one is an error.
-    for &index in selected {
-        let server = state.server_mut(index)?;
-        server.sync_owned()?;
-        server.wait_ready()?;
-    }
-    let mut merged = Partition::default();
-    for &index in selected {
-        let server = state.server(index)?;
-        let infos = server.workspace_symbol(symbol)?;
-        merged.absorb(partition(symbol, server.name(), infos, root, scope));
-    }
-    let candidates = merged.into_candidates();
-    let exclusions = Exclusions {
-        out_of_root: candidates.out_of_root,
-        out_of_scope: candidates.out_of_scope,
-    };
-    let (exact, fuzzy) = match candidates.resolution {
-        Resolution::NotFound => (Vec::new(), Vec::new()),
-        Resolution::FuzzyOnly(fuzzy) => (Vec::new(), fuzzy),
-        Resolution::ExactOne(candidate) => (vec![*candidate], Vec::new()),
-        Resolution::ExactMany(exact) => (exact, Vec::new()),
-    };
-    Ok((exact, fuzzy, exclusions))
 }
 
 /// Own the candidate's file, check the index's range against the text just
