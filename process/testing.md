@@ -129,12 +129,19 @@ case's feature gate; the backlog entry goes with the unit.
 against this repository and asserts `resolve` is one thing, while
 `reference/servers-list/scripts/` now also defines it in Python. The answer
 is correct and the expectation is stale
-(`../backlog/identity-test-uses-the-repo.md`). Two `stdio_mcp_*` cases also
-fail under the default thread count and pass with `--test-threads=1`; that
-is contention, not a defect.
+(`../backlog/identity-test-uses-the-repo.md`).
 
-Both are worth knowing before reading a red suite, and neither should be
-allowed to stay: a suite with known failures cannot show a new one.
+It has a second: `targeting::qualified_names_and_anchors_target_what_bare_names_cannot`,
+where an anchor with no `focus` is verified against the whole anchor text
+rather than the token the definition names, so the tool errors and blames
+the server for a mismatch this client constructed
+(`../backlog/whole-anchor-focus-verification.md`).
+
+Two `stdio_mcp_*` cases also fail under the default thread count and pass
+with `--test-threads=1`; that is contention, not a defect.
+
+All of these are worth knowing before reading a red suite, and none should
+be allowed to stay: a suite with known failures cannot show a new one.
 
 ## Understood flakes
 
