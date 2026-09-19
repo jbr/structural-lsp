@@ -194,6 +194,18 @@ Focus matching is plain substring matching today, so a focus that is a
 prefix or suffix of a neighbouring identifier collides
 (`../backlog/focus-identifier-boundaries.md`).
 
+**The name is what the definition carries, not how the anchor spelled it.**
+The two differ whenever the anchor is wider than the token it resolves —
+`config.doubled()` resolves to `doubled`, and an anchor given with no
+`focus` is the whole quoted text, so `choose(Mode::Fast);` resolves to
+`choose`. That resolved name is what `verify_name_at` checks against the
+target's range and what a rename would replace. Carrying the quoted text
+there instead would make the check compare two different things and then
+report the server's target as not naming it in the file on disk —
+accusing the server of a mismatch this client constructed. An ambiguous
+result is still rendered from the quoted text, which is what the caller
+wrote.
+
 ## The listings
 
 When there is no single identity, the answer is a listing — the same

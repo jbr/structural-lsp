@@ -9,6 +9,9 @@ change, see [`journal/`](journal/); for what is left, see
 
 ## [Unreleased]
 
+### Fixed
+- **An anchor with no `focus`** (docs/resolution.md): the name is what the definition carries rather than how the anchor spelled it, so `choose(Mode::Fast);` resolves to `choose` instead of erroring that the server's target "does not name it in the file on disk".
+
 ### Added
 - **Discovery, as pure policy** (docs/discovery.md): evidence + catalogue + overrides → server plans with reasons, a value no process is started from — ranked by what a server answered through `show`, `uses` and `action` rather than by how many editors ship it, with no admission threshold and no score statable without the run that produced it.
 

@@ -125,23 +125,25 @@ case's feature gate; the backlog entry goes with the unit.
 
 ## Standing failures
 
-`cargo test -- --ignored` has one: the identity acceptance, which runs
-against this repository and asserts `resolve` is one thing, while
-`reference/servers-list/scripts/` now also defines it in Python. The answer
-is correct and the expectation is stale
-(`../backlog/identity-test-uses-the-repo.md`).
+None. `cargo test -- --ignored` is green in parallel, which is the point:
+a suite with known failures cannot show a new one.
 
-It has a second: `targeting::qualified_names_and_anchors_target_what_bare_names_cannot`,
-where an anchor with no `focus` is verified against the whole anchor text
-rather than the token the definition names, so the tool errors and blames
-the server for a mismatch this client constructed
-(`../backlog/whole-anchor-focus-verification.md`).
+Three were cleared on 2026-09-18, and what each turned out to be is worth
+keeping:
 
-Two `stdio_mcp_*` cases also fail under the default thread count and pass
-with `--test-threads=1`; that is contention, not a defect.
-
-All of these are worth knowing before reading a red suite, and none should
-be allowed to stay: a suite with known failures cannot show a new one.
+- the identity acceptance asserted `resolve` was one thing in this
+  repository, and `reference/servers-list/scripts/` had since added a
+  Python one. Both servers were right and the expectation was stale; the
+  query is now scoped to `src/`, which keeps the real tree and the common
+  name while excluding a collision that says nothing about identity.
+- `targeting::…` was a real defect, not a stale expectation: an anchor
+  given with no `focus` was verified against the whole quoted text
+  instead of the token its definition names, so the tool errored and
+  accused the server.
+- two `stdio_mcp_*` cases were the deadline, not the server. They drive a
+  real child and wait on a cold rust-analyzer; at fifteen seconds they
+  failed under the default thread count and passed serially. The bound is
+  a hang backstop rather than a measurement, so it is now generous.
 
 ## Understood flakes
 

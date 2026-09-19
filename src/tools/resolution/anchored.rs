@@ -122,28 +122,43 @@ pub(super) fn from_anchor(
             line
         )));
     }
-    let identities = targets
+    let (names, identities): (Vec<String>, Vec<Identity>) = targets
         .into_iter()
         .map(|target| {
             let name = name_at(&target, encoding).unwrap_or_else(|| focus_text.clone());
-            Identity::anchored(
+            let identity = Identity::anchored(
                 &server_name,
                 Origin {
-                    name,
+                    name: name.clone(),
                     kind: None,
                     location: origin_location.clone(),
                 },
                 Some(target),
-            )
+            );
+            (name, identity)
         })
-        .collect();
-    // An anchor resolves the token it names, so the name being
-    // resolved and the name shown are the same text.
+        .unzip();
+    // The name is what the definition carries, not how the anchor spelled
+    // it. The two differ whenever the anchor is wider than the token —
+    // `config.doubled()` resolves to `doubled`, and an anchor given with
+    // no `focus` is the whole quoted text, so `choose(Mode::Fast);`
+    // resolves to `choose`. Passing the quoted text here would send it
+    // into `verify_name_at`, which would then report that the server's
+    // target "does not name it in the file on disk" — accusing the server
+    // of a mismatch this client constructed (docs/resolution.md).
+    //
+    // Only a single target has a resolved name to use; an ambiguous
+    // result is rendered from the quoted text, which is what the caller
+    // wrote and can recognize.
+    let name = match names.as_slice() {
+        [one] => one.clone(),
+        _ => focus_text.clone(),
+    };
     finish(
         state,
         root,
         identities,
-        &focus_text,
+        &name,
         &focus_text,
         Exclusions::default(),
     )

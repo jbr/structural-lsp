@@ -10,10 +10,10 @@ fn repo_root() -> PathBuf {
     std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap()
 }
 
-fn show(state: &mut structural::session::Session, symbol: &str) -> String {
+fn show(state: &mut structural::session::Session, symbol: &str, path: Option<&str>) -> String {
     structural::tools::Show {
         symbol: Some(symbol.to_string()),
-        path: None,
+        path: path.map(str::to_string),
         anchor: None,
         focus: None,
         view: None,
@@ -29,8 +29,17 @@ fn exact_hits_are_deduplicated_by_definition_target() {
 
     // `resolve` the function is reachable even though `Resolution` and
     // friends fuzzy-match it (the adapter asks for all symbols, not types
-    // first), and it is one thing.
-    let resolve = show(&mut state, "resolve");
+    // first), and within `src/` it is one thing.
+    //
+    // The scope is what keeps this about identity. `reference/` carries
+    // extraction scripts, one of which defines a Python `resolve`, so the
+    // unscoped query is legitimately ambiguous across two languages and
+    // both servers are right to say so. Narrowing to `src/` keeps the
+    // property the case exists for — several fuzzy hits that navigate to
+    // one definition are one answer — while excluding a collision that
+    // says nothing about it. Do not widen this back without replacing the
+    // subject: the name has to be one a real tree makes common.
+    let resolve = show(&mut state, "resolve", Some("src"));
     assert!(
         resolve.starts_with("fn resolve · src/lsp/definition.rs:"),
         "{resolve}"
@@ -39,7 +48,7 @@ fn exact_hits_are_deduplicated_by_definition_target() {
 
     // `Server` is two things: the spike binary's enum and the smoke tests' struct.
     // Two exact hits, two distinct targets, listed with kinds and paths.
-    let server = show(&mut state, "Server");
+    let server = show(&mut state, "Server", None);
     assert!(
         server.starts_with("ambiguous: 2 definitions of 'Server'"),
         "{server}"

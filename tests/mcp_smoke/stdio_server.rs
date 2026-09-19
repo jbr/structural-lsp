@@ -6,7 +6,17 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
-const WAIT: Duration = Duration::from_secs(15);
+/// How long any one response, event or exit may take before the test
+/// fails rather than hanging.
+///
+/// A backstop, not a measurement: nothing here asserts that structural is
+/// fast, only that it answers. It has to cover a cold rust-analyzer
+/// indexing the fixture while the rest of the suite runs — these cases
+/// spawn a real child, and the machine is often shared with other agent
+/// sessions (`process/testing.md`). At fifteen seconds they failed under
+/// the default thread count and passed with `--test-threads=1`, which is
+/// a fact about the deadline rather than about the server.
+const WAIT: Duration = Duration::from_secs(120);
 
 pub struct Server {
     pub child: Child,
