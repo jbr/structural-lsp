@@ -121,7 +121,9 @@ impl Tool<Session> for Action {
             Some(APPLY) => Mode::Apply,
             Some(other) => bail!("`mode` must be `{PREVIEW}` or `{APPLY}`, not `{other}`"),
         };
+        let view = state.view().to_path_buf();
         let target = Target {
+            view: &view,
             symbol: self.symbol.as_deref(),
             path: self.path.as_deref(),
             anchor: self.anchor.as_deref(),

@@ -33,6 +33,39 @@ pub(super) fn scratch(name: &str) -> (PathBuf, PathBuf) {
 pub(super) struct Fixture {
     pub root: PathBuf,
     pub log: PathBuf,
+    /// The mock script, so a test can write a `structural.toml` pointing
+    /// at it somewhere other than the fixture root — which it must
+    /// whenever the project root is not the fixture root, since
+    /// configuration is read from the project root
+    /// (`docs/discovery.md`).
+    pub script: PathBuf,
+    pub python: String,
+}
+
+impl Fixture {
+    /// Write a `structural.toml` in `dir` pointing both built-ins at the
+    /// mock.
+    pub(super) fn write_config(&self, dir: &std::path::Path) {
+        let command = |label: &str| {
+            format!(
+                "command = [\"{}\", \"{}\", \"{}\", \"{}\"]",
+                self.python,
+                self.script.display(),
+                self.log.display(),
+                label
+            )
+        };
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(
+            dir.join(crate::config::FILE_NAME),
+            format!(
+                "[servers.rust-analyzer]\n{}\n\n[servers.pyright]\n{}\n",
+                command("rust-analyzer"),
+                command("pyright")
+            ),
+        )
+        .unwrap();
+    }
 }
 
 /// `None` when there is no usable Python, which every test here reports as a
@@ -65,7 +98,12 @@ pub(super) fn fixture(name: &str) -> Option<Fixture> {
         ),
     )
     .unwrap();
-    Some(Fixture { root: dir, log })
+    Some(Fixture {
+        root: dir,
+        log,
+        script,
+        python,
+    })
 }
 
 impl Fixture {
@@ -151,7 +189,12 @@ pub(super) fn asymmetric_fixture(name: &str, rust: &str) -> Option<Fixture> {
         ),
     )
     .unwrap();
-    Some(Fixture { root: dir, log })
+    Some(Fixture {
+        root: dir,
+        log,
+        script,
+        python,
+    })
 }
 
 /// A fixture whose sources and extra configuration are the case under
@@ -191,7 +234,12 @@ pub(super) fn selective_fixture(name: &str, sources: &[(&str, &str)], extra: &st
         ),
     )
     .unwrap();
-    Some(Fixture { root: dir, log })
+    Some(Fixture {
+        root: dir,
+        log,
+        script,
+        python,
+    })
 }
 
 /// Which servers the mock recorded starting, sorted, after giving any

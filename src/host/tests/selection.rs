@@ -85,3 +85,101 @@ fn a_disabled_server_does_not_start_where_its_language_is() {
     host.shutdown();
 }
 
+
+#[test]
+fn sibling_members_of_one_workspace_share_one_launch_and_keep_their_own_view() {
+    // The sharing bug this milestone's second half closes. `agent_started`
+    // keyed on the working directory verbatim, so two agents in two
+    // members of one cargo workspace got two workspaces and two servers —
+    // and each of those servers indexed the whole workspace anyway
+    // (`reference/server-root-discovery.md`). Keying on the outermost
+    // manifest in the span makes them one.
+    //
+    // The other half of the claim is that sharing widens without answers
+    // widening: each session still views its own member, which is what
+    // `path`, the filters and every rendered location are relative to.
+    let Some(fixture) = selective_fixture(
+        "siblings",
+        &[
+            ("Cargo.toml", "[workspace]\n"),
+            ("crates/alpha/Cargo.toml", ""),
+            ("crates/alpha/src/lib.rs", "pub fn a() {}\n"),
+            ("crates/beta/Cargo.toml", ""),
+            ("crates/beta/src/lib.rs", "pub fn b() {}\n"),
+        ],
+        "",
+    ) else {
+        return;
+    };
+    let root = std::fs::canonicalize(&fixture.root).unwrap();
+    let alpha_dir = root.join("crates/alpha");
+    let beta_dir = root.join("crates/beta");
+
+    let host = Host::new();
+    let alpha = host.agent_started(AgentId::new("alpha"), &alpha_dir);
+    let beta = host.agent_started(AgentId::new("beta"), &beta_dir);
+
+    assert_eq!(
+        servers_launched(&fixture),
+        ["rust-analyzer"],
+        "one server for the workspace, not one per member"
+    );
+    assert_eq!(
+        alpha.workspace().root(),
+        root,
+        "both are keyed on the workspace, not on the member they started in"
+    );
+    assert_eq!(beta.workspace().root(), root);
+
+    assert_eq!(alpha.view(), alpha_dir, "each still asks about its own member");
+    assert_eq!(beta.view(), beta_dir);
+
+    host.shutdown();
+}
+
+#[test]
+fn a_member_with_no_workspace_above_it_is_its_own_key() {
+    // The control: sharing follows the project, not the directory depth.
+    // Two unrelated projects in one repository key apart, which is why the
+    // VCS root bounds the search rather than being the answer.
+    let Some(fixture) = selective_fixture(
+        "unrelated",
+        &[
+            ("backend/Cargo.toml", ""),
+            ("backend/src/lib.rs", "pub fn a() {}\n"),
+            ("tools/Cargo.toml", ""),
+            ("tools/src/lib.rs", "pub fn b() {}\n"),
+        ],
+        "",
+    ) else {
+        return;
+    };
+    let root = std::fs::canonicalize(&fixture.root).unwrap();
+    // A repository holding both, and no manifest of its own.
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    // Each project root is its own workspace, and configuration is read
+    // from the project root — so the fixture's own `structural.toml`, at
+    // the repository, is read by neither. Writing one per project is the
+    // consequence of the key moving up, made concrete.
+    fixture.write_config(&root.join("backend"));
+    fixture.write_config(&root.join("tools"));
+
+    let host = Host::new();
+    let backend = host.agent_started(AgentId::new("backend"), &root.join("backend"));
+    let tools = host.agent_started(AgentId::new("tools"), &root.join("tools"));
+
+    assert_eq!(backend.workspace().root(), root.join("backend"));
+    assert_eq!(
+        tools.workspace().root(),
+        root.join("tools"),
+        "keying on the repository would fuse two unrelated projects"
+    );
+    assert_eq!(
+        servers_launched(&fixture),
+        ["rust-analyzer", "rust-analyzer"],
+        "two projects, two servers — the sharing above is not simply \
+         everything collapsing onto one key"
+    );
+
+    host.shutdown();
+}

@@ -12,14 +12,14 @@ tests assert.
 | catalogue | `src/discovery/catalogue.rs` | what a server is, what it serves, how it ranks |
 | selection | `src/discovery/selection.rs` | plans, each naming a server and its reasons |
 
-Acquisition is connected: `Workspace::new` lays out one `ServerSlot` per
+Acquisition is connected. `Workspace::new` lays out one `ServerSlot` per
 plan rather than one per configured adapter (`ownership.md`), so a server
-no evidence calls for is never warmed and never appears in a message. What
-is not yet connected is the **root key** — the host still keys a workspace
-on the working directory it was handed rather than on the project root the
-walk found, so two agents in sibling members of one workspace still get two
-servers. That, and the generated catalogue, are what remain of
-`backlog/discovery/selection.md`.
+no evidence calls for is never warmed and never appears in a message; and
+`Host::agent_started` keys a workspace on the project root the walk found
+rather than on the working directory it was handed, so two agents in
+sibling members of one cargo workspace share one server. What remains of
+`backlog/discovery/selection.md` is the generated catalogue and the
+fallback ladder.
 
 ## The root is the key, and only the key
 
@@ -64,7 +64,26 @@ working directory is its own root.
   its own span.
 
 `Root::reason` carries which of these applied, and `explain()` renders it
-as a line.
+as a line. `host::workspace_key` is what calls it.
+
+### The key and the view
+
+Separating them is what lets sharing widen without answers widening. A
+`Session` carries the working directory it was bound with as its **view**,
+and that is what every user-facing path is relative to: `path` joins onto
+it, references outside it are filtered and counted, and locations are
+rendered relative to it. The workspace key is only what servers are shared
+under and what they are told at startup.
+
+So two agents in `crates/alpha` and `crates/beta` hold one workspace and
+one server, and each is still answered about its own member. `Target`
+carries the view, which is how it reaches resolution and the views without
+any tool reaching for the key.
+
+One consequence, decided rather than discovered: `structural.toml` is read
+from the **project root**, since that is the workspace root. Configuration
+comes from the project rather than from whichever directory an agent
+happened to start in.
 
 ## Evidence is evidence, not proof
 

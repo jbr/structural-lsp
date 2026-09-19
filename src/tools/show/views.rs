@@ -38,7 +38,7 @@ pub const MAX_LINES: usize = 200;
 
 /// Answer `view` for `target`. `definition` is not handled here.
 pub fn run(state: &mut Workspace, view: &str, target: Target<'_>) -> Result<String> {
-    let root = state.root().to_path_buf();
+    let root = target.view.to_path_buf();
     match view {
         OUTLINE => outline::run(state, &root, target),
         IMPLEMENTATIONS => locations::implementations(state, &root, target),

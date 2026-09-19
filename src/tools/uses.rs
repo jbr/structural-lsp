@@ -104,8 +104,9 @@ impl Tool<Session> for Uses {
 
     fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
         let mut state = session.acquire(self.path.as_deref())?;
-        let root = state.root().to_path_buf();
+        let root = state.view().to_path_buf();
         let target = Target {
+            view: &root,
             symbol: self.symbol.as_deref(),
             path: self.path.as_deref(),
             anchor: self.anchor.as_deref(),

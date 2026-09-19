@@ -22,7 +22,7 @@ pub(super) fn run(
     if new_name.is_empty() || new_name.chars().any(char::is_whitespace) {
         bail!("`new_name` must be a single name without whitespace");
     }
-    let root = state.root().to_path_buf();
+    let root = target.view.to_path_buf();
     let found = match resolve_target(state, target)? {
         Resolved::Listed(listing) => return Ok(listing),
         Resolved::One(found) => *found,

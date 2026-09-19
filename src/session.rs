@@ -10,6 +10,15 @@
 //! [`Session::activate`] runs first, holding no workspace lock, because a
 //! launch publishes under the guard and would otherwise wait on the caller
 //! that is waiting for it.
+//!
+//! A session also carries the caller's **view**: the working directory it
+//! was bound with. The workspace is keyed by the project root above that
+//! directory, so two agents in sibling members of one cargo workspace
+//! share servers — but each is still asking about its own member, so
+//! `path` resolves against the view, answers are filtered against it, and
+//! paths are displayed relative to it. The key and the filter used to be
+//! the same field; separating them is what lets sharing widen without
+//! answers widening (`docs/discovery.md`).
 
 use crate::host::Entry;
 use crate::workspace::{Workspace, canonical_root};
@@ -18,6 +27,10 @@ use std::sync::{Arc, MutexGuard};
 
 pub struct Session {
     workspace: Arc<Entry>,
+    /// The caller's working directory: what `path` is relative to, what
+    /// answers are filtered against, and what paths are shown relative
+    /// to. Always inside the workspace root, or equal to it.
+    view: PathBuf,
 }
 
 impl Session {
@@ -25,12 +38,16 @@ impl Session {
     /// path and in-process tests. No agent is registered as interested, so
     /// nothing releases it but dropping it. Front ends that share workspaces
     /// go through [`crate::host::Host::agent_started`] instead.
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(cwd: PathBuf) -> Self {
         let lifetime = crate::host::Lifetime::new();
-        let session = Self::bind(Arc::new(Entry::new(
-            Workspace::new(canonical_root(&root), lifetime.flag()),
-            lifetime,
-        )));
+        let view = canonical_root(&cwd);
+        let session = Self::bind(
+            Arc::new(Entry::new(
+                Workspace::new(crate::host::workspace_key(&view), lifetime.flag()),
+                lifetime,
+            )),
+            view,
+        );
         // Warm every configured server, as the MCP process does when an agent
         // starts. A server that will not start is recorded on its slot, for
         // each call to report, rather than failing the session.
@@ -38,8 +55,15 @@ impl Session {
         session
     }
 
-    pub(crate) fn bind(workspace: Arc<Entry>) -> Self {
-        Self { workspace }
+    pub(crate) fn bind(workspace: Arc<Entry>, view: PathBuf) -> Self {
+        Self { workspace, view }
+    }
+
+    /// The caller's working directory. Every user-facing path — a `path`
+    /// scope, a filter, a rendered location — is relative to this, never
+    /// to the workspace key.
+    pub fn view(&self) -> &Path {
+        &self.view
     }
 
     /// Make the servers that would answer for `scope` running, starting the
@@ -62,13 +86,13 @@ impl Session {
     /// lock and then waited for a launch would be waiting for itself.
     pub fn acquire(&self, path: Option<&str>) -> anyhow::Result<Operation<'_>> {
         let admission = self.workspace.admit()?;
-        let scope = {
-            let workspace = self.workspace();
-            path.map(|path| workspace.root().join(path))
-        };
+        // Against the view, not the workspace root: an agent in
+        // `crates/alpha` asking for `path: "src"` means its own `src`.
+        let scope = path.map(|path| self.view.join(path));
         self.activate(scope.as_deref());
         Ok(Operation {
             workspace: self.workspace(),
+            view: self.view.clone(),
             _admission: admission,
         })
     }
@@ -83,7 +107,18 @@ impl Session {
 /// Whole-call protection: release the workspace before returning admission.
 pub struct Operation<'a> {
     workspace: MutexGuard<'a, Workspace>,
+    view: PathBuf,
     _admission: swansong::Guard,
+}
+
+impl Operation<'_> {
+    /// The caller's working directory, carried in from the session so a
+    /// tool never has to reach for the workspace key to answer about
+    /// paths. Shadows nothing: [`Workspace::root`] remains the key, and
+    /// the two differ whenever an agent works inside a larger project.
+    pub fn view(&self) -> &Path {
+        &self.view
+    }
 }
 impl std::ops::Deref for Operation<'_> {
     type Target = Workspace;

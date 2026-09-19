@@ -71,7 +71,10 @@ the standard capability profile.
 
 ## `structural.toml`
 
-Read from the workspace root. Absent: the built-ins alone. Present but
+Read from the workspace root, which is the **project root** above the
+directory a caller started in (`discovery.md`) — so configuration comes
+from the project rather than from wherever an agent happened to begin.
+Absent: the built-ins alone. Present but
 unparsable: **nothing starts**, and every call reports the parse error —
 silently ignoring it would run the wrong servers. Unknown keys are rejected.
 

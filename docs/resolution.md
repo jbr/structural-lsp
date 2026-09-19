@@ -93,6 +93,12 @@ whatever the index would have offered. A **directory** scope still narrows
 the bounded index, as a bare name does (`../backlog/bare-name-staleness.md`
 is the other half of that gap).
 
+Every scope is relative to the session's **view** — the working directory
+the caller was bound with — and never to the workspace key, which may be a
+project root above it (`discovery.md`). An agent in `crates/alpha` asking
+for `path: "src"` means its own `src`, and a candidate in a sibling member
+is outside its view and is counted as excluded rather than returned.
+
 ### A language with no index
 
 `workspaceSymbolProvider` is optional, and a server may serve documents and

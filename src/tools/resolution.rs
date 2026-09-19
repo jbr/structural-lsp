@@ -56,9 +56,16 @@ pub struct Exclusions {
     pub out_of_scope: usize,
 }
 
-/// What a tool was asked to resolve, as the user gave it.
-#[derive(Debug, Clone, Copy, Default)]
+/// What a tool was asked to resolve, as the user gave it, plus the view
+/// it is relative to.
+#[derive(Debug, Clone, Copy)]
 pub struct Target<'a> {
+    /// The caller's working directory: what `path` joins onto, what
+    /// answers are filtered against, and what locations are displayed
+    /// relative to. Not the workspace key, which is the project root
+    /// above it and is only what servers are shared under
+    /// (`docs/discovery.md`).
+    pub view: &'a Path,
     /// A bare or qualified name.
     pub symbol: Option<&'a str>,
     /// A scope under the root; the file an anchor is in.
@@ -88,10 +95,10 @@ pub struct Found {
     pub name: String,
 }
 
-/// Resolve `target` under the fixed root. Argument errors are errors; every
+/// Resolve `target` under the caller's view. Argument errors are errors; every
 /// other outcome is a [`Resolved`].
 pub fn resolve_target(state: &mut Workspace, target: Target<'_>) -> Result<Resolved> {
-    let root = state.root().to_path_buf();
+    let root = target.view.to_path_buf();
     let scope = target
         .path
         .map(|user_path| resolve_scope(&root, user_path))

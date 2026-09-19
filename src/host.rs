@@ -21,6 +21,23 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError, Weak};
 use std::time::{Duration, Instant};
 
+/// The root a workspace is shared under, for a caller working in `cwd`.
+///
+/// The project root above the working directory, bounded by the VCS root
+/// and taking the outermost marker in that span
+/// (`crate::discovery::roots`). Two agents in sibling members of one cargo
+/// workspace therefore key the same and share servers, where keying on the
+/// working directory verbatim gave each its own — and each of those
+/// indexed the whole workspace anyway
+/// (`reference/server-root-discovery.md`).
+///
+/// A wrong key costs **sharing, not correctness**: what a caller is told
+/// is filtered against the session's view, which is the working directory
+/// and does not consult the key (`docs/discovery.md`).
+pub fn workspace_key(cwd: &Path) -> PathBuf {
+    canonical_root(&crate::discovery::roots::Ancestry::gather(cwd).root().path)
+}
+
 /// Which agent — or front end — a workspace binding belongs to. Agent start
 /// and end arrive as these identifiers, so releasing one agent's interest
 /// never releases another's.
@@ -319,7 +336,8 @@ impl Host {
     /// one launch per server, by the slot's own election rather than by this
     /// lock. Operations on an already-acquired workspace never take it.
     pub fn agent_started(&self, agent: AgentId, cwd: &Path) -> Session {
-        let key = canonical_root(cwd);
+        let view = canonical_root(cwd);
+        let key = workspace_key(&view);
         // Interest is recorded before the map lock is released, so a
         // concurrent `agent_ended` cannot catch an entry no agent has bound
         // to yet and release it out from under this caller.
@@ -343,7 +361,7 @@ impl Host {
         // own election rather than by this lock, and a failure is recorded on
         // the slot for each call to report rather than failing the binding.
         entry.activate(None);
-        Session::bind(entry)
+        Session::bind(entry, view)
     }
 
     /// Release `agent`'s interest in whatever it was bound to. Interest is
