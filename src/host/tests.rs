@@ -6,152 +6,10 @@
 //! real language server is needed and every launch is recorded.
 
 use super::*;
-use crate::test_support::HOST_MOCK_PY;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use fixtures::{alive, asymmetric_fixture, wait_for_launches};
 
-/// A workspace on disk whose built-in servers are overridden to run the mock.
-struct Fixture {
-    root: PathBuf,
-    log: PathBuf,
-}
-
-/// `None` when there is no usable Python, which every test here reports as a
-/// skip. Nothing else about the fixture can fail.
-fn fixture(name: &str) -> Option<Fixture> {
-    let python = crate::test_support::python()?;
-    let dir = std::env::temp_dir().join(format!("structural-host-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(dir.join("src")).unwrap();
-    let script = dir.join("mock.py");
-    std::fs::write(&script, HOST_MOCK_PY).unwrap();
-    // A source file, so file-scoped routing has something to match.
-    std::fs::write(dir.join("src/lib.rs"), "pub fn a() {}\n").unwrap();
-    let log = dir.join("launches.log");
-    let command = |label: &str| {
-        format!(
-            "command = [\"{}\", \"{}\", \"{}\", \"{}\"]",
-            python,
-            script.display(),
-            log.display(),
-            label
-        )
-    };
-    std::fs::write(
-        dir.join("structural.toml"),
-        format!(
-            "[servers.rust-analyzer]\n{}\n\n[servers.pyright]\n{}\n",
-            command("rust-analyzer"),
-            command("pyright")
-        ),
-    )
-    .unwrap();
-    Some(Fixture { root: dir, log })
-}
-
-impl Fixture {
-    /// One pid per launch of the mock, in the order they started.
-    fn launches(&self) -> Vec<u32> {
-        self.events()
-            .into_iter()
-            .filter(|event| event.kind == "START")
-            .map(|event| event.pid)
-            .collect()
-    }
-
-    fn source(&self) -> PathBuf {
-        self.root.join("src/lib.rs")
-    }
-
-    /// The recorded events, in the order they reached the log: each launch,
-    /// and the answer to its `initialize` when it came, each naming its
-    /// server.
-    fn events(&self) -> Vec<Event> {
-        std::fs::read_to_string(&self.log)
-            .map(|text| {
-                text.lines()
-                    .filter_map(|line| {
-                        let mut fields = line.split_whitespace();
-                        Some(Event {
-                            kind: fields.next()?.to_string(),
-                            server: fields.next()?.to_string(),
-                            pid: fields.next()?.parse().ok()?,
-                        })
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-}
-
-/// One line of the mock's log: what happened, to which server, and its pid.
-#[derive(Debug)]
-struct Event {
-    kind: String,
-    server: String,
-    pid: u32,
-}
-
-/// A fixture whose two servers differ: rust-analyzer's `initialize` stalls or
-/// its command cannot be spawned, while pyright runs the mock normally. The
-/// asymmetry is what makes independence observable.
-fn asymmetric_fixture(name: &str, rust: &str) -> Option<Fixture> {
-    let python = crate::test_support::python()?;
-    let dir = std::env::temp_dir().join(format!("structural-host-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(dir.join("src")).unwrap();
-    let script = dir.join("mock.py");
-    std::fs::write(&script, HOST_MOCK_PY).unwrap();
-    std::fs::write(dir.join("src/lib.rs"), "pub fn a() {}\n").unwrap();
-    std::fs::write(dir.join("src/helper.py"), "def a():\n    pass\n").unwrap();
-    let log = dir.join("launches.log");
-    let mock = |label: &str, stall: Option<f64>| {
-        let mut argv = vec![
-            format!("\"{python}\""),
-            format!("\"{}\"", script.display()),
-            format!("\"{}\"", log.display()),
-            format!("\"{label}\""),
-        ];
-        if let Some(stall) = stall {
-            // Quoted: `command` is a list of strings, so a bare `1.0` would
-            // make the whole file unparsable and quietly leave no servers.
-            argv.push(format!("\"{stall}\""));
-        }
-        format!("command = [{}]", argv.join(", "))
-    };
-    let rust = match rust {
-        "mock" => mock("rust-analyzer", None),
-        // Long enough that a serialized activation cannot answer the other
-        // server first, and short enough not to slow the suite much.
-        "stalling" => mock("rust-analyzer", Some(1.5)),
-        other => format!("command = [\"{other}\"]"),
-    };
-    std::fs::write(
-        dir.join("structural.toml"),
-        format!(
-            "[servers.rust-analyzer]\n{rust}\n\n[servers.pyright]\n{}\n",
-            mock("pyright", None)
-        ),
-    )
-    .unwrap();
-    Some(Fixture { root: dir, log })
-}
-
-/// Wait for `n` launches to appear in the mock's log, up to a bound.
-///
-/// This observes a signal another thread produces — a pid that exists — and
-/// never stands in for a claim that a server is ready; the bounded wait is
-/// only so a failure reports rather than hangs.
-fn wait_for_launches(fixture: &Fixture, n: usize) -> Vec<u32> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        let launches = fixture.launches();
-        if launches.len() >= n || std::time::Instant::now() > deadline {
-            return launches;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-}
+mod fixtures;
+mod selection;
 
 /// Something that panics while holding a guard must still release it, or a
 /// shutdown would wait on it forever.
@@ -183,7 +41,7 @@ fn a_panicking_participant_still_releases_its_guard() {
 /// out.
 #[test]
 fn a_launch_that_cannot_publish_in_time_stops_its_own_child() {
-    let Some(fixture) = fixture("publish-bound") else {
+    let Some(fixture) = fixtures::fixture("publish-bound") else {
         return;
     };
     let host = Host::with_publish_bound(std::time::Duration::from_millis(50));
@@ -239,7 +97,7 @@ fn a_launch_that_cannot_publish_in_time_stops_its_own_child() {
 /// used to perform anyway.
 #[test]
 fn a_demand_after_shutdown_launches_nothing_and_leaves_slots_cold() {
-    let Some(fixture) = fixture("post-claim") else {
+    let Some(fixture) = fixtures::fixture("post-claim") else {
         return;
     };
     let host = Host::new();
@@ -400,7 +258,7 @@ fn a_server_that_will_not_start_leaves_the_others_running() {
 /// so — rather than reaching for a handle whose server has been reaped.
 #[test]
 fn a_query_after_shutdown_reports_rather_than_panics() {
-    let Some(fixture) = fixture("after-shutdown") else {
+    let Some(fixture) = fixtures::fixture("after-shutdown") else {
         return;
     };
     let host = Host::new();
@@ -422,21 +280,9 @@ fn a_query_after_shutdown_reports_rather_than_panics() {
     assert!(error.contains("no language server is running"), "{error}");
 }
 
-/// Whether `pid` names a live process. `ps` is the portable-enough probe:
-/// teardown waits on the child, so a reaped pid is gone rather than a zombie.
-fn alive(pid: u32) -> bool {
-    Command::new("ps")
-        .args(["-p", &pid.to_string()])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
-}
-
 macro_rules! fixture {
     ($name:literal) => {
-        match fixture($name) {
+        match crate::host::tests::fixtures::fixture($name) {
             Some(fixture) => fixture,
             None => {
                 eprintln!("skipping: python3 not available");

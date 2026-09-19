@@ -281,9 +281,14 @@ fn stdio_mcp_serves_and_reports_actionable_error_without_rust_analyzer() {
         text.contains("rustup component add rust-analyzer"),
         "the error must name the fix: {text}"
     );
+    // The fixture is Rust, so no Python server is planned for it and none
+    // is laid out, started, or reported. Before selection drove the slots
+    // this said the opposite — every *configured* server was accounted
+    // for, pyright included — and an agent was told about a server that
+    // had nothing in the tree to serve (`docs/discovery.md`).
     assert!(
-        text.contains("pyright"),
-        "every configured server is accounted for: {text}"
+        !text.contains("pyright"),
+        "a server no evidence calls for is not the caller's problem: {text}"
     );
 
     server.close_stdin();

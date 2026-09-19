@@ -2,10 +2,16 @@
 //!
 //! A workspace is created by the [`crate::host::Host`], which keys it by its
 //! canonical root and shares it between every agent or caller bound to it.
-//! Building one is cheap and starts nothing: it reads `structural.toml` and
-//! lays out one [`ServerSlot`] per configured adapter. Servers start on
-//! demand, through the host entry — which is why a workspace can exist, and
-//! answer routing questions, before anything is running.
+//! Building one is cheap and starts nothing: it reads the tree's evidence
+//! and `structural.toml`, asks selection what to run, and lays out one
+//! [`ServerSlot`] per **planned** server (`docs/discovery.md`). Servers
+//! start on demand, through the host entry — which is why a workspace can
+//! exist, and answer routing questions, before anything is running.
+//!
+//! Laying out a slot per plan rather than per configured adapter is what
+//! makes "irrelevant servers do not start" true of the process table: a
+//! Python-only tree lays out no Rust slot, so no Rust server is warmed,
+//! demanded, or reported as down.
 //!
 //! Concurrency: the host wraps this in a mutex, so document ownership is
 //! serialized per workspace — the same guarantee `&mut State` gave the MCP
@@ -13,6 +19,9 @@
 //! its own threads behind its handle.
 
 use crate::config::Config;
+use crate::discovery::catalogue::Catalogue;
+use crate::discovery::evidence::Evidence;
+use crate::discovery::selection::{Selection, select};
 use crate::lsp::adapter::language_for;
 use crate::lsp::server::LspServer;
 use anyhow::{Context, Result, bail};
@@ -21,6 +30,9 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 mod slot;
+
+#[cfg(test)]
+mod tests;
 
 pub use slot::{Demand, Launch, ServerSlot, SlotState};
 
@@ -39,6 +51,9 @@ pub struct Workspace {
     /// A present but unusable `structural.toml`: nothing starts, and every
     /// call says why.
     config_error: Option<String>,
+    /// What selection proposed for this tree, kept so a call can say why a
+    /// server it expected is not here.
+    selection: Option<Selection>,
 }
 
 impl Workspace {
@@ -56,20 +71,32 @@ impl Workspace {
             slots: Vec::new(),
             servers: Vec::new(),
             config_error: None,
+            selection: None,
         };
-        let adapters = match Config::load(&workspace.root).and_then(Config::adapters) {
-            Ok(adapters) => adapters,
+        let layout = match Config::load(&workspace.root).and_then(Config::layout) {
+            Ok(layout) => layout,
             Err(error) => {
                 workspace.config_error = Some(format!("{error:#}"));
                 return workspace;
             }
         };
-        for adapter in adapters {
+        // Evidence is read once, here, and never again for this workspace:
+        // a tree that grows a language after the workspace is built keeps
+        // the slots it was laid out with until something re-reads it.
+        // Noticing that change is observation's, not this unit's
+        // (`backlog/discovery/observation.md`).
+        let evidence = Evidence::gather(&workspace.root);
+        let selection = select(&evidence, &Catalogue::built_in(), &layout.overrides);
+        for adapter in layout.adapters {
+            if !selection.proposes(adapter.name()) {
+                continue;
+            }
             workspace
                 .slots
                 .push(Arc::new(ServerSlot::new(adapter, Arc::clone(&stopped))));
             workspace.servers.push(None);
         }
+        workspace.selection = Some(selection);
         workspace
     }
 
@@ -139,12 +166,13 @@ impl Workspace {
                 bail!("{}", self.nothing_running());
             }
             bail!(
-                "no configured language server serves `{}` files (configured: {})",
+                "no language server here serves `{}` files.\n  here: {}\n{}",
                 scope
                     .and_then(Path::extension)
                     .unwrap_or_default()
                     .to_string_lossy(),
-                self.names()
+                self.names(),
+                self.not_planned()
             );
         }
         let running = self.running_of(&candidates);
@@ -206,6 +234,27 @@ impl Workspace {
             .iter()
             .copied()
             .filter(|index| self.servers[*index].is_some())
+            .collect()
+    }
+
+    /// The servers this workspace has no slot for, and why selection left
+    /// each one out.
+    ///
+    /// Without this a configured server simply vanishes from the message.
+    /// The case is ordinary: a tree with no Python lays out no Python
+    /// slot, and then a `.py` file appears — the file is real, `pyright`
+    /// is configured, and "no language server serves `py` files" would be
+    /// true and useless. Noticing the new language while the workspace is
+    /// live is observation's
+    /// (`backlog/discovery/observation.md`); saying so is this.
+    fn not_planned(&self) -> String {
+        let Some(selection) = &self.selection else {
+            return String::new();
+        };
+        selection
+            .declined
+            .iter()
+            .map(|declined| format!("  not here: {}\n", declined.explain()))
             .collect()
     }
 

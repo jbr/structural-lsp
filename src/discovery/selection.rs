@@ -174,6 +174,23 @@ pub struct Declined {
     pub reason: DeclinedReason,
 }
 
+impl Declined {
+    /// One line, for the message a caller gets when the server it needed
+    /// is not here.
+    pub fn explain(&self) -> String {
+        let reason = match &self.reason {
+            DeclinedReason::NoEvidence { languages } => {
+                format!("nothing in the tree calls for {}", languages.join(" or "))
+            }
+            DeclinedReason::Disabled => {
+                format!("disabled in {}", crate::config::FILE_NAME)
+            }
+            DeclinedReason::Outranked { by } => format!("outranked by {}", by.join(", ")),
+        };
+        format!("{}: {reason}", self.server)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeclinedReason {
     /// Nothing in the tree suggests any language this server serves.

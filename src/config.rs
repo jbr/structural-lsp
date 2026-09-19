@@ -10,13 +10,25 @@
 //! languages = ["go"]               # language ids; extensions from the table
 //!                                  # below, or:
 //! extensions = { go = ["go"] }
+//!
+//! [servers.pyright]
+//! disabled = true                  # not in this project, built-in or not
 //! ```
 //!
 //! Built-in adapters are on by default; an entry with a built-in's name
 //! overrides its command, languages, or backstop and keeps everything else
 //! (readiness policy, capabilities, query rewriting). Absent file: the
 //! built-ins alone.
+//!
+//! This file is the **override layer** over the server catalogue
+//! (`docs/discovery.md`), not the whole configuration: naming a server
+//! configures it, `disabled = true` takes it out of consideration, and a
+//! name the catalogue does not know is added generically. What actually
+//! starts is what selection plans from the tree's evidence, so a
+//! configured server whose language is not in the tree lays out no slot.
 
+use crate::discovery::catalogue::{self, Entry};
+use crate::discovery::selection::Overrides;
 use crate::lsp::adapter::{self, Adapter, DEFAULT_BACKSTOP, Language, configured::Configured};
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
@@ -47,6 +59,11 @@ pub struct ServerEntry {
     /// Extensions per language id, when the defaults below do not cover it.
     #[serde(default)]
     pub extensions: BTreeMap<String, Vec<String>>,
+    /// Take this server out of consideration for this project, built-in or
+    /// not. The one thing configuration could not express before the
+    /// catalogue: a project with no Rust in it can now say so.
+    #[serde(default)]
+    pub disabled: bool,
     pub backstop_secs: Option<u64>,
     /// Answered to this server's `workspace/configuration` request, one
     /// copy per requested item. Some servers serve nothing until it
@@ -84,22 +101,90 @@ impl Config {
         Ok(toml::from_str(text)?)
     }
 
-    /// The adapters to run: every built-in (overridden where named) plus
-    /// every other entry as a generic server.
-    pub fn adapters(self) -> Result<Vec<Arc<dyn Adapter>>> {
+    /// The adapters this file defines, and the override layer it puts over
+    /// the catalogue.
+    ///
+    /// The two are produced together because they have to agree about
+    /// names: a plan names a catalogue entry, and a slot is laid out for
+    /// the adapter of that name. A disabled entry produces neither, which
+    /// is also why it is never validated — `disabled = true` on a generic
+    /// server with no `command` is a statement about this project, not an
+    /// incomplete definition.
+    pub fn layout(self) -> Result<Layout> {
         let mut entries = self.servers;
+        let mut overrides = Overrides::new();
         let mut adapters: Vec<Arc<dyn Adapter>> = Vec::new();
+
+        let mut configured: Vec<(String, bool)> = Vec::new();
         for builtin in adapter::builtins() {
             match entries.remove(builtin.name()) {
-                Some(entry) => adapters.push(Arc::new(override_builtin(builtin, entry)?)),
+                Some(entry) if entry.disabled => {
+                    overrides = overrides.disable(builtin.name());
+                }
+                Some(entry) => {
+                    let name = builtin.name().to_string();
+                    adapters.push(Arc::new(override_builtin(builtin, entry)?));
+                    configured.push((name, true));
+                }
                 None => adapters.push(builtin),
             }
         }
         for (name, entry) in entries {
-            adapters.push(Arc::new(generic(name, entry)?));
+            if entry.disabled {
+                overrides = overrides.disable(&name);
+                continue;
+            }
+            adapters.push(Arc::new(generic(name.clone(), entry)?));
+            configured.push((name, true));
         }
-        Ok(adapters)
+
+        // An entry the file named replaces whatever the catalogue said
+        // about it, because the merged adapter is what will actually run
+        // and its languages are what a plan has to route by.
+        for (name, _) in &configured {
+            if let Some(adapter) = adapters.iter().find(|a| a.name() == name) {
+                overrides = overrides.configure(entry_for(adapter.as_ref()));
+            }
+        }
+        Ok(Layout {
+            adapters,
+            overrides,
+        })
     }
+}
+
+/// What `structural.toml` produces: the adapters it defines and the
+/// override layer it puts over the catalogue.
+pub struct Layout {
+    pub adapters: Vec<Arc<dyn Adapter>>,
+    pub overrides: Overrides,
+}
+
+/// A catalogue entry describing an adapter, so selection can route by the
+/// languages that adapter will actually serve.
+///
+/// It carries no score: a server named in a project's configuration has
+/// not been measured, and inventing a number for it here would be the
+/// thing the catalogue exists to prevent (`docs/discovery.md`).
+fn entry_for(adapter: &dyn Adapter) -> Entry {
+    Entry::configured(
+        adapter.name(),
+        &adapter.command(),
+        adapter
+            .languages()
+            .iter()
+            .map(|language| {
+                catalogue::Serves::new(
+                    &language.id,
+                    &language
+                        .extensions
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect(),
+    )
 }
 
 fn languages_of(name: &str, entry: &ServerEntry) -> Result<Vec<Language>> {
@@ -194,7 +279,7 @@ mod tests {
 
     #[test]
     fn absent_config_is_the_builtins() {
-        let adapters = Config::default().adapters().unwrap();
+        let adapters = Config::default().layout().unwrap().adapters;
         let names: Vec<&str> = adapters.iter().map(|a| a.name()).collect();
         assert_eq!(names, ["rust-analyzer", "pyright"]);
     }
@@ -209,7 +294,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        let adapters = config.adapters().unwrap();
+        let adapters = config.layout().unwrap().adapters;
         let ra = &adapters[0];
         assert_eq!(ra.name(), "rust-analyzer");
         assert_eq!(ra.command()[0], "/opt/ra/rust-analyzer");
@@ -234,7 +319,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        let adapters = config.adapters().unwrap();
+        let adapters = config.layout().unwrap().adapters;
         let gopls = adapters.iter().find(|a| a.name() == "gopls").unwrap();
         assert_eq!(gopls.command(), ["gopls", "serve"]);
         assert_eq!(gopls.languages(), [Language::new("go", &["go"])]);
@@ -242,7 +327,7 @@ mod tests {
 
         let missing = Config::parse("[servers.thing]\nlanguages = [\"go\"]\n")
             .unwrap()
-            .adapters()
+            .layout()
             .err()
             .expect("command is required");
         assert!(
@@ -253,7 +338,7 @@ mod tests {
         let unknown =
             Config::parse("[servers.thing]\ncommand = [\"thing\"]\nlanguages = [\"brainfuck\"]\n")
                 .unwrap()
-                .adapters()
+                .layout()
                 .err()
                 .expect("unknown extensions are an error");
         assert!(
@@ -265,8 +350,9 @@ mod tests {
             "[servers.thing]\ncommand = [\"thing\"]\nlanguages = [\"brainfuck\"]\nextensions = { brainfuck = [\"bf\"] }\n",
         )
         .unwrap()
-        .adapters()
-        .unwrap();
+        .layout()
+        .unwrap()
+        .adapters;
         assert_eq!(explicit.last().unwrap().languages()[0].extensions, ["bf"]);
     }
 

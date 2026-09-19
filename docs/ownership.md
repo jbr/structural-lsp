@@ -19,14 +19,24 @@ clone of the host's shared `Lifetime`. The root and the slots are held
 *outside* the workspace mutex on purpose: a launch reads them and moves a
 server's lifecycle state without the lock that publication needs.
 
-**`Workspace`** — the canonical root, one `ServerSlot` per configured
-adapter (in configuration order), and the running server for each, indexed
-alike: `servers[i]` is `Some` exactly when slot `i` is `Running`, and both
-change together under the workspace lock. Building one is cheap and starts
-nothing — it reads `structural.toml` and lays out slots — so a workspace can
-answer routing questions before anything is running. A `structural.toml` that
-is present but unparsable is kept as a `config_error`: nothing starts, and
-every call says why.
+**`Workspace`** — the canonical root, one `ServerSlot` per **planned**
+server, and the running server for each, indexed alike: `servers[i]` is
+`Some` exactly when slot `i` is `Running`, and both change together under
+the workspace lock. Building one is cheap and starts nothing — it reads the
+tree's evidence and `structural.toml`, asks selection what to run, and lays
+out a slot per plan (`discovery.md`) — so a workspace can answer routing
+questions before anything is running. A `structural.toml` that is present
+but unparsable is kept as a `config_error`: nothing starts, and every call
+says why.
+
+A slot per plan rather than per configured adapter is what keeps an
+irrelevant server out of the process table: a Python-only tree lays out no
+Rust slot, so no Rust server is warmed, demanded, or reported as down.
+Evidence is read **once**, when the workspace is built; a tree that grows a
+language afterwards keeps the slots it was laid out with, and a query for
+the new language is told which server was left out and why. Noticing the
+change while the workspace is live is observation's
+(`../backlog/discovery/observation.md`).
 
 **`Session`** — a caller's binding to one `Entry`. A tool is handed
 `&mut Session` and takes the workspace guard for the duration of its call.

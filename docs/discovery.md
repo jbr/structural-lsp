@@ -12,10 +12,13 @@ tests assert.
 | catalogue | `src/discovery/catalogue.rs` | what a server is, what it serves, how it ranks |
 | selection | `src/discovery/selection.rs` | plans, each naming a server and its reasons |
 
-Acquisition — starting what the plans name — is not yet connected. Today
-`Workspace::new` still lays out one slot per configured adapter and warms
-every one of them (`ownership.md`), so this subsystem is complete as a
-value and not yet consulted. The plan governing the connection is
+Acquisition is connected: `Workspace::new` lays out one `ServerSlot` per
+plan rather than one per configured adapter (`ownership.md`), so a server
+no evidence calls for is never warmed and never appears in a message. What
+is not yet connected is the **root key** — the host still keys a workspace
+on the working directory it was handed rather than on the project root the
+walk found, so two agents in sibling members of one workspace still get two
+servers. That, and the generated catalogue, are what remain of
 `backlog/discovery/selection.md`.
 
 ## The root is the key, and only the key
@@ -131,10 +134,13 @@ for the *right* reason. A `Declined` records a catalogue entry no plan
 names and why: no evidence for its languages, disabled, or outranked.
 
 Precedence is explicit and ordered: an **override** beats the
-**catalogue**, which beats a **guess from evidence**. `Overrides` can
-disable a server — which `structural.toml` cannot do today, since
-`Config::adapters` always emits both built-ins — and can add or replace
-one.
+**catalogue**, which beats a **guess from evidence**. `structural.toml` is
+that layer (`servers.md`): naming a server configures it, `disabled = true`
+takes it out of consideration — built-in or not, which configuration could
+not express before — and a name the catalogue does not know is added
+generically. A disabled entry is never validated, because `disabled = true`
+on a server with no `command` is a statement about the project rather than
+an incomplete definition.
 
 Two reasons are kept apart on purpose. `HighestScore` means it outranked
 named alternatives; `OnlyCandidate` means there was no one else. On a

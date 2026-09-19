@@ -84,7 +84,22 @@ backstop_secs = 180
 command = ["gopls", "serve"]     # required
 languages = ["go"]               # required; extensions from the table below
 extensions = { go = ["go"] }     # or spell them out
+
+[servers.pyright]
+disabled = true                  # not in this project, built-in or not
 ```
+
+This file is the **override layer** over the server catalogue
+(`discovery.md`), not the whole configuration. Naming a server configures
+it, `disabled = true` takes it out of consideration, and a name the
+catalogue does not know is added generically. What actually starts is what
+selection plans from the tree's evidence, so a configured server whose
+language is nowhere in the tree lays out no slot and starts nothing.
+
+A disabled entry is never validated: `disabled = true` on a generic server
+with no `command` is a statement about this project, not an incomplete
+definition, and failing the whole file over it would leave the workspace
+with no servers at all.
 
 ### The index is warmed at launch
 

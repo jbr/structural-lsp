@@ -13,6 +13,8 @@ change, see [`journal/`](journal/); for what is left, see
 - **An anchor with no `focus`** (docs/resolution.md): the name is what the definition carries rather than how the anchor spelled it, so `choose(Mode::Fast);` resolves to `choose` instead of erroring that the server's target "does not name it in the file on disk".
 
 ### Added
+- **Slots come from plans** (docs/discovery.md, docs/ownership.md): a workspace lays out a slot per planned server rather than per configured adapter, so a Python-only tree starts no Rust server; `structural.toml` becomes the override layer over the catalogue and gains `disabled = true`, which it could not express before.
+
 - **Discovery, as pure policy** (docs/discovery.md): evidence + catalogue + overrides → server plans with reasons, a value no process is started from — ranked by what a server answered through `show`, `uses` and `action` rather than by how many editors ship it, with no admission threshold and no score statable without the run that produced it.
 
 - **No-index note** (docs/resolution.md): a name that missed says which languages have no symbol index to ask — pylsp, gleam and qmlls serve documents and no index — and that naming their file in `path` resolves from its outline, instead of reporting the symbol absent.
