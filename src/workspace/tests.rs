@@ -44,7 +44,10 @@ fn a_tree_lays_out_only_the_slots_its_languages_call_for() {
         &[("Cargo.toml", ""), ("src/lib.rs", ""), ("app.py", "")],
         "",
     );
-    assert_eq!(slot_names(&both), ["rust-analyzer", "pyright"]);
+    // Plan order — by language, then by server — not configuration order:
+    // slots come from plans, and a plan's order is the stated one
+    // (`docs/discovery.md`).
+    assert_eq!(slot_names(&both), ["pyright", "rust-analyzer"]);
 }
 
 #[test]
@@ -138,5 +141,49 @@ fn a_file_no_slot_serves_is_told_what_is_not_here_and_why() {
     assert!(
         text.contains("nothing in the tree calls for python"),
         "and why it was left out: {text}"
+    );
+}
+
+#[test]
+fn two_servers_for_one_language_are_one_slot_with_a_ladder() {
+    // A plan carries every candidate for its language, and the slot it
+    // becomes holds all of them: the alternatives are rungs to walk when
+    // the preferred one will not start, not servers to run alongside it.
+    // Neither of these is measured and neither has consensus, so the rank
+    // falls through to name ascending — which is the stated order the
+    // ladder is asserted against (`docs/discovery.md`).
+    let ladder = workspace(
+        "ladder",
+        &[("Cargo.toml", ""), ("src/lib.rs", "")],
+        "[servers.rust-analyzer]\ndisabled = true\n\n\
+         [servers.b-second]\ncommand = [\"b\"]\nlanguages = [\"rust\"]\n\n\
+         [servers.a-first]\ncommand = [\"a\"]\nlanguages = [\"rust\"]\n",
+    );
+    assert_eq!(slot_names(&ladder), ["a-first"], "one slot, not two");
+    assert_eq!(
+        ladder.slots()[0].candidate_names(),
+        ["a-first", "b-second"],
+        "and it holds the whole ladder, in rank order"
+    );
+}
+
+#[test]
+fn one_server_planned_for_two_languages_is_one_slot() {
+    // One server is one process however many languages it was planned
+    // for, so two plans naming it become one slot. The ladder is then the
+    // intersection of the two plans': falling back to a candidate serving
+    // only one of the languages would quietly drop the other, and here
+    // rust-analyzer and pyright each serve one, so neither survives.
+    let poly = workspace(
+        "polyglot-server",
+        &[("Cargo.toml", ""), ("src/lib.rs", ""), ("app.py", "")],
+        "[servers.poly]\ncommand = [\"poly\"]\nlanguages = [\"rust\", \"python\"]\n",
+    );
+    assert_eq!(slot_names(&poly), ["poly"]);
+    assert_eq!(
+        poly.slots()[0].candidate_names(),
+        ["poly"],
+        "a fallback that served only one of the two would answer for less \
+         than the slot was laid out for"
     );
 }

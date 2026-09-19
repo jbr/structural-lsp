@@ -79,8 +79,8 @@ Every other invariant here is a consequence, and they are stated in full in
 | Subsystem | Doc | Governing modules |
 | --- | --- | --- |
 | The correctness contract every other doc inherits | [correctness.md](correctness.md) | `src/lsp/server.rs`, `src/lsp/handle.rs`, `src/tools/resolution.rs` |
-| Host, workspaces, sessions, slots — who owns a server and who may use it | [ownership.md](ownership.md) | `src/host.rs`, `src/host/lifetime.rs`, `src/workspace.rs`, `src/workspace/slot.rs`, `src/session.rs` |
-| Shutdown — soft admission, force reach, process trees, signals and EOF | [shutdown.md](shutdown.md) | `src/host.rs`, `src/host/lifetime.rs`, `src/lsp/handle/owner/lifecycle.rs`, `src/main.rs` |
+| Host, workspaces, sessions, slots — who owns a server and who may use it | [ownership.md](ownership.md) | `src/host.rs`, `src/host/launch.rs`, `src/host/lifetime.rs`, `src/workspace.rs`, `src/workspace/slot.rs`, `src/session.rs` |
+| Shutdown — soft admission, force reach, process trees, signals and EOF | [shutdown.md](shutdown.md) | `src/host.rs`, `src/host/launch.rs`, `src/host/lifetime.rs`, `src/lsp/handle/owner/lifecycle.rs`, `src/main.rs` |
 | The transport — one server on three threads, the backstop, the probe, the bounds | [transport.md](transport.md) | `src/lsp/handle.rs` (+ `src/lsp/handle/`), `src/lsp/framing.rs`, `src/lsp/jsonrpc.rs`, `src/lsp/handlers.rs` |
 | Servers and adapters — what each language server needs said to it, and `structural.toml` | [servers.md](servers.md) | `src/lsp/adapter.rs` (+ `src/lsp/adapter/`), `src/lsp/server.rs`, `src/config.rs` |
 | Resolution — a name or an anchor to one identity, or a listing that says why not | [resolution.md](resolution.md) | `src/tools/resolution.rs` (+ `src/tools/resolution/`), `src/lsp/definition.rs`, `src/lsp/anchor.rs`, `src/lsp/shape.rs` |

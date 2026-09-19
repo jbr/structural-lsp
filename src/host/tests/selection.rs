@@ -6,7 +6,7 @@
 //! and it is only checkable because the mock records every launch
 //! (`backlog/discovery/selection.md`).
 
-use super::fixtures::{selective_fixture, servers_launched};
+use super::fixtures::{ladder_fixture, launch_order, selective_fixture, servers_launched};
 use crate::host::{AgentId, Host};
 
 #[test]
@@ -181,5 +181,160 @@ fn a_member_with_no_workspace_above_it_is_its_own_key() {
          everything collapsing onto one key"
     );
 
+    host.shutdown();
+}
+
+/// The fallback clause, asserted against the launch log: a preferred
+/// candidate that spawns and then fails its handshake is stepped over, and
+/// the next candidate on the ladder is tried — in order, and only then.
+///
+/// `dies` rather than a missing binary on purpose. Availability is
+/// **successful initialization**, not an executable on `PATH`
+/// (`docs/discovery.md`), and only a candidate that got as far as a pid can
+/// show the log that both were attempted and in which order.
+#[test]
+fn a_candidate_that_fails_its_handshake_is_stepped_over_in_order() {
+    let Some(fixture) = ladder_fixture("ladder-dies", "dies", "serves") else {
+        return;
+    };
+    let host = Host::new();
+    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+
+    assert_eq!(
+        launch_order(&fixture),
+        ["a-preferred", "b-alternative"],
+        "the preferred candidate was tried first and the alternative second"
+    );
+
+    let workspace = session.workspace();
+    let slot = &workspace.slots()[0];
+    assert_eq!(
+        workspace.slots().len(),
+        1,
+        "one plan, one slot — the alternative is a rung, not a second server"
+    );
+    assert_eq!(slot.state().label(), "running", "{:?}", slot.state());
+    assert_eq!(
+        slot.name(),
+        "b-alternative",
+        "the slot stands for the candidate that actually started"
+    );
+
+    // Retained, never swallowed: a fallback that hides the reason it fell
+    // back is worse than no fallback (`backlog/discovery/selection.md`).
+    let attempts = slot.failed_attempts();
+    assert_eq!(attempts.len(), 1, "{attempts:?}");
+    assert_eq!(attempts[0].server, "a-preferred");
+    assert!(!attempts[0].reason.is_empty(), "{attempts:?}");
+
+    // And reported: the footer is the only place a *successful* fallback
+    // is visible, since every other report is about something being wrong.
+    let descriptions = workspace.descriptions();
+    assert!(
+        descriptions.contains("a-preferred failed to start"),
+        "{descriptions}"
+    );
+
+    drop(workspace);
+    host.shutdown();
+}
+
+/// The same ladder when the preferred candidate cannot be spawned at all.
+/// No pid for it, so the log names only the alternative — which is why the
+/// retained attempt, not the log, is what says the first rung was tried.
+#[test]
+fn a_candidate_that_cannot_be_spawned_falls_back_too() {
+    let Some(fixture) = ladder_fixture("ladder-missing", "missing", "serves") else {
+        return;
+    };
+    let host = Host::new();
+    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+
+    assert_eq!(
+        launch_order(&fixture),
+        ["b-alternative"],
+        "the preferred candidate never became a process"
+    );
+    let workspace = session.workspace();
+    let slot = &workspace.slots()[0];
+    assert_eq!(slot.name(), "b-alternative");
+    assert_eq!(
+        slot.failed_attempts()
+            .iter()
+            .map(|attempt| attempt.server.clone())
+            .collect::<Vec<_>>(),
+        ["a-preferred"],
+    );
+
+    drop(workspace);
+    host.shutdown();
+}
+
+/// The control. Without it, "the alternative started" would also pass if
+/// the ladder were walked to the bottom every time, and the assertion would
+/// be measuring the fixture rather than the fallback.
+#[test]
+fn an_alternative_is_never_started_behind_a_candidate_that_works() {
+    let Some(fixture) = ladder_fixture("ladder-control", "serves", "serves") else {
+        return;
+    };
+    let host = Host::new();
+    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+
+    assert_eq!(
+        launch_order(&fixture),
+        ["a-preferred"],
+        "the ladder stops at the first candidate that initializes"
+    );
+    let workspace = session.workspace();
+    let slot = &workspace.slots()[0];
+    assert_eq!(slot.name(), "a-preferred");
+    assert!(slot.failed_attempts().is_empty());
+    assert!(
+        !workspace.descriptions().contains("failed to start"),
+        "nothing fell back, so the footer says nothing about it"
+    );
+
+    drop(workspace);
+    host.shutdown();
+}
+
+/// A ladder that runs out is **bounded by the list**: every candidate was
+/// tried once, the slot failed, and the failure names each one rather than
+/// only the last. Nothing retries and no timer decides anything.
+#[test]
+fn a_ladder_that_runs_out_reports_every_candidate_it_tried() {
+    let Some(fixture) = ladder_fixture("ladder-exhausted", "missing", "missing") else {
+        return;
+    };
+    let host = Host::new();
+    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+
+    assert!(
+        launch_order(&fixture).is_empty(),
+        "neither candidate was a real command"
+    );
+    let workspace = session.workspace();
+    let slot = &workspace.slots()[0];
+    assert_eq!(slot.state().label(), "failed", "{:?}", slot.state());
+    let reason = slot.state().reason().unwrap_or_default().to_string();
+    assert!(reason.contains("a-preferred"), "{reason}");
+    assert!(
+        reason.contains("b-alternative"),
+        "the last candidate's failure is not the whole story: {reason}"
+    );
+
+    // And the caller is told the same thing, with each candidate's own
+    // install hint beside it.
+    let error = format!(
+        "{:#}",
+        workspace
+            .select(Some(&fixture.root.join("src/lib.rs")))
+            .expect_err("nothing on the ladder started")
+    );
+    assert!(error.contains("a-preferred"), "{error}");
+    assert!(error.contains("b-alternative"), "{error}");
+
+    drop(workspace);
     host.shutdown();
 }

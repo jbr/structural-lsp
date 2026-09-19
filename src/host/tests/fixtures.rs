@@ -242,6 +242,61 @@ pub(super) fn selective_fixture(name: &str, sources: &[(&str, &str)], extra: &st
     })
 }
 
+/// A Rust tree whose *rust* candidates are two generic servers, so one plan
+/// carries a ladder of two.
+///
+/// The shipped catalogue holds one server per language, so a fallback can
+/// only be exercised against candidates supplied from outside it
+/// (`backlog/discovery/selection.md`). `structural.toml` is that outside:
+/// two entries declaring the same language are two candidates, and with
+/// neither measured the rank falls through to name ascending — which is why
+/// these are named so that `a-preferred` comes first and `b-alternative`
+/// second. Both built-ins are disabled, so nothing else is in the tree's
+/// way.
+///
+/// `preferred` says how the first candidate fails: `"serves"` runs the mock
+/// normally, `"dies"` records its launch and exits before answering
+/// `initialize`, and `"missing"` names a binary that cannot be spawned at
+/// all. The three are the cases the ladder has to tell apart.
+pub(super) fn ladder_fixture(name: &str, preferred: &str, alternative: &str) -> Option<Fixture> {
+    let python = crate::test_support::python()?;
+    let (dir, script) = scratch(name);
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(dir.join("Cargo.toml"), "").unwrap();
+    std::fs::write(dir.join("src/lib.rs"), "pub fn a() {}\n").unwrap();
+    let log = dir.join("launches.log");
+    let candidate = |label: &str, kind: &str| match kind {
+        "missing" => format!("command = [\"no-such-server-{label}\"]"),
+        kind => {
+            let mut argv = vec![
+                format!("\"{python}\""),
+                format!("\"{}\"", script.display()),
+                format!("\"{}\"", log.display()),
+                format!("\"{label}\""),
+            ];
+            if kind == "dies" {
+                argv.push("\"die\"".to_string());
+            }
+            format!("command = [{}]", argv.join(", "))
+        }
+    };
+    std::fs::write(
+        dir.join(crate::config::FILE_NAME),
+        format!(
+            "[servers.rust-analyzer]\ndisabled = true\n\n             [servers.pyright]\ndisabled = true\n\n             [servers.a-preferred]\n{}\nlanguages = [\"rust\"]\n\n             [servers.b-alternative]\n{}\nlanguages = [\"rust\"]\n",
+            candidate("a-preferred", preferred),
+            candidate("b-alternative", alternative),
+        ),
+    )
+    .unwrap();
+    Some(Fixture {
+        root: dir,
+        log,
+        script,
+        python,
+    })
+}
+
 /// Which servers the mock recorded starting, sorted, after giving any
 /// further launch a chance to appear.
 ///
@@ -260,6 +315,23 @@ pub(super) fn servers_launched(fixture: &Fixture) -> Vec<String> {
         .collect();
     servers.sort();
     servers
+}
+
+/// Which servers the mock recorded starting, **in the order they started**,
+/// after giving any further launch a chance to appear.
+///
+/// The ordered form, for the one claim that is about order: a ladder is
+/// walked top down, and a sorted list could not tell a fallback from a
+/// race. Safe to read as an order here because one slot's ladder is walked
+/// by one launcher, serially.
+pub(super) fn launch_order(fixture: &Fixture) -> Vec<String> {
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    fixture
+        .events()
+        .into_iter()
+        .filter(|event| event.kind == "START")
+        .map(|event| event.server)
+        .collect()
 }
 
 /// Wait for `n` launches to appear in the mock's log, up to a bound.

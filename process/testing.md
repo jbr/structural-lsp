@@ -70,11 +70,19 @@ code.
 ## Tests are the instrument, not a formality
 
 `src/test_support.rs` holds a Python mock language server that **records
-every launch** and can stall its `initialize`. That is what makes the
-ownership properties assertable at all: "concurrent demand causes one launch",
-"irrelevant servers do not start" and "shutdown leaves no orphan" are
-assertions about **pids**, not inspections of intent. Prefer extending that
-mock to reasoning about the code.
+every launch**, can stall its `initialize`, and can record its launch and
+then exit without answering one. That is what makes the ownership
+properties assertable at all: "concurrent demand causes one launch",
+"irrelevant servers do not start", "shutdown leaves no orphan" and "the
+fallback ladder was walked in order" are assertions about **pids**, not
+inspections of intent. Prefer extending that mock to reasoning about the
+code.
+
+The last mode is there because a missing binary is the wrong instrument
+for fallback: a candidate that never spawns leaves nothing in the log, so
+the test passes identically whether the ladder was walked or never
+existed. A server that spawns and *then* fails its handshake is the case
+availability is actually defined on, and it is the one the log can see.
 
 Lifecycle races are picked with mock events, barriers and recorded pids —
 **never timing sleeps**. Put an outer timeout on a process-lifecycle test so

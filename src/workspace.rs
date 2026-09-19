@@ -18,11 +18,11 @@
 //! dispatcher — without serializing unrelated workspaces. Each server runs on
 //! its own threads behind its handle.
 
-use crate::config::Config;
+use crate::config::{self, Config, Layout};
 use crate::discovery::catalogue::Catalogue;
 use crate::discovery::evidence::Evidence;
 use crate::discovery::selection::{Selection, select};
-use crate::lsp::adapter::language_for;
+use crate::lsp::adapter::{Adapter, language_for};
 use crate::lsp::server::LspServer;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
@@ -34,15 +34,16 @@ mod slot;
 #[cfg(test)]
 mod tests;
 
-pub use slot::{Demand, Launch, ServerSlot, SlotState};
+pub use slot::{Attempt, Demand, Launch, ServerSlot, SlotState};
 
 pub struct Workspace {
     /// The canonical workspace root, fixed when the workspace is acquired.
     /// A tool's `path` is a scope inside it; it never changes a server's root.
     root: PathBuf,
-    /// One per configured adapter, in configuration order, fixed when the
-    /// workspace is built. The host entry holds the same handles, so a demand
-    /// can read and move lifecycle state without this workspace's lock.
+    /// One per plan, in plan order — by language, then by server — fixed
+    /// when the workspace is built, and each holding that plan's whole
+    /// ladder. The host entry holds the same handles, so a demand can read
+    /// and move lifecycle state without this workspace's lock.
     slots: Vec<Arc<ServerSlot>>,
     /// The running server for each slot, indexed alike: `Some` exactly when
     /// that slot is `Running`. Both change together, under this workspace's
@@ -87,13 +88,10 @@ impl Workspace {
         // (`backlog/discovery/observation.md`).
         let evidence = Evidence::gather(&workspace.root);
         let selection = select(&evidence, &Catalogue::built_in(), &layout.overrides);
-        for adapter in layout.adapters {
-            if !selection.proposes(adapter.name()) {
-                continue;
-            }
+        for ladder in ladders(&selection, &layout) {
             workspace
                 .slots
-                .push(Arc::new(ServerSlot::new(adapter, Arc::clone(&stopped))));
+                .push(Arc::new(ServerSlot::new(ladder, Arc::clone(&stopped))));
             workspace.servers.push(None);
         }
         workspace.selection = Some(selection);
@@ -194,11 +192,32 @@ impl Workspace {
     }
 
     /// One line per running server, for result footers.
+    ///
+    /// A server that is running because the candidate above it would not
+    /// start says so here. That is the only place a *successful* fallback
+    /// is visible — every other report is about something being wrong —
+    /// and leaving it out would let the ladder silently substitute one
+    /// server for another.
     pub fn descriptions(&self) -> String {
         self.servers
             .iter()
-            .flatten()
-            .map(LspServer::description)
+            .enumerate()
+            .filter_map(|(index, server)| Some((index, server.as_ref()?)))
+            .map(|(index, server)| {
+                let fallen_from = self.slots[index].failed_attempts();
+                if fallen_from.is_empty() {
+                    return server.description();
+                }
+                format!(
+                    "{} (after {})",
+                    server.description(),
+                    fallen_from
+                        .iter()
+                        .map(|attempt| format!("{} failed to start", attempt.server))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })
             .collect::<Vec<_>>()
             .join(" · ")
     }
@@ -292,6 +311,7 @@ impl Workspace {
                 ));
             }
             text.push('\n');
+            text.push_str(&tried(slot));
         }
         text
     }
@@ -312,10 +332,61 @@ impl Workspace {
                 text.push_str(&format!("\n    {reason}"));
             }
             text.push('\n');
+            text.push_str(&tried(slot));
         }
         text.push_str("Restart this server after installing or configuring one.");
         text
     }
+}
+
+/// The ladder for each plan, in plan order: the adapter that will run each
+/// candidate, preferred first.
+///
+/// Two things happen here that a plan cannot do for itself. A candidate is
+/// resolved to an adapter — from the [`Layout`] when the file or a built-in
+/// describes it, and from the catalogue entry otherwise, which is the only
+/// way an alternative this project never configured can be started at all.
+/// And two plans naming the same server become **one** slot, because one
+/// server is one process however many languages it was planned for.
+///
+/// When that happens the ladder is the **intersection** of the two, in the
+/// first plan's order: falling back to a candidate that serves only one of
+/// the languages would quietly drop the other, and a slot that answers for
+/// less than it was laid out for is worse than one with a shorter ladder.
+fn ladders(selection: &Selection, layout: &Layout) -> Vec<Vec<Arc<dyn Adapter>>> {
+    let mut ladders: Vec<Vec<Arc<dyn Adapter>>> = Vec::new();
+    for plan in &selection.plans {
+        let ladder: Vec<Arc<dyn Adapter>> = plan
+            .candidates
+            .iter()
+            .map(|entry| {
+                layout
+                    .adapter(&entry.name)
+                    .unwrap_or_else(|| config::adapter_for(entry))
+            })
+            .collect();
+        match ladders
+            .iter_mut()
+            .find(|existing| existing[0].name() == ladder[0].name())
+        {
+            Some(existing) => {
+                existing.retain(|adapter| {
+                    ladder.iter().any(|other| other.name() == adapter.name())
+                });
+            }
+            None => ladders.push(ladder),
+        }
+    }
+    ladders
+}
+
+/// The candidates a slot tried and rejected, indented under it. Empty for a
+/// slot that never fell back, so an ordinary failure reads as it always did.
+fn tried(slot: &ServerSlot) -> String {
+    slot.failed_attempts()
+        .iter()
+        .map(|attempt| format!("    tried {}\n", attempt.explain()))
+        .collect()
 }
 
 /// The slots that would serve `scope`: the ones whose adapter knows the

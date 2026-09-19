@@ -87,10 +87,16 @@ shutdown. There is no idle eviction and no expiry clock
 
 ## Slots: one server's lifecycle
 
-A `ServerSlot` exists for every adapter the workspace selected, whether or
-not its server is running — the routing question ("which files would this
-server serve") is answered by the immutable adapter, so a *cold* slot still
-answers it without a lock.
+A `ServerSlot` exists for every **plan** the workspace selected, whether or
+not a server is running — the routing question ("which files would this
+server serve") is answered by the adapter, so a *cold* slot still answers
+it without a lock.
+
+A slot holds the plan's whole **ladder**: the preferred candidate and the
+alternatives behind it, in rank order (`discovery.md`). Which one the slot
+stands for is an index, read without a lock because the list is immutable,
+and the launcher moves it as it walks. So a slot's name, its install hint
+and the languages it routes by are always the candidate actually in play.
 
 ```text
 Cold ──demand──▶ Starting ──published──▶ Running
@@ -102,9 +108,10 @@ Cold ──demand──▶ Starting ──published──▶ Running
 - **Starting** — a launch is under way. A second demand waits rather than
   starting another.
 - **Running** — the workspace holds the server.
-- **Failed(reason)** — the last launch failed. A demand reports that rather
-  than retrying; clearing it belongs to whatever can re-acquire an expired
-  server, on the clock that expires one — neither exists yet.
+- **Failed(reason)** — every candidate on the ladder failed, and `reason`
+  names each one. A demand reports that rather than retrying; clearing it
+  belongs to whatever can re-acquire an expired server, on the clock that
+  expires one — neither exists yet.
 
 The state sits behind the **slot's own** lock, not the workspace's, which is
 what lets a server start while the workspace is otherwise free.
@@ -115,7 +122,9 @@ as it was, so a demand after shutdown costs a load rather than a thread).
 
 `mark_cold` is the one way to say "nothing is running here and a later demand
 may start one again", used by shutdown and by any future eviction alike, so
-the two cannot disagree about what stopping means. Every transition out of
+the two cannot disagree about what stopping means. It resets the ladder with
+the state, so a later demand walks it from the top rather than inheriting a
+verdict on candidates that were tried in another launch. Every transition out of
 `Starting` notifies the slot's condvar, so a waiter is never blocked on a
 launcher that will not wake it.
 
@@ -132,6 +141,13 @@ own thread and holds **no lock** while it spawns the child and performs the
 `initialize` handshake; it takes the workspace lock exactly once, to publish.
 That is why activation must happen before the workspace lock is taken: a
 caller holding the lock and waiting for a launch would be waiting for itself.
+
+One launch may start more than one child: `host::launch` walks the slot's
+ladder, and a candidate that spawns but fails its handshake is stopped and
+the next one tried. The walk is bounded by the list and every rejected
+candidate is retained (`discovery.md`); only publication differs from the
+single-candidate case, and it happens once, for whichever candidate
+initialized.
 
 Activation is best effort. A server that will not start is recorded on its
 own slot, and the call goes on to ask whatever is available; what is missing

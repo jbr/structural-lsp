@@ -59,7 +59,7 @@ fn entry(name: &str, language: &str, score: Option<u8>) -> Entry {
 }
 
 fn servers(selection: &Selection) -> Vec<String> {
-    selection.plans.iter().map(|p| p.server.clone()).collect()
+    selection.plans.iter().map(|p| p.server().to_string()).collect()
 }
 
 fn plan_for<'a>(selection: &'a Selection, language: &str) -> &'a Plan {
@@ -108,11 +108,11 @@ fn the_highest_scoring_candidate_wins_and_the_rest_are_alternatives() {
     let selection = select(&evidence, &catalogue, &Overrides::new());
     let plan = plan_for(&selection, "python");
 
-    assert_eq!(plan.server, "capable");
+    assert_eq!(plan.server(), "capable");
     assert_eq!(
-        plan.alternatives,
+        plan.alternative_names(),
         vec!["mediocre", "poor"],
-        "in rank order, which is what milestone C walks"
+        "in rank order, which is what the acquisition ladder walks"
     );
     assert!(plan.why.contains(&Reason::HighestScore {
         answered: 6,
@@ -144,7 +144,7 @@ fn one_candidate_did_not_beat_anything() {
         !plan.why.iter().any(|r| matches!(r, Reason::HighestScore { .. })),
         "it outranked nothing, so it must not claim to have"
     );
-    assert!(plan.alternatives.is_empty());
+    assert!(plan.alternatives().is_empty());
 }
 
 #[test]
@@ -226,7 +226,7 @@ fn an_override_beats_the_catalogue_even_when_the_catalogue_scored_better() {
     let selection = select(&evidence, &catalogue, &Overrides::new().configure(mine));
     let plan = plan_for(&selection, "python");
 
-    assert_eq!(plan.command, vec!["/opt/mine/pyright"]);
+    assert_eq!(plan.command(), ["/opt/mine/pyright"]);
     assert!(plan.why.contains(&Reason::Configured));
 }
 

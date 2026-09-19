@@ -14,12 +14,13 @@ tests assert.
 
 Acquisition is connected. `Workspace::new` lays out one `ServerSlot` per
 plan rather than one per configured adapter (`ownership.md`), so a server
-no evidence calls for is never warmed and never appears in a message; and
+no evidence calls for is never warmed and never appears in a message;
 `Host::agent_started` keys a workspace on the project root the walk found
 rather than on the working directory it was handed, so two agents in
-sibling members of one cargo workspace share one server. What remains of
-`backlog/discovery/selection.md` is the generated catalogue and the
-fallback ladder.
+sibling members of one cargo workspace share one server; and a slot holds
+its plan's whole ladder, so a candidate that will not start is stepped
+over rather than ending the matter. What remains of
+`backlog/discovery/selection.md` is the generated catalogue.
 
 ## The root is the key, and only the key
 
@@ -146,8 +147,9 @@ verified set they rank, is `backlog/discovery/catalogue-synthesis.md`.
 `select(evidence, catalogue, overrides) -> Selection`. It returns plans
 and declines, and does nothing else.
 
-A `Plan` names a server, the language it was chosen for, the root it would
-start against, its command, the alternatives in rank order, and `why` — a
+A `Plan` carries the language it was chosen for, the root it would start
+against, its `candidates` — every catalogue entry serving that language, in
+rank order, the preferred one first — and `why`: a
 list of `Reason` values, not prose, so a test can assert a plan is right
 for the *right* reason. A `Declined` records a catalogue entry no plan
 names and why: no evidence for its languages, disabled, or outranked.
@@ -164,13 +166,63 @@ an incomplete definition.
 Two reasons are kept apart on purpose. `HighestScore` means it outranked
 named alternatives; `OnlyCandidate` means there was no one else. On a
 machine with one server per language, which is the common case, only the
-second is defensible. Its acquisition-time twin — the only candidate whose
-command would actually start — arrives with fallback.
+second is defensible. Selection knows nothing of what will actually start:
+that is the ladder's, below, and it is reported as an `Attempt` on the slot
+rather than folded back into a plan's reasons.
 
 A plan is a **proposal**. Whether a server can start is acquisition's to
 discover, and a failure there is reported rather than dropped.
 
-Plans come out sorted by language, then by server. Every collection the
-module builds is ordered before it is read, because purity means the
-nondeterminism that can reach selection arrives with its inputs —
-directory iteration order, and any map whose iteration order is not fixed.
+Plans come out sorted by language, then by server, and that is also the
+order the workspace's slots are in. Every collection the module builds is
+ordered before it is read, because purity means the nondeterminism that
+can reach selection arrives with its inputs — directory iteration order,
+and any map whose iteration order is not fixed.
+
+## Availability is initialization, and the ladder is bounded
+
+A plan carries every candidate for its language in rank order, not just
+the winner, and `Workspace::new` turns each plan into **one** slot holding
+that whole list. A candidate is resolved to an adapter from the
+`structural.toml` layout when the file or a built-in describes it
+(`config::Layout::adapter`) and from the catalogue entry otherwise
+(`config::adapter_for`) — which is the only way an alternative this
+project never configured can be started at all.
+
+`host::launch` walks that list. Each rung is spawned and handshaken with
+no lock held; the first that initializes is published and the walk stops.
+Three properties are deliberate:
+
+- **Availability is successful initialization**, not an executable on
+  `PATH`. A server that spawns and then fails its handshake is
+  unavailable, and that is the case the ladder exists for. It is not
+  "answers the questions the tools ask" — a server that initializes and
+  serves nothing is a real state, but every observed case is a bug of ours
+  or a project that was never set up, so stepping over it would route
+  around the thing worth fixing
+  (`backlog/generic-baseline/answering-is-availability.md`).
+- **The walk is bounded by the list.** Every candidate is tried at most
+  once, and the list ends. Nothing retries and no timer decides anything.
+- **Failures are retained, never swallowed.** Each rejected candidate is
+  an `Attempt` on the slot — server, reason, install hint — kept whether
+  the walk went on to succeed or ran out. A ladder that runs out fails
+  naming every candidate rather than only the last, and a ladder that
+  succeeded on its second rung says so in the result footer
+  (`Workspace::descriptions`). A fallback that hides the reason it fell
+  back is worse than no fallback.
+
+A failure that is *not* the candidate's — the host shutting down, or a
+workspace still busy past the publication bound — ends the launch instead
+of advancing it, because the next candidate would meet the same wall.
+
+`mark_cold` resets the ladder along with the state, so a later demand
+walks it from the top: a candidate that failed once is not excluded
+forever, which would be a residency policy, and residency is
+`backlog/discovery/observation.md`'s.
+
+Two plans naming the same server become one slot — one server is one
+process however many languages it was planned for — and that slot's ladder
+is the **intersection** of the two, in the first plan's order. Falling
+back to a candidate that serves only one of the languages would quietly
+drop the other, and a slot that answers for less than it was laid out for
+is worse than one with a shorter ladder.

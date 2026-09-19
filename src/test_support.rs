@@ -32,6 +32,14 @@ pub(crate) fn python() -> Option<String> {
 /// how the host tests tell one launch from two and check that shutdown left
 /// no child behind. It speaks just enough framing for `LspServer::start`:
 /// `initialize` is answered with empty capabilities, `exit` ends the process.
+///
+/// `sys.argv[3]` is either a stall in seconds or the word `die`, which
+/// records its launch and then exits without answering `initialize`. That
+/// is a server that *spawned* and is still unavailable — the distinction
+/// the fallback ladder rests on, since availability is successful
+/// initialization rather than an executable on `PATH`
+/// (`docs/discovery.md`), and it is only observable in the log because the
+/// pid is written before the exit.
 pub(crate) const HOST_MOCK_PY: &str = r#"
 import json, os, sys, time
 
@@ -40,8 +48,10 @@ log = sys.argv[1] if len(sys.argv) > 1 else None
 # order is the operating system's business, not something to assert on.
 label = sys.argv[2] if len(sys.argv) > 2 else "?"
 # A fourth argument makes `initialize` take that many seconds to answer, so a
-# test can see one launch overlapping another.
-stall = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+# test can see one launch overlapping another — or, spelled `die`, makes this
+# launch record itself and exit without ever answering one.
+mode = sys.argv[3] if len(sys.argv) > 3 else ""
+stall = float(mode) if mode and mode != "die" else 0.0
 
 def note(what):
     if log:
@@ -49,6 +59,9 @@ def note(what):
             handle.write("%s %s %d\n" % (what, label, os.getpid()))
 
 note("START")
+
+if mode == "die":
+    sys.exit(1)
 
 def read_headers():
     length = None

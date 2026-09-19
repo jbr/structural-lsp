@@ -6,10 +6,11 @@
 //! and the value is what the tests assert — which is what lets every
 //! Done-when clause of that unit fail on a fixture tree.
 //!
-//! A plan is a **proposal**. Whether the server can actually start is
-//! acquisition's to find out, and a failure there is reported rather than
-//! silently dropped; walking to the next alternative is milestone C. What
-//! this layer owes is that the proposal is deterministic and says why.
+//! A plan is a **proposal**. Whether a candidate can actually start is
+//! acquisition's to find out: a plan carries the whole ladder in rank
+//! order, and `host::launch` walks it, retaining every failure
+//! (`docs/discovery.md`). What this layer owes is that the proposal is
+//! deterministic and says why.
 //!
 //! ## Precedence
 //!
@@ -104,8 +105,9 @@ pub enum Reason {
     /// [`Reason::HighestScore`] because "it won" and "there was no one
     /// else" are different claims, and only one survives one candidate.
     ///
-    /// Its acquisition-time twin — chosen because it was the only
-    /// candidate whose command would *start* — belongs to milestone C.
+    /// Neither says anything about what will *start*: that is settled by
+    /// walking the ladder, and reported as an `Attempt` on the slot
+    /// (`docs/discovery.md`).
     OnlyCandidate,
     /// Chosen without a measured score, so its rank is the floor.
     Unmeasured,
@@ -116,27 +118,63 @@ pub enum Reason {
     ExtensionsInferred,
 }
 
-/// A server proposed for a language, and why.
+/// A server proposed for a language, the alternatives behind it, and why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
-    pub server: String,
     pub language: String,
     /// The project root the server would be started against, and what the
     /// scope of an answer is *not* — narrowing stays the caller's working
     /// directory (`docs/resolution.md`).
     pub root: PathBuf,
-    pub command: Vec<String>,
-    /// The other candidates for this language, in rank order. What
-    /// milestone C walks when this one fails to start.
-    pub alternatives: Vec<String>,
+    /// The **ladder**: every candidate for this language, in rank order,
+    /// the preferred one first. Acquisition attempts them in this order
+    /// and stops at the first that initializes (`docs/discovery.md`).
+    ///
+    /// Never empty — a plan is built from a language that had at least one
+    /// candidate — which is what lets [`Plan::server`] index it.
+    ///
+    /// Whole entries rather than names, because the thing acquisition
+    /// needs from an alternative is its command and the languages it
+    /// serves, and a name would send the workspace back to a catalogue it
+    /// would then have to be given.
+    pub candidates: Vec<Entry>,
     pub why: Vec<Reason>,
 }
 
 impl Plan {
+    /// The preferred candidate: the server this plan proposes starting.
+    pub fn server(&self) -> &str {
+        &self.preferred().name
+    }
+
+    pub fn command(&self) -> &[String] {
+        &self.preferred().command
+    }
+
+    /// What acquisition walks when the preferred candidate will not start,
+    /// in rank order.
+    pub fn alternatives(&self) -> &[Entry] {
+        &self.candidates[1..]
+    }
+
+    /// The alternatives by name, for a message or an assertion.
+    pub fn alternative_names(&self) -> Vec<&str> {
+        self.alternatives()
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect()
+    }
+
+    fn preferred(&self) -> &Entry {
+        self.candidates
+            .first()
+            .expect("a plan is built from a non-empty candidate list")
+    }
+
     /// One line, for an operator log and for a plan's own report.
     pub fn explain(&self) -> String {
         let why: Vec<String> = self.why.iter().map(Reason::describe).collect();
-        format!("{} for {}: {}", self.server, self.language, why.join("; "))
+        format!("{} for {}: {}", self.server(), self.language, why.join("; "))
     }
 }
 
@@ -215,7 +253,7 @@ pub struct Selection {
 impl Selection {
     /// Whether any plan proposes `server`.
     pub fn proposes(&self, server: &str) -> bool {
-        self.plans.iter().any(|plan| plan.server == server)
+        self.plans.iter().any(|plan| plan.server() == server)
     }
 
     pub fn declined_reason(&self, server: &str) -> Option<&DeclinedReason> {
@@ -307,11 +345,9 @@ pub fn select(evidence: &Evidence, catalogue: &Catalogue, overrides: &Overrides)
         }
         chosen.insert(winner.name.clone());
         plans.push(Plan {
-            server: winner.name.clone(),
             language: language.clone(),
             root: root.path.clone(),
-            command: winner.command.clone(),
-            alternatives: rest.iter().map(|entry| entry.name.clone()).collect(),
+            candidates: candidates.iter().map(|entry| (*entry).clone()).collect(),
             why: reasons,
         });
     }
@@ -319,7 +355,7 @@ pub fn select(evidence: &Evidence, catalogue: &Catalogue, overrides: &Overrides)
     plans.sort_by(|a, b| {
         a.language
             .cmp(&b.language)
-            .then_with(|| a.server.cmp(&b.server))
+            .then_with(|| a.server().cmp(b.server()))
     });
 
     let declined = declined_from(&catalogue, overrides, &chosen, &outranked);

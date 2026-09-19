@@ -160,6 +160,20 @@ pub struct Layout {
     pub overrides: Overrides,
 }
 
+impl Layout {
+    /// The adapter this file (or a built-in) defines for `name`.
+    ///
+    /// Preferred over [`adapter_for`] wherever both could answer, because
+    /// this one carries what the catalogue entry cannot: a built-in's
+    /// protocol behaviour, and whatever the file overrode on it.
+    pub fn adapter(&self, name: &str) -> Option<Arc<dyn Adapter>> {
+        self.adapters
+            .iter()
+            .find(|adapter| adapter.name() == name)
+            .map(Arc::clone)
+    }
+}
+
 /// A catalogue entry describing an adapter, so selection can route by the
 /// languages that adapter will actually serve.
 ///
@@ -185,6 +199,37 @@ fn entry_for(adapter: &dyn Adapter) -> Entry {
             })
             .collect(),
     )
+}
+
+/// The adapter that runs a catalogue entry `structural.toml` did not
+/// define: the inverse of `entry_for` above, and what lets a plan's
+/// **alternative** be started at all.
+///
+/// A plan's ladder names catalogue entries, and only the ones the file or
+/// the built-ins already describe have an adapter waiting in the
+/// [`Layout`]. The rest — a fallback candidate this project never
+/// configured — need one built from the entry itself: its command, and the
+/// languages it claims.
+///
+/// `base` is `None` deliberately: a built-in always arrives through the
+/// layout, because a built-in the file disabled is removed from the
+/// catalogue and can never be a candidate here.
+pub fn adapter_for(entry: &Entry) -> Arc<dyn Adapter> {
+    Arc::new(Configured {
+        name: entry.name.clone(),
+        command: entry.command.clone(),
+        languages: entry
+            .serves
+            .iter()
+            .map(|serves| Language {
+                id: serves.language.clone(),
+                extensions: serves.extensions.clone(),
+            })
+            .collect(),
+        backstop: DEFAULT_BACKSTOP,
+        base: None,
+        configuration: None,
+    })
 }
 
 fn languages_of(name: &str, entry: &ServerEntry) -> Result<Vec<Language>> {

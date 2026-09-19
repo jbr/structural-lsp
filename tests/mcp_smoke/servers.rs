@@ -49,9 +49,12 @@ fn both_servers_answer_from_one_root() {
     {
         let workspace = state.workspace();
         let names: Vec<&str> = workspace.running().map(|server| server.name()).collect();
+        // Plan order — by language, then by server — because slots come
+        // from plans rather than from configuration order
+        // (`docs/discovery.md`).
         assert_eq!(
             names,
-            ["rust-analyzer", "pyright"],
+            ["pyright", "rust-analyzer"],
             "both built-ins started: not running = {:?}",
             workspace
                 .slots()

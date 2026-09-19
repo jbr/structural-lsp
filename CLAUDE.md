@@ -56,7 +56,8 @@ is silently picked. The full contract, and what each mechanism costs, is
 
 ## Module map
 
-`src/host.rs` + `src/host/lifetime.rs` (workspaces, admission, shutdown) ·
+`src/host.rs` + `src/host/launch.rs` + `src/host/lifetime.rs` (workspaces,
+launching, admission, shutdown) ·
 `src/workspace.rs` + `src/workspace/slot.rs` (one root's servers and their
 lifecycle) · `src/session.rs` (a caller's binding) · `src/lsp/handle.rs`
 (one server on three threads) · `src/lsp/server.rs` (documents and queries) ·
