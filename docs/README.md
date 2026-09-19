@@ -85,6 +85,7 @@ Every other invariant here is a consequence, and they are stated in full in
 | Servers and adapters — what each language server needs said to it, and `structural.toml` | [servers.md](servers.md) | `src/lsp/adapter.rs` (+ `src/lsp/adapter/`), `src/lsp/server.rs`, `src/config.rs` |
 | Resolution — a name or an anchor to one identity, or a listing that says why not | [resolution.md](resolution.md) | `src/tools/resolution.rs` (+ `src/tools/resolution/`), `src/lsp/definition.rs`, `src/lsp/anchor.rs`, `src/lsp/shape.rs` |
 | The three tools — `show`, `uses`, `action`, their views, and how answers render | [tools.md](tools.md) | `src/tools.rs`, `src/tools/show.rs`, `src/tools/uses.rs`, `src/tools/action.rs`, `src/tools/listing.rs`, `src/tools/hits.rs` |
+| Discovery — where a project begins, what a tree is, and which servers it calls for | [discovery.md](discovery.md) | `src/discovery.rs` (+ `src/discovery/`) |
 | The raw-LSP spike — the dev instrument that dumps unrendered server answers | [spike.md](spike.md) | `src/bin/spike/` |
 
 ## Repository layout
@@ -97,7 +98,7 @@ diagnostic instrument ([spike.md](spike.md)).
 
 Where a module has grown a directory beside it (`src/lsp/handle/`,
 `src/lsp/adapter/`, `src/tools/show/`, `src/tools/resolution/`,
-`src/workspace/`, `src/host/`), the `.rs` file holds that subsystem's
+`src/workspace/`, `src/host/`, `src/discovery/`), the `.rs` file holds that subsystem's
 vocabulary and public surface and the directory holds one file per concern.
 Tests live in a sibling module — `foo.rs` + `foo/tests.rs` — so the module
 path is unchanged.

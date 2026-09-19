@@ -56,21 +56,12 @@ pub struct ServerEntry {
 
 /// Extensions for language ids a user is likely to name without spelling
 /// them out. Anything else needs `extensions`.
+///
+/// The table itself lives in the catalogue
+/// (`backlog/discovery/selection.md`), which is where a server's languages
+/// are data rather than a branch in a parser.
 fn default_extensions(language: &str) -> Option<&'static [&'static str]> {
-    Some(match language {
-        "rust" => &["rs"],
-        "python" => &["py", "pyi"],
-        "typescript" => &["ts", "tsx", "mts", "cts"],
-        "javascript" => &["js", "jsx", "mjs", "cjs"],
-        "go" => &["go"],
-        "c" => &["c", "h"],
-        "cpp" => &["cpp", "cc", "cxx", "hpp", "hh"],
-        "ruby" => &["rb"],
-        "java" => &["java"],
-        "kotlin" => &["kt", "kts"],
-        "zig" => &["zig"],
-        _ => return None,
-    })
+    crate::discovery::catalogue::extensions_for_language(language)
 }
 
 impl Config {

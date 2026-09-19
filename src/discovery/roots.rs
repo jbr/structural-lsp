@@ -53,7 +53,7 @@ const VCS_DIRECTORIES: &[(&str, &str)] = &[
 /// (`backlog/discovery/selection.md`). A marker earns a row only when it
 /// names a project boundary — `tsconfig.json` does, a linter's dotfile does
 /// not.
-const PROJECT_MARKERS: &[(&str, &[&str])] = &[
+pub const PROJECT_MARKERS: &[(&str, &[&str])] = &[
     ("Cargo.toml", &["rust"]),
     ("go.mod", &["go"]),
     ("deno.json", &["typescript", "javascript"]),

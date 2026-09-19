@@ -10,6 +10,8 @@ change, see [`journal/`](journal/); for what is left, see
 ## [Unreleased]
 
 ### Added
+- **Discovery, as pure policy** (docs/discovery.md): evidence + catalogue + overrides → server plans with reasons, a value no process is started from — ranked by what a server answered through `show`, `uses` and `action` rather than by how many editors ship it, with no admission threshold and no score statable without the run that produced it.
+
 - **No-index note** (docs/resolution.md): a name that missed says which languages have no symbol index to ask — pylsp, gleam and qmlls serve documents and no index — and that naming their file in `path` resolves from its outline, instead of reporting the symbol absent.
 
 - **TypeScript and C++ conformance columns** (process/testing.md): eleven servers across five languages measured, reduced to the dimensions they vary in (reference/lsp-server-conventions.md) and four aggregate units (backlog/generic-baseline/).

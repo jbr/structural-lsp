@@ -5,4 +5,7 @@
 //! function over the filesystem returning a value with its reasons; no
 //! process is spawned and no lock is taken.
 
+pub mod catalogue;
+pub mod evidence;
 pub mod roots;
+pub mod selection;
