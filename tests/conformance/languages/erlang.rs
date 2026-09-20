@@ -1,5 +1,5 @@
-//! Erlang: `erlang_ls`, and the fixture whose language has no type to
-//! qualify a name with.
+//! Erlang: `elp` and `erlang_ls`, and the fixture whose language has no
+//! type to qualify a name with.
 //!
 //! Every other column here can ask for a member of a type
 //! (`Config.doubled`, `Config::doubled`). Erlang has no types carrying
@@ -48,13 +48,22 @@ pub const ERLANG: Language = Language {
     probes: PROBES,
 };
 
-const CANDIDATES: &[Candidate] = &[Candidate {
-    name: "erlang_ls",
-    argv: &["erlang_ls", "--transport", "stdio"],
-    version_argv: &["erlang_ls", "--version"],
-    builtin: false,
-    settings: "",
-}];
+const CANDIDATES: &[Candidate] = &[
+    Candidate {
+        name: "elp",
+        argv: &["elp", "server"],
+        version_argv: &["elp", "--version"],
+        builtin: false,
+        settings: "",
+    },
+    Candidate {
+        name: "erlang_ls",
+        argv: &["erlang_ls", "--transport", "stdio"],
+        version_argv: &["erlang_ls", "--version"],
+        builtin: false,
+        settings: "",
+    },
+];
 
 const PROBES: &[Probe] = &[
     Probe {

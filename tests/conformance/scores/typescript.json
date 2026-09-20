@@ -1,0 +1,122 @@
+{
+  "date": 1789867226,
+  "fixture_revision": "4119e30e",
+  "language": "typescript",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "qualified name",
+    "qualified name, in file",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "typescript-language-server --stdio",
+      "candidate": "typescript-language-server",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no 'doubled' is in a container ending in `Config`; the 'dou…",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "4.3.3"
+    },
+    {
+      "argv": "deno lsp",
+      "candidate": "deno",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no definition at `doubled` (main.ts:7)",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "deno 2.9.6 (stable, release, x86_64-apple-darwin)"
+    },
+    {
+      "argv": "vtsls --stdio",
+      "candidate": "vtsls",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no exact match for 'Config::doubled'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "0.3.0"
+    }
+  ],
+  "structural_revision": "1ce943a9cb40f8ddbbff31ace6fea9b92ced71bd"
+}

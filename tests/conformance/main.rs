@@ -97,7 +97,34 @@ fn on_path(program: &str) -> bool {
 /// a detail. A line that reads as an error or a stack trace is dropped:
 /// several servers answer `--version` by trying to start.
 fn version(argv: &[&str]) -> String {
-    let Ok(output) = Command::new(argv[0]).args(&argv[1..]).output() else {
+    // Bounded: `typeprof --version` spins at 100% CPU forever (measured
+    // 2026-09-19, killed after 17 minutes), and an unbounded wait turns one
+    // server's version flag into a twenty-minute stall. A version that
+    // cannot be read in ten seconds is left blank rather than guessed.
+    let mut child = match Command::new(argv[0])
+        .args(&argv[1..])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => return String::new(),
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return String::new();
+            }
+        }
+    }
+    let Ok(output) = child.wait_with_output() else {
         return String::new();
     };
     let text = if output.stdout.is_empty() {
@@ -242,6 +269,19 @@ fn measure(language: &Language) {
         "{}",
         scorecard.render(language.probes.iter().map(|probe| probe.needs).collect())
     );
+
+    // The checked-in artifact: a re-run overwrites the same path, so a
+    // change to the evidence is a reviewable diff. Written even when the
+    // run probed nothing, because an empty rows list with provenance is
+    // still a statement about what was tried.
+    let scores_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("conformance")
+        .join("scores");
+    let _ = std::fs::create_dir_all(&scores_dir);
+    if let Err(error) = scorecard.write_json(&scores_dir.join(format!("{}.json", language.name))) {
+        eprintln!("warning: could not write scorecard JSON: {error:#}");
+    }
 
     assert!(
         probed > 0,

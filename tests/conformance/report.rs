@@ -4,6 +4,36 @@
 //! answers two of six is reported as two of six, with the failures named,
 //! because which two is the whole point. An average would hide it.
 
+/// Seconds since the Unix epoch, as the provenance date. A human calendar
+/// date would need a formatting dependency for one field; the epoch is
+/// unambiguous and converts losslessly.
+fn chrono_date() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0)
+}
+
+/// The machine that measured, from the environment when set and `uname -n`
+/// otherwise. Absent rather than guessed: `None` when neither answers.
+fn machine_name() -> Option<String> {
+    if let Ok(name) = std::env::var("HOSTNAME").map(|name| name.trim().to_string())
+        && !name.is_empty()
+    {
+        return Some(name);
+    }
+    std::process::Command::new("uname")
+        .arg("-n")
+        .output()
+        .ok()
+        .and_then(|output| {
+            std::str::from_utf8(&output.stdout)
+                .ok()
+                .map(|text| text.trim().to_string())
+        })
+        .filter(|text| !text.is_empty())
+}
+
 /// What one probe got back.
 pub enum Outcome {
     /// The answer was what the probe asked for.
@@ -92,6 +122,55 @@ impl Scorecard {
             fixture,
             rows: Vec::new(),
         }
+    }
+
+    /// The checked-in artifact `catalogue-synthesis.md` requires: per-probe
+    /// outcomes (not just the total), with provenance on every row. A flat
+    /// count out of eight weighs a verified rename the same as a hit line's
+    /// container; storing the vector means a weighting can be introduced
+    /// later without reinstalling and re-running every server. A field
+    /// whose provenance cannot be stated is absent rather than guessed —
+    /// `None` serializes as missing, never as an empty string pretending to
+    /// be a version.
+    pub fn write_json(&self, path: &std::path::Path) -> anyhow::Result<()> {
+        let structural_revision = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .ok()
+            .and_then(|output| {
+                std::str::from_utf8(&output.stdout)
+                    .ok()
+                    .map(|text| text.trim().to_string())
+            })
+            .filter(|text| !text.is_empty());
+        let document = serde_json::json!({
+            "language": self.language,
+            "fixture_revision": self.fixture,
+            "structural_revision": structural_revision,
+            "date": chrono_date(),
+            "machine": machine_name(),
+            "probes": self.probes,
+            "rows": self.rows.iter().map(|row| match row {
+                Row::Scored { name, argv, version, outcomes } => serde_json::json!({
+                    "candidate": name,
+                    "argv": argv,
+                    "version": if version.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(version.clone()) },
+                    "outcomes": outcomes.iter().map(|outcome| match outcome {
+                        Outcome::Answered => serde_json::json!({"probe_answered": true}),
+                        Outcome::Unmet(detail) => serde_json::json!({"probe_answered": false, "kind": "unmet", "detail": detail}),
+                        Outcome::Failed(detail) => serde_json::json!({"probe_answered": false, "kind": "failed", "detail": detail}),
+                    }).collect::<Vec<_>>(),
+                }),
+                Row::Absent { name, argv, why } => serde_json::json!({
+                    "candidate": name,
+                    "argv": argv,
+                    "absent": true,
+                    "unrunnable": why,
+                }),
+            }).collect::<Vec<_>>(),
+        });
+        std::fs::write(path, serde_json::to_string_pretty(&document)?)?;
+        Ok(())
     }
 
     pub fn scored(&mut self, name: &str, argv: String, version: String, outcomes: Vec<Outcome>) {

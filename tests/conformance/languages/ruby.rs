@@ -1,8 +1,8 @@
-//! Ruby: one candidate, `typeprof --lsp`, which is a type-inference tool
-//! with an LSP interface rather than a general-purpose language server. It
-//! is expected to answer few of these probes; a `no` here is the tool's own
-//! catalogue fact, not a fixture defect, so the fixture is not contorted to
-//! avoid one.
+//! Ruby: three candidates — `solargraph`, `ruby-lsp`, and `typeprof --lsp`.
+//! The last is a type-inference tool with an LSP interface rather than a
+//! general-purpose language server. It is expected to answer few of these
+//! probes; a `no` here is the tool's own catalogue fact, not a fixture
+//! defect, so the fixture is not contorted to avoid one.
 
 use crate::probe::{Candidate, Language, Probe, rename_preview, show, uses};
 use crate::report::Outcome;
@@ -16,13 +16,29 @@ pub const RUBY: Language = Language {
     probes: PROBES,
 };
 
-const CANDIDATES: &[Candidate] = &[Candidate {
-    name: "typeprof",
-    argv: &["typeprof", "--lsp", "--stdio"],
-    version_argv: &["typeprof", "--version"],
-    builtin: false,
-    settings: "",
-}];
+const CANDIDATES: &[Candidate] = &[
+    Candidate {
+        name: "solargraph",
+        argv: &["solargraph", "stdio"],
+        version_argv: &["solargraph", "--version"],
+        builtin: false,
+        settings: "",
+    },
+    Candidate {
+        name: "ruby-lsp",
+        argv: &["ruby-lsp"],
+        version_argv: &["ruby-lsp", "--version"],
+        builtin: false,
+        settings: "",
+    },
+    Candidate {
+        name: "typeprof",
+        argv: &["typeprof", "--lsp", "--stdio"],
+        version_argv: &["typeprof", "--version"],
+        builtin: false,
+        settings: "",
+    },
+];
 
 const PROBES: &[Probe] = &[
     Probe {

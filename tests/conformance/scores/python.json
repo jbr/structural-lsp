@@ -1,0 +1,221 @@
+{
+  "date": 1789867690,
+  "fixture_revision": "196fedea",
+  "language": "python",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "qualified name",
+    "qualified name, in file",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "pyright-langserver --stdio",
+      "candidate": "pyright",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "pyright 1.1.403"
+    },
+    {
+      "argv": "basedpyright-langserver --stdio",
+      "candidate": "basedpyright",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "basedpyright 1.39.5"
+    },
+    {
+      "argv": "pylsp",
+      "candidate": "pylsp",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "pylsp v1.15.0"
+    },
+    {
+      "argv": "jedi-language-server",
+      "candidate": "jedi",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "0.47.0"
+    },
+    {
+      "argv": "ty server",
+      "candidate": "ty",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no 'doubled' is in a container ending in `Config`; the 'dou…",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "ty 0.0.81 (4edd7724a 2026-09-14)"
+    },
+    {
+      "argv": "pyrefly lsp",
+      "candidate": "pyrefly",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "function choose · helper.py:28 · no references",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "pyrefly 1.3.1"
+    }
+  ],
+  "structural_revision": "1ce943a9cb40f8ddbbff31ace6fea9b92ced71bd"
+}

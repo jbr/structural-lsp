@@ -34,6 +34,7 @@ change, see [`journal/`](journal/); for what is left, see
 - **Paired probe columns** (process/testing.md): `qualified name, in file` alongside `qualified name`, so a failing cell localizes to the index or the outline rather than being ambiguous between the server and this code.
 
 - **Conformance probe** (process/testing.md): `tests/conformance/` asks every installed server of a language the questions `show`, `uses` and `action` need, and prints a scorecard with each server's version — what it answered, not what it advertises.
+- **Checked-in score evidence** (process/testing.md, backlog/discovery/catalogue-synthesis.md): every conformance run writes `tests/conformance/scores/<language>.json` — per-probe outcome vectors with server version, structural revision, fixture revision, date and machine — so a preference order's evidence is a reviewable diff rather than a printed-and-discarded card.
 
 - **Bare-name staleness regression** (process/testing.md): feature-gated pending acceptance — an unopened-file edit and a newly-created file, each followed immediately by a bare-name query — observed failing on rust-analyzer, with the currentness wording qualified to match the implementation (docs/correctness.md).
 - **`action` with `rename`** (docs/tools.md): a semantic change previewed with a digest over the files it touches, applied only when the digest still matches, with the servers re-synced afterwards.

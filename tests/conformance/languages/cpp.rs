@@ -1,5 +1,5 @@
-//! C++: clangd, and the one fixture here whose language splits a symbol
-//! into a declaration and a definition.
+//! C++: clangd and ccls, and the one fixture here whose language splits a
+//! symbol into a declaration and a definition.
 //!
 //! `helper.hpp` declares `Config::doubled` and `helper.cpp` defines it, so
 //! two files name the same entity and neither is redundant. That is a shape
@@ -22,13 +22,22 @@ pub const CPP: Language = Language {
     probes: PROBES,
 };
 
-const CANDIDATES: &[Candidate] = &[Candidate {
-    name: "clangd",
-    argv: &["clangd"],
-    version_argv: &["clangd", "--version"],
-    builtin: false,
-    settings: "",
-}];
+const CANDIDATES: &[Candidate] = &[
+    Candidate {
+        name: "clangd",
+        argv: &["clangd"],
+        version_argv: &["clangd", "--version"],
+        builtin: false,
+        settings: "",
+    },
+    Candidate {
+        name: "ccls",
+        argv: &["ccls"],
+        version_argv: &["ccls", "--version"],
+        builtin: false,
+        settings: "",
+    },
+];
 
 const PROBES: &[Probe] = &[
     Probe {

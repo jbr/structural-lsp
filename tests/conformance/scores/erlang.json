@@ -1,0 +1,109 @@
+{
+  "date": 1789867303,
+  "fixture_revision": "3eb9b00c",
+  "language": "erlang",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "qualified name",
+    "qualified name, in file",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "elp server",
+      "candidate": "elp",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'identity'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'helper::choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'helper::choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "elp 1.1.0+build-2026-08-10"
+    },
+    {
+      "argv": "erlang_ls --transport stdio",
+      "candidate": "erlang_ls",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'identity'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'helper::choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'helper::choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "Version: 0.0.0"
+    }
+  ],
+  "structural_revision": "1ce943a9cb40f8ddbbff31ace6fea9b92ced71bd"
+}

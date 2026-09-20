@@ -1,10 +1,11 @@
-//! TypeScript: two candidates that disagree about what a project is.
+//! TypeScript: three candidates that disagree about what a project is.
 //!
 //! `typescript-language-server` wraps tsserver and reads `tsconfig.json`;
 //! `deno lsp` has its own module resolution and ignores it. Both are
 //! recorded by the dataset for `.ts` — typescript-language-server by twelve
 //! sources, the most of any server in it — so this is the first language
-//! here where two servers are genuinely alternatives.
+//! here where two servers are genuinely alternatives. `vtsls` is a third
+//! such wrapper, added for the measured order.
 
 use crate::probe::{Candidate, Language, Probe, rename_preview, show, uses};
 use crate::report::Outcome;
@@ -37,6 +38,13 @@ const CANDIDATES: &[Candidate] = &[
         // (`../../../docs/servers.md`). `unstable` and the inlay-hint
         // settings an editor also sets make no difference to these probes.
         settings: "{ enable = true }",
+    },
+    Candidate {
+        name: "vtsls",
+        argv: &["vtsls", "--stdio"],
+        version_argv: &["vtsls", "--version"],
+        builtin: false,
+        settings: "",
     },
 ];
 

@@ -1,0 +1,152 @@
+{
+  "date": 1789867629,
+  "fixture_revision": "8bbb9eea",
+  "language": "ruby",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "qualified name",
+    "qualified name, in file",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "solargraph stdio",
+      "candidate": "solargraph",
+      "outcomes": [
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no exact match for 'Config::doubled'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "0.60.4"
+    },
+    {
+      "argv": "ruby-lsp",
+      "candidate": "ruby-lsp",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no definition reported for 'identity' (ruby-lsp, from helpe…",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no 'doubled' is in a container ending in `Config`; the 'dou…",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no definition reported for 'Config::doubled' (ruby-lsp, fro…",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "0.26.11"
+    },
+    {
+      "argv": "typeprof --lsp --stdio",
+      "candidate": "typeprof",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'identity'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no definition at `doubled` (main.rb:5)",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": null
+    }
+  ],
+  "structural_revision": "1ce943a9cb40f8ddbbff31ace6fea9b92ced71bd"
+}
