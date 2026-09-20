@@ -95,6 +95,7 @@ fn find_in(
         adapter,
         uri,
         path: Path::new("/ws/src/a.rs"),
+        decorated: false,
     };
     candidates(outline, &file)
 }
@@ -291,6 +292,98 @@ fn a_flat_outline_nominates_from_the_declaration_line() {
 
     let null = find_in(&RustAnalyzer, &Value::Null, TEXT, "new").unwrap();
     assert!(null.is_empty());
+}
+
+/// Both Erlang servers advertise `choose/1` for a function the file spells
+/// `choose`: elp in the hierarchical shape, with a selection range over the
+/// bare name, and erlang_ls in the flat shape, whose declaration line says
+/// `choose(Flag) ->` and never `choose/1`
+/// (`../../../journal/2026-09-19-a-name-is-what-the-range-says.md`).
+const ERLANG: &str = "\
+-module(helper).
+
+choose(Flag) ->
+    Flag.
+
+chooser(Flag) ->
+    Flag.
+";
+
+#[test]
+fn an_advertised_name_that_decorates_the_queried_one_nominates_hierarchically() {
+    let outline = json!([
+        {
+            "name": "choose/1", "kind": 12,
+            "range": range(2, 0, 3, 9), "selectionRange": range(2, 0, 2, 6)
+        }
+    ]);
+    let found = find_in(&Pyright, &outline, ERLANG, "choose").unwrap();
+    assert_eq!(found.len(), 1, "`choose/1` is `choose` decorated");
+    assert_eq!(
+        found[0].info.name, "choose",
+        "the identity is the identifier the range names, not the decoration"
+    );
+    assert_eq!(found[0].info.location.range, range_of(2, 0, 2, 6));
+
+    // The decoration has to mention the name as a whole token: `chooser/1`
+    // is another function, not a spelling of this one.
+    let other = json!([
+        {
+            "name": "chooser/1", "kind": 12,
+            "range": range(5, 0, 6, 9), "selectionRange": range(5, 0, 5, 7)
+        }
+    ]);
+    assert!(
+        find_in(&Pyright, &other, ERLANG, "choose")
+            .unwrap()
+            .is_empty(),
+        "a token boundary is required"
+    );
+}
+
+#[test]
+fn a_decorated_name_in_the_flat_shape_is_found_by_the_identifier() {
+    // erlang_ls's shape: the whole clause, and a name written nowhere in it.
+    let flat = json!([
+        {
+            "name": "choose/1", "kind": 12,
+            "location": { "uri": "file:///ws/src/a.rs", "range": range(2, 0, 3, 9) }
+        }
+    ]);
+    let found = find_in(&Pyright, &flat, ERLANG, "choose").unwrap();
+    assert_eq!(found.len(), 1, "the declaration line names `choose`");
+    assert_eq!(found[0].info.name, "choose");
+    assert_eq!(
+        found[0].info.location.range,
+        range_of(2, 0, 2, 6),
+        "the nominated range is the identifier on the declaration line"
+    );
+}
+
+/// A node that advertises the name exactly settles it: a decorated node is
+/// a fallback for when nothing did, never a second candidate beside one.
+#[test]
+fn an_exact_advertisement_is_never_joined_by_a_decorated_one() {
+    let outline = json!([
+        {
+            "name": "choose", "kind": 12,
+            "range": range(2, 0, 3, 9), "selectionRange": range(2, 0, 2, 6)
+        },
+        {
+            "name": "choose/1", "kind": 12,
+            "range": range(5, 0, 6, 9), "selectionRange": range(5, 0, 5, 7)
+        }
+    ]);
+    let found = find_in(&Pyright, &outline, ERLANG, "choose").unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].info.location.range, range_of(2, 0, 2, 6));
+}
+
+fn range_of(sl: u32, sc: u32, el: u32, ec: u32) -> lsp_types::Range {
+    lsp_types::Range {
+        start: lsp_types::Position::new(sl, sc),
+        end: lsp_types::Position::new(el, ec),
+    }
 }
 
 #[test]

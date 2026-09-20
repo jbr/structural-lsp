@@ -87,6 +87,42 @@ impl Partition {
         self.out_of_scope += other.out_of_scope;
     }
 
+    /// Promote fuzzy candidates whose advertised name **decorates**
+    /// `symbol`, when nothing matched it by name.
+    ///
+    /// A server's `name` is a display string, not a declared identifier:
+    /// ccls advertises `int choose(bool flag)` in its index and elp
+    /// advertises `choose/1` in an outline, both for a definition the file
+    /// spells `choose`. When the decoration mentions the queried name
+    /// exactly once as a whole token, the symbol is nominated under the
+    /// queried name — and the range still has to hold it in the text just
+    /// read, which is checked before anything navigates
+    /// (docs/resolution.md).
+    ///
+    /// Only as a fallback: a server that advertises the bare name resolves
+    /// exactly as it did, and a decorated candidate is never an additional
+    /// exact match beside one. `sole_token` is the whole rule — no
+    /// language-specific parsing of what a decoration may be.
+    pub fn promote_decorated(&mut self, symbol: &str) {
+        if !self.exact.is_empty() {
+            return;
+        }
+        let (decorated, rest): (Vec<Candidate>, Vec<Candidate>) = std::mem::take(&mut self.fuzzy)
+            .into_iter()
+            .partition(|candidate| decorates(&candidate.info.name, symbol));
+        self.exact = decorated
+            .into_iter()
+            .map(|mut candidate| {
+                // The identity is the identifier the range names; the
+                // decoration was the server's spelling of it.
+                candidate.info.name = symbol.to_string();
+                candidate.exact = true;
+                candidate
+            })
+            .collect();
+        self.fuzzy = rest;
+    }
+
     pub fn into_candidates(self) -> Candidates {
         let Partition {
             mut exact,
@@ -181,7 +217,9 @@ pub fn resolve(
     root: &Path,
     scope: Option<&Path>,
 ) -> Candidates {
-    partition(symbol, server, infos, root, scope).into_candidates()
+    let mut partitioned = partition(symbol, server, infos, root, scope);
+    partitioned.promote_decorated(symbol);
+    partitioned.into_candidates()
 }
 
 /// One *definition target* that exact-named candidates lead to: the unit of
@@ -415,6 +453,16 @@ pub fn elided(found: &str) -> String {
 /// Check that `range` names `name` in `text`, discarding where.
 pub fn verify_name_at(text: &str, range: Range, name: &str, encoding: Encoding) -> Result<()> {
     locate_name_at(text, range, name, encoding).map(|_| ())
+}
+
+/// Whether `advertised` is a decoration of `name`: a different string that
+/// mentions it exactly once as a whole token.
+///
+/// `choose/1` and `int choose(bool flag)` decorate `choose`; `chooser` and
+/// `choose_all` do not (no token boundary), and neither does `choose` itself
+/// (that is a name, not a decoration of one).
+pub fn decorates(advertised: &str, name: &str) -> bool {
+    advertised != name && sole_token(advertised, name).is_some()
 }
 
 /// Whether `range` is the whole of `text`: a definition target that is a

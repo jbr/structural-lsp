@@ -42,7 +42,7 @@
 //! ambiguous nomination is not one. pylsp 1.15.0 serves this shape.
 
 use crate::lsp::adapter::Adapter;
-use crate::lsp::definition::{Candidate, NameLocation, locate_name_at, verify_name_at};
+use crate::lsp::definition::{Candidate, NameLocation, decorates, locate_name_at, verify_name_at};
 use crate::lsp::outline::{self, Node};
 use crate::lsp::positions::{Encoding, position_to_offset};
 use crate::lsp::server::LspServer;
@@ -106,17 +106,33 @@ fn from_server(server: &mut LspServer, file: &Path, symbol: &str) -> Result<Vec<
         adapter: server.adapter(),
         uri,
         path: file,
+        decorated: false,
     };
     candidates(&outline, &named)
 }
 
 /// The pure part: an outline result and the file it was read from, to the
 /// candidates it advertises for that file's queried name.
+///
+/// Two passes, the second only when the first found nothing: a node whose
+/// advertised name *is* the queried name, then a node whose advertised name
+/// **decorates** it — `choose/1` for `choose`, which is how both Erlang
+/// servers name a function (`docs/resolution.md`). The fallback order is
+/// what keeps a server that advertises the bare name resolving exactly as
+/// it did.
 fn candidates(outline: &Value, file: &NamedFile<'_>) -> Result<Vec<Candidate>> {
     let nodes = outline::tree(outline)
         .with_context(|| format!("{} returned an unusable documentSymbol result", file.server))?;
     let mut found = Vec::new();
     collect(&nodes, &mut Vec::new(), file, &mut found)?;
+    if found.is_empty() && !file.decorated {
+        let decorated = NamedFile {
+            decorated: true,
+            uri: file.uri.clone(),
+            ..*file
+        };
+        collect(&nodes, &mut Vec::new(), &decorated, &mut found)?;
+    }
     Ok(found)
 }
 
@@ -131,6 +147,34 @@ struct NamedFile<'a> {
     adapter: &'a dyn Adapter,
     uri: Uri,
     path: &'a Path,
+    /// Which pass this is: nodes advertising exactly the queried name, or —
+    /// when that pass found nothing — nodes whose advertised name
+    /// **decorates** it (`decorates`, `crate::lsp::definition`).
+    decorated: bool,
+}
+
+impl NamedFile<'_> {
+    /// Whether `node` nominates in this pass: it advertises the queried
+    /// name, or — in the decorated pass — its advertised name decorates it.
+    fn nominates(&self, node: &Node) -> bool {
+        if self.decorated {
+            decorates(&node.extent.name, self.symbol)
+        } else {
+            node.extent.name == self.symbol
+        }
+    }
+
+    /// The identifier a nominated node is nominated under, and the name
+    /// every range check is made against: the queried name in the decorated
+    /// pass, where the advertised name is the server's spelling of it and
+    /// the range is what proves it.
+    fn identifier<'n>(&'n self, node: &'n Node) -> &'n str {
+        if self.decorated {
+            self.symbol
+        } else {
+            node.extent.name.as_str()
+        }
+    }
 }
 
 /// Every symbol `symbols` advertises with exactly the asked-for name, with
@@ -164,12 +208,22 @@ fn collect<'a>(
             collect(&node.children, ancestors, file, out)?;
             continue;
         };
-        if node.extent.name == file.symbol {
+        if file.nominates(node) {
+            let identifier = file.identifier(node);
             // Checked here, on the text already in hand, before the candidate
             // can reach a filter or a listing: a listing built on a range the
             // server no longer matches is exactly what the contract forbids.
-            verify_name_at(file.text, range, &node.extent.name, file.encoding).with_context(
-                || {
+            let named = verify_name_at(file.text, range, identifier, file.encoding);
+            if file.decorated {
+                // The node never advertised this name — the decoration did.
+                // A range that does not hold the identifier says only that
+                // this is not the symbol asked for, which is a miss and not
+                // a disagreement about the file.
+                if named.is_ok() {
+                    out.push(candidate(node, range, ancestors, file)?);
+                }
+            } else {
+                named.with_context(|| {
                     format!(
                         "{}'s outline for {} advertises `{}`, but its range does not name it \
                          there; the outline does not describe the file as read from disk",
@@ -177,9 +231,9 @@ fn collect<'a>(
                         file.path.display(),
                         node.extent.name
                     )
-                },
-            )?;
-            out.push(candidate(node, range, ancestors, file)?);
+                })?;
+                out.push(candidate(node, range, ancestors, file)?);
+            }
         }
         ancestors.push((node.extent.name.as_str(), range));
         let descended = collect(&node.children, ancestors, file, out);
@@ -202,19 +256,25 @@ fn collect<'a>(
 /// is nomination, and a nomination that cannot say which token it means is
 /// not one (docs/correctness.md).
 fn declaration_range(file: &NamedFile<'_>, node: &Node) -> Option<Range> {
+    // In the decorated pass the advertised name is not written in the file
+    // at all — erlang_ls advertises `choose/1` for a line that says
+    // `choose(Flag) ->` — so the identifier is what the line is searched
+    // for. The one-occurrence rule is unchanged either way.
+    let name = if file.decorated && decorates(&node.extent.name, file.symbol) {
+        file.symbol
+    } else {
+        node.extent.name.as_str()
+    };
     let start = Position::new(node.extent.range.start.line, 0);
     let end = Position::new(node.extent.range.start.line, u32::MAX);
     let line = Range { start, end };
     // The item's first line, clamped to the file: `u32::MAX` is past every
     // line end, and `locate_name_at` would refuse a range outside the text.
     let line = clamp_to_line(file.text, line)?;
-    match locate_name_at(file.text, line, &node.extent.name, file.encoding).ok()? {
+    match locate_name_at(file.text, line, name, file.encoding).ok()? {
         NameLocation::At(at) => Some(Range {
             start: at,
-            end: Position::new(
-                at.line,
-                at.character + node.extent.name.chars().count() as u32,
-            ),
+            end: Position::new(at.line, at.character + name.chars().count() as u32),
         }),
         NameLocation::Unnamed => None,
     }
@@ -238,7 +298,7 @@ fn candidate(
     ancestors: &[(&str, Range)],
     file: &NamedFile<'_>,
 ) -> Result<Candidate> {
-    let name = node.extent.name.as_str();
+    let name = file.identifier(node);
     // Nesting first: the hierarchical shape says the container by putting
     // the symbol under it, and the adapter's rule reads that. The flat
     // shape has no nesting and names the container in a field instead,

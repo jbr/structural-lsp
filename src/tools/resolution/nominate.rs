@@ -93,6 +93,10 @@ fn discover(
         let infos = server.workspace_symbol(symbol)?;
         merged.absorb(partition(symbol, server.name(), infos, root, scope));
     }
+    // After merging, so a server that advertises the bare name settles it
+    // for every server: a decorated name is a fallback, never a second
+    // exact match beside a plain one (`docs/resolution.md`).
+    merged.promote_decorated(symbol);
     let candidates = merged.into_candidates();
     let exclusions = Exclusions {
         out_of_root: candidates.out_of_root,

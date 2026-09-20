@@ -10,6 +10,7 @@ change, see [`journal/`](journal/); for what is left, see
 ## [Unreleased]
 
 ### Fixed
+- **A name a server decorated still resolves** (docs/resolution.md): when nothing matches the queried name, a candidate whose advertised name mentions it exactly once as a whole token nominates under the identifier — `choose/1` from both Erlang servers, `int choose(bool flag)` from ccls — with every range check made against the identifier, and no language-specific parsing. Erlang goes 1/8 to 3/8 on both servers, vtsls 5/8 to 8/8.
 - **An anchor with no `focus`** (docs/resolution.md): the name is what the definition carries rather than how the anchor spelled it, so `choose(Mode::Fast);` resolves to `choose` instead of erroring that the server's target "does not name it in the file on disk".
 
 ### Added

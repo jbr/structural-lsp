@@ -15,7 +15,9 @@ one. Implemented in `src/tools/resolution.rs` (+ `resolution/nominate.rs`,
 3. **Nominate** — the bare name becomes candidates from `workspace/symbol`
    (through the adapter's query rewriting), or, when `path` names a file,
    from that file's own outline (below). Candidates are partitioned into
-   exact / fuzzy / ambiguous; only exact-name matches can resolve.
+   exact / fuzzy / ambiguous; only exact-name matches can resolve, and a
+   name a server *decorated* counts as exact only when nothing matched the
+   bare name ([Decorated names](#decorated-names)).
 4. **Navigate** — every exact candidate's file is synced, its range checked
    against the text just read, and `textDocument/definition` asked at it.
 5. **Group by target.** Candidates that navigate to the same place are one
@@ -44,7 +46,9 @@ A `path` that names a **file** nominates from that file's own
 - the file is synced from disk first, so the outline is the server's view of
   the text just read, and the answer is current;
 - a symbol's identity is the **name the server advertises**
-  (`DocumentSymbol.name`), and its own selection range is only the
+  (`DocumentSymbol.name`) — or, when no node advertises the queried name,
+  the identifier a node's advertised name decorates ([Decorated
+  names](#decorated-names)) — and its own selection range is only the
   navigation point handed to the pipeline. That name is checked against the
   text at that range **at nomination**, before the candidate can reach a
   qualifier filter or a listing, and checked again by `definition_of` before
@@ -98,6 +102,37 @@ the caller was bound with — and never to the workspace key, which may be a
 project root above it (`discovery.md`). An agent in `crates/alpha` asking
 for `path: "src"` means its own `src`, and a candidate in a sibling member
 is outside its view and is counted as excluded rather than returned.
+
+### Decorated names
+
+A server's `name` is a display string, not a declared identifier. ccls
+advertises `int choose(bool flag)` in its index, elp advertises `choose/1`
+in an outline and erlang_ls advertises `choose/1` in the flat shape, all for
+a definition the file spells `choose`. Exact name equality reaches none of
+them, and the symbol reads as absent.
+
+So when **nothing** matched the queried name, a second pass admits
+candidates whose advertised name *decorates* it: mentions it exactly once as
+a whole token (`definition::decorates`). The nominated identity is then the
+**identifier**, not the decoration, and every check that follows is made
+against it — the outline pass verifies it at the selection range before the
+candidate can reach a filter or a listing, the flat shape searches the
+declaration line for it rather than for the advertised name, and the
+navigate step verifies it again in the text just read.
+
+That ordering is the whole safety argument. A server that advertises the
+bare name resolves exactly as it did; a decorated candidate never joins a
+plain one; the range still has to hold the identifier in the file on disk;
+and `chooser/1`, `choose_all` and `choose(choose)` are all refused — the
+first two for want of a token boundary, the last because two occurrences do
+not say which one is meant. Nothing here parses a language: no arity rule,
+no signature grammar, no table of which server decorates how.
+
+What it does not reach is an index that does not hold the symbol at all.
+Both Erlang servers answer `workspace/symbol` for `choose` — and for
+`choose/1` — with `[]`; elp's index holds modules, so `helper` resolves and
+no function does. A bare name in Erlang is therefore still a miss, and a
+`path` naming the file is the route that works.
 
 ### A language with no index
 

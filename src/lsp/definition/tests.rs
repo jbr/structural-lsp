@@ -75,6 +75,71 @@ fn fuzzy_only_matches_are_not_resolutions() {
     }
 }
 
+/// ccls advertises `int choose(bool flag)` in its index for a definition
+/// the file spells `choose`; elp advertises `choose/1`. Both mention the
+/// name once as a whole token, and nothing else matched it, so both
+/// nominate it — under the identifier, which is what every range check is
+/// made against (`../../../journal/2026-09-19-a-name-is-what-the-range-says.md`).
+#[test]
+fn a_decorated_name_nominates_when_nothing_matched_the_bare_one() {
+    let candidates = resolve(
+        "choose",
+        "ccls",
+        vec![symbol_info("int choose(bool flag)", "/ws/helper.cpp", 6)],
+        Path::new("/ws"),
+        None,
+    );
+    match candidates.resolution {
+        Resolution::ExactOne(candidate) => {
+            assert!(candidate.exact);
+            assert_eq!(
+                candidate.info.name, "choose",
+                "the identity is the identifier, not the server's spelling of it"
+            );
+        }
+        other => panic!("expected the decorated candidate, got {other:?}"),
+    }
+}
+
+/// A candidate that advertises the bare name settles it; a decoration is
+/// the fallback, never a second exact match beside one.
+#[test]
+fn a_plain_name_keeps_a_decorated_one_out_of_the_exact_set() {
+    let candidates = resolve(
+        "choose",
+        "ccls",
+        vec![
+            symbol_info("choose", "/ws/helper.cpp", 6),
+            symbol_info("int choose(bool flag)", "/ws/helper.hpp", 9),
+        ],
+        Path::new("/ws"),
+        None,
+    );
+    match candidates.resolution {
+        Resolution::ExactOne(candidate) => {
+            assert_eq!(
+                candidate.canonical_path.as_deref(),
+                Some(Path::new("/ws/helper.cpp"))
+            );
+        }
+        other => panic!("expected one exact match, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_decoration_must_mention_the_name_as_a_whole_token() {
+    assert!(decorates("choose/1", "choose"));
+    assert!(decorates("int choose(bool flag)", "choose"));
+    assert!(decorates("(Config).Doubled", "Doubled"));
+    assert!(!decorates("choose", "choose"), "a name is not a decoration");
+    assert!(!decorates("chooser/1", "choose"), "no token boundary");
+    assert!(!decorates("choose_all", "choose"));
+    assert!(
+        !decorates("choose(choose)", "choose"),
+        "two occurrences say nothing about which one is meant"
+    );
+}
+
 #[test]
 fn nothing_reported_is_not_found() {
     let candidates = resolve("nope", "rust-analyzer", vec![], Path::new("/ws"), None);
