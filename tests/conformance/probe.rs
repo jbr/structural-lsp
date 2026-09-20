@@ -32,6 +32,14 @@ pub struct Candidate {
     /// setting has to be is itself a catalogue fact
     /// (`backlog/discovery/selection.md`).
     pub settings: &'static str,
+    /// Extra lines for this candidate's `[servers.<name>]` table, as TOML
+    /// written verbatim.
+    ///
+    /// For a protocol fact about the server that the entry has to state:
+    /// ccls reserves a `$/progress` token at startup and never reports
+    /// through it, so `progress_create_is_work = false` is what lets a
+    /// readiness wait on it finish at all (`../../docs/servers.md`).
+    pub extra_config: &'static str,
 }
 
 /// One question structural's tools need answered, and what a right answer

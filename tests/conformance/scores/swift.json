@@ -1,0 +1,64 @@
+{
+  "date": 1789870038,
+  "fixture_revision": "514a0226",
+  "language": "swift",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "qualified name",
+    "qualified name, in file",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "sourcekit-lsp",
+      "candidate": "sourcekit-lsp",
+      "outcomes": [
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no exact match for 'identity'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no exact match for 'Config::doubled'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no exact match for 'Config::doubled'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no exact match for 'choose'; similar:",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": null
+    }
+  ],
+  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772"
+}

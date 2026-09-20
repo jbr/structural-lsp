@@ -13,6 +13,11 @@
 //!
 //! [servers.pyright]
 //! disabled = true                  # not in this project, built-in or not
+//!
+//! [servers.ccls]
+//! command = ["ccls"]
+//! languages = ["cpp"]
+//! progress_create_is_work = false  # reserves a progress token it never uses
 //! ```
 //!
 //! Built-in adapters are on by default; an entry with a built-in's name
@@ -65,6 +70,14 @@ pub struct ServerEntry {
     #[serde(default)]
     pub disabled: bool,
     pub backstop_secs: Option<u64>,
+    /// Whether `window/workDoneProgress/create` alone counts as outstanding
+    /// work for this server. Default true, which is right for every server
+    /// that begins the work it reserved a token for. Set it false for a
+    /// server that reserves a token and never reports through it — ccls
+    /// creates one `index` token at startup and sends no `$/progress` at
+    /// all — since counting that create leaves the connection never idle
+    /// and every query on it waiting forever (docs/servers.md).
+    pub progress_create_is_work: Option<bool>,
     /// Answered to this server's `workspace/configuration` request, one
     /// copy per requested item. Some servers serve nothing until it
     /// arrives (docs/servers.md).
@@ -229,6 +242,7 @@ pub fn adapter_for(entry: &Entry) -> Arc<dyn Adapter> {
         backstop: DEFAULT_BACKSTOP,
         base: None,
         configuration: None,
+        progress_create_is_work: true,
     })
 }
 
@@ -286,6 +300,9 @@ fn override_builtin(builtin: Arc<dyn Adapter>, entry: ServerEntry) -> Result<Con
         .map(Duration::from_secs)
         .unwrap_or_else(|| builtin.backstop());
     let configuration = configuration_of(&name, &entry)?;
+    let progress_create_is_work = entry
+        .progress_create_is_work
+        .unwrap_or_else(|| builtin.progress_create_is_work());
     Ok(Configured {
         name,
         command,
@@ -293,6 +310,7 @@ fn override_builtin(builtin: Arc<dyn Adapter>, entry: ServerEntry) -> Result<Con
         backstop,
         base: Some(builtin),
         configuration,
+        progress_create_is_work,
     })
 }
 
@@ -315,6 +333,7 @@ fn generic(name: String, entry: ServerEntry) -> Result<Configured> {
             .unwrap_or(DEFAULT_BACKSTOP),
         base: None,
         configuration,
+        progress_create_is_work: entry.progress_create_is_work.unwrap_or(true),
     })
 }
 

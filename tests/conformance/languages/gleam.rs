@@ -37,6 +37,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     version_argv: &["gleam", "--version"],
     builtin: false,
     settings: "",
+    extra_config: "",
 }];
 
 const PROBES: &[Probe] = &[

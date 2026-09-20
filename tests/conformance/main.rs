@@ -207,6 +207,7 @@ fn scratch_root(language: &Language, candidate: &Candidate) -> PathBuf {
         if !candidate.settings.is_empty() {
             toml.push_str(&format!("settings = {}\n", candidate.settings));
         }
+        toml.push_str(candidate.extra_config);
         toml.push('\n');
     }
     for builtin in ["pyright", "rust-analyzer"] {

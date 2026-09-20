@@ -34,6 +34,7 @@ const CANDIDATES: &[Candidate] = &[Candidate {
     version_argv: &["qmlls", "--version"],
     builtin: false,
     settings: "",
+    extra_config: "",
 }];
 
 const PROBES: &[Probe] = &[

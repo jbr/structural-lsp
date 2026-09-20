@@ -1,0 +1,50 @@
+{
+  "date": 1789872306,
+  "fixture_revision": "b1b8a964",
+  "language": "rust",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "qualified name",
+    "qualified name, in file",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "rust-analyzer",
+      "candidate": "rust-analyzer",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "rust-analyzer 1.100.0-nightly (215a8af4b 2026-09-15)"
+    }
+  ],
+  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
+}

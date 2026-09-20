@@ -18,6 +18,9 @@ pub struct Configured {
     /// `settings` from this entry, answered to `workspace/configuration`.
     /// `None` defers to the built-in, if there is one.
     pub configuration: Option<Value>,
+    /// Whether `window/workDoneProgress/create` alone counts as outstanding
+    /// work for this server (`progress_create_is_work` in the entry).
+    pub progress_create_is_work: bool,
 }
 
 impl Adapter for Configured {
@@ -97,6 +100,10 @@ impl Adapter for Configured {
 
     fn backstop(&self) -> Duration {
         self.backstop
+    }
+
+    fn progress_create_is_work(&self) -> bool {
+        self.progress_create_is_work
     }
 
     fn kind_label(&self, kind: lsp_types::SymbolKind) -> &'static str {
@@ -179,6 +186,7 @@ mod tests {
             backstop: Duration::from_secs(60),
             base,
             configuration: None,
+            progress_create_is_work: true,
         }
     }
 

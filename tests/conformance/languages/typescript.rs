@@ -26,6 +26,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["typescript-language-server", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     Candidate {
         name: "deno",
@@ -38,6 +39,7 @@ const CANDIDATES: &[Candidate] = &[
         // (`../../../docs/servers.md`). `unstable` and the inlay-hint
         // settings an editor also sets make no difference to these probes.
         settings: "{ enable = true }",
+        extra_config: "",
     },
     Candidate {
         name: "vtsls",
@@ -45,6 +47,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["vtsls", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
 ];
 

@@ -103,6 +103,13 @@ enum Row {
     },
 }
 
+/// A trimmed `git` answer, or `None` when git could not be run.
+fn git(args: &[&str]) -> Option<String> {
+    let output = std::process::Command::new("git").args(args).output().ok()?;
+    let text = std::str::from_utf8(&output.stdout).ok()?.trim().to_string();
+    (!text.is_empty() || args[0] == "status").then_some(text)
+}
+
 pub struct Scorecard {
     language: String,
     probes: Vec<&'static str>,
@@ -133,16 +140,16 @@ impl Scorecard {
     /// `None` serializes as missing, never as an empty string pretending to
     /// be a version.
     pub fn write_json(&self, path: &std::path::Path) -> anyhow::Result<()> {
-        let structural_revision = std::process::Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .output()
-            .ok()
-            .and_then(|output| {
-                std::str::from_utf8(&output.stdout)
-                    .ok()
-                    .map(|text| text.trim().to_string())
-            })
-            .filter(|text| !text.is_empty());
+        let structural_revision = git(&["rev-parse", "HEAD"]).map(|head| {
+            // A score is a joint measurement of server *and client*
+            // (`../../src/discovery/catalogue.rs`), so a run from a working
+            // tree that is not the commit says so: `HEAD` alone would name
+            // code that did not produce these numbers.
+            match git(&["status", "--porcelain"]) {
+                Some(changes) if !changes.is_empty() => format!("{head}-dirty"),
+                _ => head,
+            }
+        });
         let document = serde_json::json!({
             "language": self.language,
             "fixture_revision": self.fixture,

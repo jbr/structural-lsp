@@ -124,6 +124,12 @@ pub struct Settings {
     pub pending_cap: usize,
     /// Progress tokens open at once. A server past this is treated as broken.
     pub progress_token_cap: usize,
+    /// Whether `window/workDoneProgress/create` alone counts as outstanding
+    /// work, as it does for every server that begins the work it reserved a
+    /// token for. `false` for a server that reserves a token and never
+    /// reports through it, which would otherwise never be idle
+    /// (docs/servers.md).
+    pub progress_create_is_work: bool,
     /// Diagnostic event log entries retained; oldest are dropped first.
     pub event_cap: usize,
     /// The inactivity backstop for requests and notifications.
@@ -153,6 +159,7 @@ impl Default for Settings {
             writer_cap: 64,
             pending_cap: 256,
             progress_token_cap: 4096,
+            progress_create_is_work: true,
             event_cap: 2000,
             backstop: Duration::from_secs(90),
             probe_after: Duration::from_secs(20),

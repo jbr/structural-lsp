@@ -11,7 +11,11 @@ mechanism, and what would break if each were relaxed.
 Before any semantic query, the server must have **no outstanding work**:
 every `$/progress` token it opened has ended, and the adapter's readiness
 policy agrees (`ready = standard_idle && policy.is_ready()`, see
-[servers.md](servers.md)). Work unrelated to this query counts — another
+[servers.md](servers.md)). A `window/workDoneProgress/create` opens a token
+too, which is conservative beyond the protocol and is what a server that
+reserves a token it never reports through opts out of
+([servers.md](servers.md)) — without that opt-out such a connection is never
+idle and this wait never ends. Work unrelated to this query counts — another
 file's re-index, a `cargo check` — because an index that is still settling
 answers differently from one that has settled, and nothing in the protocol
 distinguishes the two.

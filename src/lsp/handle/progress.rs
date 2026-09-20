@@ -6,16 +6,28 @@ use std::collections::HashSet;
 /// The set of progress tokens the server has opened and not ended.
 /// `window/workDoneProgress/create` and a `$/progress` `begin` both open a
 /// token; `end` closes it; `report` only proves the server is alive.
+///
+/// Counting `create` is conservative beyond the spec, which makes it a
+/// *reservation*: the server may report under this token, and work begins at
+/// `begin`. It is counted because a server that creates a token is about to
+/// start work, and the gap before `begin` is a window in which this
+/// connection would otherwise call itself idle. `create_is_work` is how a
+/// server that reserves a token it never reports through says so
+/// (`../../docs/servers.md`); without it, such a connection is never idle
+/// and every readiness wait on it blocks forever.
 pub(super) struct ProgressTokens {
     pub(super) open: HashSet<String>,
     pub(super) cap: usize,
+    /// Whether `window/workDoneProgress/create` alone opens a token.
+    create_is_work: bool,
 }
 
 impl ProgressTokens {
-    pub(super) fn new(cap: usize) -> Self {
+    pub(super) fn new(cap: usize, create_is_work: bool) -> Self {
         Self {
             open: HashSet::new(),
             cap,
+            create_is_work,
         }
     }
 
@@ -33,8 +45,8 @@ impl ProgressTokens {
         let token = params.and_then(|p| p.get("token")).map(canonical_token);
         match method {
             "window/workDoneProgress/create" => match token {
-                Some(token) => self.open_token(token),
-                None => Ok(()),
+                Some(token) if self.create_is_work => self.open_token(token),
+                _ => Ok(()),
             },
             "$/progress" => {
                 let kind = params
@@ -80,7 +92,7 @@ mod tests {
 
     #[test]
     fn create_begin_and_end_track_the_open_set() {
-        let mut tokens = ProgressTokens::new(8);
+        let mut tokens = ProgressTokens::new(8, true);
         assert!(tokens.is_idle());
         let create = json!({ "token": "a" });
         tokens
@@ -108,9 +120,30 @@ mod tests {
         assert!(tokens.is_idle());
     }
 
+    /// ccls sends one `window/workDoneProgress/create` at startup, for a
+    /// token it never begins and never ends, whatever the size of the tree
+    /// (`../../journal/2026-09-19-ccls-reserves-a-token.md`). Counting that
+    /// create leaves the connection permanently not-idle.
+    #[test]
+    fn a_reservation_is_not_work_when_the_server_never_reports_through_it() {
+        let mut tokens = ProgressTokens::new(8, false);
+        let create = json!({ "token": "index" });
+        tokens
+            .observe("window/workDoneProgress/create", Some(&create))
+            .unwrap();
+        assert!(tokens.is_idle(), "the reservation alone is not work");
+        // Progress the server does report is still tracked, both ends.
+        let begin = json!({ "token": "index", "value": { "kind": "begin" } });
+        tokens.observe("$/progress", Some(&begin)).unwrap();
+        assert!(!tokens.is_idle(), "begin is work whatever opened it");
+        let end = json!({ "token": "index", "value": { "kind": "end" } });
+        tokens.observe("$/progress", Some(&end)).unwrap();
+        assert!(tokens.is_idle());
+    }
+
     #[test]
     fn exceeding_the_token_cap_is_an_error() {
-        let mut tokens = ProgressTokens::new(2);
+        let mut tokens = ProgressTokens::new(2, true);
         for token in ["a", "b"] {
             let begin = json!({ "token": token, "value": { "kind": "begin" } });
             tokens.observe("$/progress", Some(&begin)).unwrap();

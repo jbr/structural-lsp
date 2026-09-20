@@ -1,5 +1,5 @@
 {
-  "date": 1789867226,
+  "date": 1789872301,
   "fixture_revision": "4119e30e",
   "language": "typescript",
   "machine": "quad-3.local",
@@ -91,25 +91,19 @@
           "probe_answered": true
         },
         {
-          "detail": "no exact match for 'Config::doubled'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "probe_answered": true
         },
         {
-          "detail": "no exact match for 'choose'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "probe_answered": true
         },
         {
-          "detail": "no exact match for 'choose'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "probe_answered": true
@@ -118,5 +112,5 @@
       "version": "0.3.0"
     }
   ],
-  "structural_revision": "1ce943a9cb40f8ddbbff31ace6fea9b92ced71bd"
+  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
 }

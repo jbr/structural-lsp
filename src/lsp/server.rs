@@ -151,6 +151,7 @@ impl LspServer {
             // send during startup and before any caller exists.
             configuration: adapter.workspace_configuration(),
             backstop: adapter.backstop(),
+            progress_create_is_work: adapter.progress_create_is_work(),
             ..Settings::default()
         };
         let handle = ServerHandle::spawn_with(command, args, settings, adapter.readiness_policy())

@@ -151,6 +151,20 @@ pub trait Adapter: Send + Sync {
         DEFAULT_BACKSTOP
     }
 
+    /// Whether `window/workDoneProgress/create` alone counts as outstanding
+    /// work for this server.
+    ///
+    /// True for every server that begins the work it reserved a token for:
+    /// the create is the first sign of it, and the gap before `begin` is a
+    /// window this connection would otherwise call idle. False states an
+    /// observation about *this* server — it reserves a token and never
+    /// reports through it, so counting the create would leave the connection
+    /// never idle and every readiness wait on it blocking forever. ccls is
+    /// the measured case (docs/servers.md).
+    fn progress_create_is_work(&self) -> bool {
+        true
+    }
+
     /// Views beyond the standard ones this server can answer through its
     /// own extensions, by their `view` names.
     fn extra_views(&self) -> Vec<&'static str> {

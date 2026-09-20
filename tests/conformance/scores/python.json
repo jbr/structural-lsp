@@ -1,5 +1,5 @@
 {
-  "date": 1789867690,
+  "date": 1789872309,
   "fixture_revision": "196fedea",
   "language": "python",
   "machine": "quad-3.local",
@@ -217,5 +217,5 @@
       "version": "pyrefly 1.3.1"
     }
   ],
-  "structural_revision": "1ce943a9cb40f8ddbbff31ace6fea9b92ced71bd"
+  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
 }

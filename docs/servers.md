@@ -45,6 +45,29 @@ a server-specific signal observes the notification stream through
 `ReadinessPolicy::observe` and keeps its own protocol state — it never
 rescans the event log, which is capped and diagnostics-only.
 
+### A reservation is not always work
+
+Counting `window/workDoneProgress/create` as an open token goes beyond the
+protocol, where the create only *reserves* a token and work starts at
+`$/progress` `begin`. It is counted because a server that creates a token is
+about to start work, and the gap before `begin` is a window this connection
+would otherwise call idle.
+
+A server that reserves a token and never reports through it is therefore
+never idle, and every readiness wait on it — including the one
+`warm_index` does before the slot is published — blocks forever, which no
+timer can shorten because the server answers liveness probes
+(`correctness.md`). ccls is the measured case: one
+`window/workDoneProgress/create` for an `index` token at startup, and no
+`$/progress` frame of any kind afterwards, on a three-file tree and on a
+two-hundred-file one alike. It indexes and answers queries the whole time.
+
+`Adapter::progress_create_is_work`, `progress_create_is_work = false` in a
+`structural.toml` entry, is how such a server says so. It narrows nothing
+else: progress the server does report still opens and closes tokens
+normally, and the default stays true for every server that begins the work
+it reserved.
+
 ## The built-ins
 
 **rust-analyzer.** `initialization_options` sets

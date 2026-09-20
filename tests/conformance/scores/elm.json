@@ -1,0 +1,66 @@
+{
+  "date": 1789870017,
+  "fixture_revision": "84614617",
+  "language": "elm",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "qualified name",
+    "qualified name, in file",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "elm-language-server",
+      "candidate": "elm-language-server",
+      "outcomes": [
+        {
+          "detail": "Request workspace/symbol failed with message: Cannot read properties of undefined (reading 'synchronize') (code -32603)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "Request textDocument/documentSymbol failed with message: Cannot read properties of undefined (reading 'getTree') (code -32603)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "Request workspace/symbol failed with message: Cannot read properties of undefined (reading 'synchronize') (code -32603)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "Request textDocument/documentSymbol failed with message: Cannot read properties of undefined (reading 'getTree') (code -32603)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "Request workspace/symbol failed with message: Cannot read properties of undefined (reading 'synchronize') (code -32603)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "Request textDocument/definition failed with message: Cannot read properties of undefined (reading 'getTree') (code -32603)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "Request workspace/symbol failed with message: Cannot read properties of undefined (reading 'synchronize') (code -32603)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "Request workspace/symbol failed with message: Cannot read properties of undefined (reading 'synchronize') (code -32603)",
+          "kind": "failed",
+          "probe_answered": false
+        }
+      ],
+      "version": "2.7.0"
+    }
+  ],
+  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772"
+}

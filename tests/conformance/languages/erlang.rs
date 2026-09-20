@@ -55,6 +55,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["elp", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     Candidate {
         name: "erlang_ls",
@@ -62,6 +63,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["erlang_ls", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
 ];
 

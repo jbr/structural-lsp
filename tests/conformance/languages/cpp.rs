@@ -29,6 +29,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["clangd", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     Candidate {
         name: "ccls",
@@ -36,6 +37,12 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["ccls", "--version"],
         builtin: false,
         settings: "",
+        // ccls sends one `window/workDoneProgress/create` for an `index`
+        // token at startup and no `$/progress` at all, whatever the size of
+        // the tree. Counting that create leaves the connection never idle,
+        // so every readiness wait on it blocks forever
+        // (`../../journal/2026-09-19-ccls-reserves-a-token.md`).
+        extra_config: "progress_create_is_work = false\n",
     },
 ];
 

@@ -51,7 +51,7 @@ pub(super) fn spawn(
     };
 
     let inbound_cap = settings.inbound_cap;
-    let progress = ProgressTokens::new(settings.progress_token_cap);
+    let progress = ProgressTokens::new(settings.progress_token_cap, settings.progress_create_is_work);
     let owner = Owner {
         label: label.clone(),
         settings,

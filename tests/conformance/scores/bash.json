@@ -1,0 +1,46 @@
+{
+  "date": 1789870019,
+  "fixture_revision": "bada2802",
+  "language": "bash",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "bash-language-server start",
+      "candidate": "bash-language-server",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no definition at `choose` (main.sh:5)",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "rename choose → pick · function choose · helper.sh:5 ·…",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "5.6.0"
+    }
+  ],
+  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772"
+}

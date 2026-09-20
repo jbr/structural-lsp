@@ -1,0 +1,58 @@
+{
+  "date": 1789870030,
+  "fixture_revision": "63051357",
+  "language": "r",
+  "machine": "quad-3.local",
+  "probes": [
+    "bare name",
+    "file-scoped name",
+    "qualified name",
+    "qualified name, in file",
+    "cross-file uses",
+    "anchor to a local",
+    "rename preview",
+    "bare name, warm"
+  ],
+  "rows": [
+    {
+      "argv": "R --slave -e languageserver::run()",
+      "candidate": "R",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "R's outline names the symbol enclosing `doubled` in /private/var/folders/t2/711cdtl91wl7lhpc638kktf40000gn/T/structural-conformance-r-R-93029/helper.R as `Config`, and the text at its range is `Config <- setRefClass(`; that is not a pairing this server's outline rule recognizes, so what encloses it cannot be read",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "function choose · helper.R:19 · 1 reference · 1 file",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "rename choose → pick · function choose · helper.R:19 ·…",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "R version 4.6.1 (2026-06-24) -- \"Happy Hop\""
+    }
+  ],
+  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772"
+}

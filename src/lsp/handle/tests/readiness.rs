@@ -88,6 +88,46 @@ fn progress_tokens_gate_readiness_and_server_requests_are_answered() {
     handle.shutdown().unwrap();
 }
 
+/// ccls reserves one `index` token at startup and sends no `$/progress`
+/// ever, so counting the create would leave this connection never idle and
+/// every readiness wait on it blocking forever
+/// (`../../../journal/2026-09-19-ccls-reserves-a-token.md`). A server that
+/// says so through `progress_create_is_work = false` is ready after the
+/// create, and the progress it *does* report still gates readiness.
+#[test]
+fn a_reserved_token_a_server_never_reports_through_does_not_gate_readiness() {
+    needs_python!();
+    let mock = Mock::new("reservation");
+    let settings = Settings {
+        progress_create_is_work: false,
+        ..test_settings()
+    };
+    let handle = mock.spawn(settings, Box::new(StandardIdle));
+    initialize(&handle);
+
+    handle
+        .request(
+            "test/progress",
+            json!({ "action": "create", "token": "index" }),
+        )
+        .unwrap();
+    let snapshot = handle.snapshot().unwrap();
+    assert_eq!(snapshot.open_progress_tokens, 0);
+    assert!(snapshot.ready, "a reservation is not work for this server");
+    handle.wait_ready(Duration::from_secs(1)).unwrap();
+
+    // What the server does report is tracked as it always was.
+    handle
+        .request("test/progress", json!({ "action": "begin", "token": "index" }))
+        .unwrap();
+    assert!(!handle.snapshot().unwrap().ready, "begin is work");
+    handle
+        .request("test/progress", json!({ "action": "end", "token": "index" }))
+        .unwrap();
+    assert!(handle.snapshot().unwrap().ready);
+    handle.shutdown().unwrap();
+}
+
 #[test]
 fn policy_composes_with_standard_progress() {
     needs_python!();

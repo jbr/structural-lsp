@@ -23,6 +23,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["solargraph", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     Candidate {
         name: "ruby-lsp",
@@ -30,6 +31,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["ruby-lsp", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     Candidate {
         name: "typeprof",
@@ -37,6 +39,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["typeprof", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
 ];
 

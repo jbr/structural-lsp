@@ -25,6 +25,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["pyright", "--version"],
         builtin: true,
         settings: "",
+        extra_config: "",
     },
     Candidate {
         name: "basedpyright",
@@ -32,6 +33,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["basedpyright", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     Candidate {
         name: "pylsp",
@@ -39,6 +41,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["pylsp", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     // Not installed here, but the argv is what the sources record, so the
     // probe picks them up on a machine that has them.
@@ -48,6 +51,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["jedi-language-server", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     // ty's errors are structural's, not ty's: it reports the whole
     // declaration as a symbol's range, which the spec allows and
@@ -58,6 +62,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["ty", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
     Candidate {
         name: "pyrefly",
@@ -65,6 +70,7 @@ const CANDIDATES: &[Candidate] = &[
         version_argv: &["pyrefly", "--version"],
         builtin: false,
         settings: "",
+        extra_config: "",
     },
 ];
 

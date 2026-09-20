@@ -15,6 +15,7 @@ fn test_settings() -> Settings {
         writer_cap: 8,
         pending_cap: 8,
         progress_token_cap: 8,
+        progress_create_is_work: true,
         event_cap: 200,
         backstop: Duration::from_secs(5),
         shutdown_grace: Duration::from_millis(500),

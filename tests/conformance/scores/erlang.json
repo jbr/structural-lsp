@@ -1,5 +1,5 @@
 {
-  "date": 1789867303,
+  "date": 1789872311,
   "fixture_revision": "3eb9b00c",
   "language": "erlang",
   "machine": "quad-3.local",
@@ -19,24 +19,20 @@
       "candidate": "elp",
       "outcomes": [
         {
-          "detail": "no symbol named 'choose'",
-          "kind": "unmet",
+          "detail": "elp is still loading (code -32801)",
+          "kind": "failed",
           "probe_answered": false
         },
         {
-          "detail": "no symbol named 'identity'",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
-          "detail": "no symbol named 'helper::choose'",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "detail": "no symbol named 'helper::choose'",
           "kind": "unmet",
           "probe_answered": false
+        },
+        {
+          "probe_answered": true
         },
         {
           "detail": "no symbol named 'choose'",
@@ -69,9 +65,7 @@
           "probe_answered": false
         },
         {
-          "detail": "no symbol named 'identity'",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "detail": "no symbol named 'helper::choose'",
@@ -79,9 +73,7 @@
           "probe_answered": false
         },
         {
-          "detail": "no symbol named 'helper::choose'",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "detail": "no symbol named 'choose'",
@@ -105,5 +97,5 @@
       "version": "Version: 0.0.0"
     }
   ],
-  "structural_revision": "1ce943a9cb40f8ddbbff31ace6fea9b92ced71bd"
+  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
 }
