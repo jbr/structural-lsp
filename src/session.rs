@@ -49,9 +49,10 @@ impl Session {
             view,
         );
         // Warm every configured server, as the MCP process does when an agent
-        // starts. A server that will not start is recorded on its slot, for
-        // each call to report, rather than failing the session.
-        session.activate(None);
+        // starts, and do not wait for them: the query that follows waits. A
+        // server that will not start is recorded on its slot, for each call
+        // to report, rather than failing the session.
+        session.warm(None);
         session
     }
 
@@ -74,6 +75,14 @@ impl Session {
     /// reported by the query, which knows the scope.
     pub fn activate(&self, scope: Option<&Path>) {
         self.workspace.activate(scope)
+    }
+
+    /// Start the servers that would answer for `scope` without waiting for
+    /// them. For binding a session, where nothing has been asked yet;
+    /// [`Session::activate`] — which every query goes through — is what
+    /// waits (`docs/ownership.md`).
+    pub fn warm(&self, scope: Option<&Path>) {
+        self.workspace.warm(scope);
     }
 
     /// Take the workspace for one call, starting whatever this call's scope

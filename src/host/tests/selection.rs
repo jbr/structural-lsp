@@ -6,8 +6,9 @@
 //! and it is only checkable because the mock records every launch
 //! (`backlog/discovery/selection.md`).
 
+use super::bound;
 use super::fixtures::{ladder_fixture, launch_order, selective_fixture, servers_launched};
-use crate::host::{AgentId, Host};
+use crate::host::Host;
 
 #[test]
 fn a_server_no_evidence_calls_for_is_never_launched() {
@@ -27,7 +28,7 @@ fn a_server_no_evidence_calls_for_is_never_launched() {
         return;
     };
     let host = Host::new();
-    let _session = host.agent_started(AgentId::new("a"), &rust_only.root);
+    let _session = bound(&host, "a", &rust_only.root);
     assert_eq!(
         servers_launched(&rust_only),
         ["rust-analyzer"],
@@ -53,7 +54,7 @@ fn both_are_launched_when_the_tree_calls_for_both() {
         return;
     };
     let host = Host::new();
-    let _session = host.agent_started(AgentId::new("a"), &polyglot.root);
+    let _session = bound(&host, "a", &polyglot.root);
     assert_eq!(servers_launched(&polyglot), ["pyright", "rust-analyzer"]);
     host.shutdown();
 }
@@ -76,7 +77,7 @@ fn a_disabled_server_does_not_start_where_its_language_is() {
         return;
     };
     let host = Host::new();
-    let _session = host.agent_started(AgentId::new("a"), &disabled.root);
+    let _session = bound(&host, "a", &disabled.root);
     assert_eq!(
         servers_launched(&disabled),
         ["rust-analyzer"],
@@ -116,8 +117,8 @@ fn sibling_members_of_one_workspace_share_one_launch_and_keep_their_own_view() {
     let beta_dir = root.join("crates/beta");
 
     let host = Host::new();
-    let alpha = host.agent_started(AgentId::new("alpha"), &alpha_dir);
-    let beta = host.agent_started(AgentId::new("beta"), &beta_dir);
+    let alpha = bound(&host, "alpha", &alpha_dir);
+    let beta = bound(&host, "beta", &beta_dir);
 
     assert_eq!(
         servers_launched(&fixture),
@@ -165,8 +166,8 @@ fn a_member_with_no_workspace_above_it_is_its_own_key() {
     fixture.write_config(&root.join("tools"));
 
     let host = Host::new();
-    let backend = host.agent_started(AgentId::new("backend"), &root.join("backend"));
-    let tools = host.agent_started(AgentId::new("tools"), &root.join("tools"));
+    let backend = bound(&host, "backend", &root.join("backend"));
+    let tools = bound(&host, "tools", &root.join("tools"));
 
     assert_eq!(backend.workspace().root(), root.join("backend"));
     assert_eq!(
@@ -198,7 +199,7 @@ fn a_candidate_that_fails_its_handshake_is_stepped_over_in_order() {
         return;
     };
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
 
     assert_eq!(
         launch_order(&fixture),
@@ -248,7 +249,7 @@ fn a_candidate_that_cannot_be_spawned_falls_back_too() {
         return;
     };
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
 
     assert_eq!(
         launch_order(&fixture),
@@ -279,7 +280,7 @@ fn an_alternative_is_never_started_behind_a_candidate_that_works() {
         return;
     };
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
 
     assert_eq!(
         launch_order(&fixture),
@@ -308,7 +309,7 @@ fn a_ladder_that_runs_out_reports_every_candidate_it_tried() {
         return;
     };
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
 
     assert!(
         launch_order(&fixture).is_empty(),

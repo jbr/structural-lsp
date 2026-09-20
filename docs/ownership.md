@@ -72,6 +72,14 @@ cannot release an entry out from under a caller that has not bound yet. The
 eager warm that follows happens *outside* the map lock, so one workspace's
 startup never queues another's work behind it.
 
+Binding **starts** every configured server and waits for none of them
+(`Entry::warm`). Nothing has been asked yet, so there is nothing to be
+correct about, and the first query waits for these same launches through
+`Session::acquire`. Waiting at the binding instead put a full `initialize`
+plus index warm-up in front of the MCP front end's first byte — seconds on a
+warm index, longer than a client's negotiation timeout on a cold one — while
+buying no query a thing.
+
 `Host::agent_ended(agent)` removes that agent's interest wherever it was
 recorded. Releasing one agent leaves another's session and the shared servers
 untouched. When the last interest goes, the workspace leaves the map and a
@@ -136,7 +144,9 @@ servers that scope needs, and only then takes the workspace lock for the rest
 of the call.
 
 `Entry::activate` starts every needed launch *before* waiting on any, so the
-latency is the slowest server rather than the sum. Each launch runs on its
+latency is the slowest server rather than the sum. It is the waiting half of
+`Entry::warm`, which every binding calls and no query does: the two differ
+only in whether the launches are joined. Each launch runs on its
 own thread and holds **no lock** while it spawns the child and performs the
 `initialize` handshake; it takes the workspace lock exactly once, to publish.
 That is why activation must happen before the workspace lock is taken: a

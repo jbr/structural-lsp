@@ -4,8 +4,11 @@
 //!
 //! The workspace root is the current directory, or `STRUCTURAL_ROOT` when
 //! set: the MCP front end's default workspace context, acquired through the
-//! same host an embedded consumer uses. Every configured language server
-//! starts before either path runs, so indexing begins immediately.
+//! same host an embedded consumer uses. Every configured language server is
+//! started before either path runs, so indexing begins immediately — and
+//! none of them is waited for here, so the MCP handshake is answered while
+//! the indexes are still warming (`docs/ownership.md`). The first tool call
+//! waits for them.
 //!
 //! Shutdown is best-effort graceful, escalated by the caller (`docs/shutdown.md`):
 //! on Unix, the first SIGINT/SIGTERM/SIGHUP requests a soft shutdown — new tool

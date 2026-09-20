@@ -7,7 +7,7 @@ use std::time::Duration;
 fn soft_shutdown_protects_an_admitted_operation_and_refuses_new_calls() {
     let fixture = fixture!("soft-operation");
     let host = std::sync::Arc::new(Host::new());
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
     let pids = fixture.launches();
     let operation = session.acquire(None).unwrap();
     host.request_shutdown();
@@ -56,7 +56,7 @@ fn completion_covers_admission_before_any_launch_election() {
 fn force_reaches_running_processes_while_workspace_is_held() {
     let fixture = fixture!("force-held-operation");
     let host = std::sync::Arc::new(Host::new());
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
     let pids = fixture.launches();
     let operation = session.acquire(None).unwrap();
     host.request_shutdown();

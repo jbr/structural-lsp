@@ -11,6 +11,16 @@ use fixtures::{alive, asymmetric_fixture, wait_for_launches};
 mod fixtures;
 mod selection;
 
+/// Bind an agent and wait for the launches that binding started, the way the
+/// first query does (`../../docs/ownership.md`). Binding itself starts every
+/// server and joins none of them — the MCP handshake must not wait on an
+/// index — so a test that asserts about processes does the waiting here.
+pub(super) fn bound(host: &Host, agent: &str, root: &std::path::Path) -> Session {
+    let session = host.agent_started(AgentId::new(agent), root);
+    session.activate(None);
+    session
+}
+
 /// Something that panics while holding a guard must still release it, or a
 /// shutdown would wait on it forever.
 /// could not give: its count came back from an ordinary call, which an unwind
@@ -45,7 +55,7 @@ fn a_launch_that_cannot_publish_in_time_stops_its_own_child() {
         return;
     };
     let host = Host::with_publish_bound(std::time::Duration::from_millis(50));
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
     let launched = fixture.launches();
     assert!(!launched.is_empty(), "the eager warm started a server");
 
@@ -101,7 +111,7 @@ fn a_demand_after_shutdown_launches_nothing_and_leaves_slots_cold() {
         return;
     };
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
     let launched = fixture.launches();
     assert!(!launched.is_empty(), "servers started");
 
@@ -150,7 +160,7 @@ fn shutdown_during_startup_leaves_no_orphan() {
     let starter = {
         let host = std::sync::Arc::clone(&host);
         let root = fixture.root.clone();
-        std::thread::spawn(move || host.agent_started(AgentId::new("a"), &root))
+        std::thread::spawn(move || bound(&host, "a", &root))
     };
 
     // The stalling child exists while its launch is still inside
@@ -186,7 +196,7 @@ fn servers_start_without_waiting_for_each_other() {
         return;
     };
     let host = Host::new();
-    let _session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let _session = bound(&host, "a", &fixture.root);
 
     let events = fixture.events();
     assert_eq!(
@@ -220,7 +230,7 @@ fn a_server_that_will_not_start_leaves_the_others_running() {
         return;
     };
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
 
     let workspace = session.workspace();
     let states: Vec<(&str, &str)> = workspace
@@ -262,7 +272,7 @@ fn a_query_after_shutdown_reports_rather_than_panics() {
         return;
     };
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &fixture.root);
+    let session = bound(&host, "a", &fixture.root);
     assert!(!fixture.launches().is_empty(), "servers started");
 
     host.shutdown();
@@ -297,14 +307,14 @@ fn two_agents_on_one_root_share_one_launch() {
     let workspace = fixture!("share");
     let host = Host::new();
 
-    let a = host.agent_started(AgentId::new("a"), &workspace.root);
+    let a = bound(&host, "a", &workspace.root);
     let after_first = workspace.launches();
     assert!(
         !after_first.is_empty(),
         "acquiring a workspace starts its servers"
     );
 
-    let b = host.agent_started(AgentId::new("b"), &workspace.root);
+    let b = bound(&host, "b", &workspace.root);
     assert_eq!(
         workspace.launches().len(),
         after_first.len(),
@@ -322,8 +332,8 @@ fn two_agents_on_one_root_share_one_launch() {
 fn releasing_one_agent_leaves_another_working() {
     let workspace = fixture!("release");
     let host = Host::new();
-    let a = host.agent_started(AgentId::new("a"), &workspace.root);
-    let b = host.agent_started(AgentId::new("b"), &workspace.root);
+    let a = bound(&host, "a", &workspace.root);
+    let b = bound(&host, "b", &workspace.root);
     let launched = workspace.launches();
 
     host.agent_ended(&AgentId::new("a"));
@@ -354,7 +364,7 @@ fn releasing_one_agent_leaves_another_working() {
 fn shutdown_reaps_a_workspace_a_released_agent_still_holds() {
     let workspace = fixture!("detached-reap");
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &workspace.root);
+    let session = bound(&host, "a", &workspace.root);
     let pids = workspace.launches();
     assert!(!pids.is_empty(), "the workspace started its servers");
 
@@ -390,7 +400,7 @@ fn a_broken_config_file_is_reported_not_fatal() {
     .unwrap();
 
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &dir);
+    let session = bound(&host, "a", &dir);
 
     // The workspace still binds — the MCP surface must come up — and every
     // call says why it cannot answer.
@@ -404,7 +414,7 @@ fn a_broken_config_file_is_reported_not_fatal() {
 fn a_released_agent_leaves_a_live_session_its_servers() {
     let workspace = fixture!("outlive");
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &workspace.root);
+    let session = bound(&host, "a", &workspace.root);
     let launched = workspace.launches();
 
     host.agent_ended(&AgentId::new("a"));
@@ -426,8 +436,8 @@ fn independent_workspaces_hold_their_workspaces_at_once() {
     let one = fixture!("independent-one");
     let two = fixture!("independent-two");
     let host = Host::new();
-    let a = host.agent_started(AgentId::new("a"), &one.root);
-    let b = host.agent_started(AgentId::new("b"), &two.root);
+    let a = bound(&host, "a", &one.root);
+    let b = bound(&host, "b", &two.root);
 
     // Both guards are held at once because an operation takes only its own
     // workspace's lock: two workspaces' calls do not serialize against each
@@ -453,7 +463,7 @@ fn independent_workspaces_hold_their_workspaces_at_once() {
 fn shutdown_reaps_every_workspace_child() {
     let workspace = fixture!("reap");
     let host = Host::new();
-    let session = host.agent_started(AgentId::new("a"), &workspace.root);
+    let session = bound(&host, "a", &workspace.root);
 
     let pids = workspace.launches();
     assert!(!pids.is_empty(), "the workspace started its servers");

@@ -34,10 +34,25 @@ impl Entry {
     /// *under* that lock, so waiting for one while holding it would deadlock
     /// against the very launcher this call elects.
     pub(crate) fn activate(self: &Arc<Self>, scope: Option<&Path>) {
-        let wanted = crate::workspace::serving(&self.slots, scope);
         // Start every needed launch first and wait afterwards. Waiting as we
         // went would serialize exactly what giving each launch a thread was
         // for: one server's `initialize` would still be a delay to the next.
+        for index in self.warm(scope) {
+            let _ = self.slots[index].wait_for_launch();
+        }
+    }
+
+    /// Start the servers that would answer for `scope` without waiting for
+    /// any of them, and say which ones were wanted.
+    ///
+    /// This is binding a session, not answering a query: a caller that has
+    /// not asked anything yet has nothing to be correct about, and every
+    /// query goes through [`Entry::activate`], which waits. Waiting here
+    /// instead would put a whole `initialize` plus index warm-up
+    /// (`../docs/servers.md`) in front of the front end's first byte — long
+    /// enough on a cold index for an MCP client to give up on the handshake.
+    pub(crate) fn warm(self: &Arc<Self>, scope: Option<&Path>) -> Vec<usize> {
+        let wanted = crate::workspace::serving(&self.slots, scope);
         for &index in &wanted {
             // Best effort: a server that will not start is recorded on its
             // own slot, and the call goes on to ask for what is available.
@@ -45,9 +60,7 @@ impl Entry {
             // being warmed at all.
             let _ = self.start(index);
         }
-        for &index in &wanted {
-            let _ = self.slots[index].wait_for_launch();
-        }
+        wanted
     }
 
     /// Bring one slot to `Running`, or say why it cannot be.

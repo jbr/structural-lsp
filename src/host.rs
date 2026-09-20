@@ -230,11 +230,16 @@ impl Host {
         entry.interested().insert(agent);
         drop(workspaces);
         // Warm every configured server, eagerly, so indexing begins before
-        // the first query — but out here, where a launch holds no host lock.
-        // Two agents on one root still produce one launch, now by the slot's
-        // own election rather than by this lock, and a failure is recorded on
-        // the slot for each call to report rather than failing the binding.
-        entry.activate(None);
+        // the first query — but out here, where a launch holds no host lock,
+        // and without waiting for any of it. Binding is not a query: the
+        // first tool call waits for these launches through
+        // `Session::acquire`, while a front end that waited here would owe
+        // its client nothing until the slowest index was warm
+        // (`docs/ownership.md`). Two agents on one root still produce one
+        // launch, now by the slot's own election rather than by this lock,
+        // and a failure is recorded on the slot for each call to report
+        // rather than failing the binding.
+        entry.warm(None);
         Session::bind(entry, view)
     }
 
