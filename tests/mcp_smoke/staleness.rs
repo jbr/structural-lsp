@@ -27,7 +27,6 @@
 //! structural, and the only waits anywhere are the pipeline's own
 //! (`sync_owned` + `wait_ready`).
 
-use mcplease::traits::Tool;
 use std::path::PathBuf;
 
 /// A scratch crate whose root owns nothing yet: `lib.rs` declares `mod util;`
@@ -69,7 +68,7 @@ impl Drop for Scratch {
 }
 
 fn show(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
@@ -80,7 +79,7 @@ fn show(
         focus: None,
         view: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }
 
 /// The one query that runs before any edit: it starts the server, waits out
@@ -88,7 +87,7 @@ fn show(
 /// opened, because the candidate navigates in `lib.rs` and nothing else is
 /// nominated. Its success is asserted, so a failed warmup cannot vacuously
 /// set a case up.
-fn warmup(state: &mut structural::session::Session) {
+fn warmup(state: &structural::session::Session) {
     let out = show(state, Some("anchored_base"), None)
         .unwrap_or_else(|error| panic!("the warmup query must resolve: {error:#}"));
     assert!(
@@ -110,8 +109,8 @@ fn append_probe(file: &std::path::Path, declaration: &str, body: &str) {
 fn a_file_scope_query_is_current_for_an_unopened_file_and_the_bare_name_once_owned() {
     let root = scratch_root("file-scope-current");
     let _scratch = Scratch(root.clone());
-    let mut state = structural::session::Session::new(root.clone());
-    warmup(&mut state);
+    let state = structural::session::Session::new(root.clone());
+    warmup(&state);
 
     let file = root.join("src/util.rs");
     append_probe(&file, "pub fn probe_marker_xyz() -> usize", "42");
@@ -119,7 +118,7 @@ fn a_file_scope_query_is_current_for_an_unopened_file_and_the_bare_name_once_own
     // First query after the edit, and the file was never opened: a file
     // scope syncs the file itself before it outlines, so the answer is the
     // server's view of the text just read.
-    let scoped = show(&mut state, Some("probe_marker_xyz"), Some("src/util.rs"))
+    let scoped = show(&state, Some("probe_marker_xyz"), Some("src/util.rs"))
         .unwrap_or_else(|error| panic!("{error:#}"));
     assert!(
         scoped.starts_with("fn probe_marker_xyz · src/util.rs:"),
@@ -130,8 +129,8 @@ fn a_file_scope_query_is_current_for_an_unopened_file_and_the_bare_name_once_own
     // That query owned the file, so the bare name — the one path that can
     // miss a recent edit — is current now, without any further query having
     // touched the file.
-    let bare = show(&mut state, Some("probe_marker_xyz"), None)
-        .unwrap_or_else(|error| panic!("{error:#}"));
+    let bare =
+        show(&state, Some("probe_marker_xyz"), None).unwrap_or_else(|error| panic!("{error:#}"));
     assert!(
         bare.starts_with("fn probe_marker_xyz ·"),
         "once the file is owned, a bare-name query must be current: {bare}"
@@ -147,8 +146,8 @@ fn a_file_scope_query_is_current_for_an_unopened_file_and_the_bare_name_once_own
 fn pending_bare_name_sees_an_unopened_files_edit() {
     let root = scratch_root("pending-edit");
     let _scratch = Scratch(root.clone());
-    let mut state = structural::session::Session::new(root.clone());
-    warmup(&mut state);
+    let state = structural::session::Session::new(root.clone());
+    warmup(&state);
 
     append_probe(
         &root.join("src/util.rs"),
@@ -158,8 +157,8 @@ fn pending_bare_name_sees_an_unopened_files_edit() {
 
     // First query after the edit: the acceptance query itself, nothing
     // else.
-    let bare = show(&mut state, Some("probe_marker_xyz"), None)
-        .unwrap_or_else(|error| panic!("{error:#}"));
+    let bare =
+        show(&state, Some("probe_marker_xyz"), None).unwrap_or_else(|error| panic!("{error:#}"));
     assert!(
         bare.starts_with("fn probe_marker_xyz ·"),
         "a bare-name query must see an unopened file's edit: {bare}"
@@ -170,7 +169,7 @@ fn pending_bare_name_sees_an_unopened_files_edit() {
     // file scope, so a promoted case also proves the fixture resolves once
     // the file is synced, and the pending result was about freshness, never
     // about a broken fixture.
-    let scoped = show(&mut state, Some("probe_marker_xyz"), Some("src/util.rs"))
+    let scoped = show(&state, Some("probe_marker_xyz"), Some("src/util.rs"))
         .unwrap_or_else(|error| panic!("{error:#}"));
     assert!(
         scoped.starts_with("fn probe_marker_xyz · src/util.rs:"),
@@ -187,8 +186,8 @@ fn pending_bare_name_sees_an_unopened_files_edit() {
 fn pending_bare_name_sees_a_newly_created_file() {
     let root = scratch_root("pending-create");
     let _scratch = Scratch(root.clone());
-    let mut state = structural::session::Session::new(root.clone());
-    warmup(&mut state);
+    let state = structural::session::Session::new(root.clone());
+    warmup(&state);
 
     std::fs::write(
         root.join("src/probe.rs"),
@@ -205,7 +204,7 @@ fn pending_bare_name_sees_a_newly_created_file() {
 
     // First query after the edit: the acceptance query itself, nothing
     // else.
-    let bare = show(&mut state, Some("probe_new_marker_xyz"), None)
+    let bare = show(&state, Some("probe_new_marker_xyz"), None)
         .unwrap_or_else(|error| panic!("{error:#}"));
     assert!(
         bare.starts_with("fn probe_new_marker_xyz ·"),
@@ -217,12 +216,8 @@ fn pending_bare_name_sees_a_newly_created_file() {
     // file scope, so a promoted case also proves the fixture and the module
     // wiring resolve once the file is synced, and the pending result was
     // about freshness, never about a broken fixture.
-    let scoped = show(
-        &mut state,
-        Some("probe_new_marker_xyz"),
-        Some("src/probe.rs"),
-    )
-    .unwrap_or_else(|error| panic!("{error:#}"));
+    let scoped = show(&state, Some("probe_new_marker_xyz"), Some("src/probe.rs"))
+        .unwrap_or_else(|error| panic!("{error:#}"));
     assert!(
         scoped.starts_with("fn probe_new_marker_xyz · src/probe.rs:"),
         "the control: the same symbol must resolve through its file scope: {scoped}"

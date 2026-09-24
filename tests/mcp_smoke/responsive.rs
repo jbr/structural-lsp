@@ -1,5 +1,6 @@
-//! MCP control traffic stays answered while a tool call is blocked, and the
-//! tool queue refuses overflow rather than blocking the reader. Runs
+//! MCP control traffic stays answered while a tool call is blocked, calls
+//! past the concurrency limit are refused rather than queued, and a blocked
+//! call reports progress to a caller that asked for it. Runs
 //! everywhere: `rust-analyzer` is a scripted shim on `PATH` that stays
 //! not-ready until the test drops a release file, so every ordering below is
 //! a barrier, not a timing guess.
@@ -129,8 +130,9 @@ fn ping_and_overflow_are_answered_while_show_is_blocked() {
     // call sits inside show's readiness wait.
     let blocked = server.send("tools/call", show("blocked"));
     let ping = server.send("ping", json!({}));
-    // The queue holds sixteen; the seventeenth and later are refused at once.
-    let queued: Vec<u64> = (0..16)
+    // Sixteen calls may run at once: the blocked one and fifteen more, all
+    // waiting on the same server. The seventeenth and later are refused at once.
+    let queued: Vec<u64> = (0..15)
         .map(|index| server.send("tools/call", show(&format!("queued{index}"))))
         .collect();
     let refused: Vec<u64> = (0..4)
@@ -164,15 +166,18 @@ fn ping_and_overflow_are_answered_while_show_is_blocked() {
         );
     }
 
-    // Release: the blocked call completes, then the accepted queue drains in
-    // arrival order, each a stated not-found result rather than an error.
+    // Release: every admitted call completes, each a stated not-found result
+    // rather than an error. They run concurrently and take the workspace in
+    // turn, so they answer in no particular order.
     std::fs::write(shim.release(), b"go").unwrap();
-    for id in std::iter::once(blocked).chain(queued) {
+    let mut expected: std::collections::BTreeSet<u64> =
+        std::iter::once(blocked).chain(queued).collect();
+    while !expected.is_empty() {
         let response = server.next_response();
-        assert_eq!(
-            response.get("id").and_then(Value::as_u64),
-            Some(id),
-            "{response}"
+        let id = response.get("id").and_then(Value::as_u64);
+        assert!(
+            id.is_some_and(|id| expected.remove(&id)),
+            "unexpected: {response}"
         );
         assert_ne!(
             response.pointer("/result/isError"),
@@ -189,4 +194,58 @@ fn ping_and_overflow_are_answered_while_show_is_blocked() {
     // Still responsive afterwards, and the direct path is untouched.
     let pong = server.request("ping", json!({}));
     assert!(pong.get("result").is_some(), "{pong}");
+}
+
+/// A call blocked in a readiness wait tells a caller that sent a progress
+/// token that it is alive, and what it is waiting on, before it answers.
+#[test]
+fn a_blocked_show_reports_progress_to_a_caller_that_asked() {
+    let shim = Shim::new("progress");
+    let root = crate::rust_fixture_root();
+    let mut server = Server::start_with_env(root.to_str().unwrap(), &shim.env());
+
+    let mut call = show("blocked");
+    call["_meta"] = json!({ "progressToken": "cold-index" });
+    let blocked = server.send("tools/call", call);
+
+    // Ticks name the phase the call is in — launching the server, then
+    // waiting for it to index — and count up, as the spec requires.
+    let mut last = -1.0;
+    loop {
+        let progress = server.next_response();
+        assert_eq!(
+            progress.get("method").and_then(Value::as_str),
+            Some("notifications/progress"),
+            "{progress}"
+        );
+        assert_eq!(
+            progress.pointer("/params/progressToken"),
+            Some(&json!("cold-index"))
+        );
+        let value = progress
+            .pointer("/params/progress")
+            .and_then(Value::as_f64)
+            .unwrap();
+        assert!(value > last, "progress went from {last} to {value}");
+        last = value;
+        let message = progress
+            .pointer("/params/message")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if message.starts_with("waiting for rust-analyzer to finish indexing") {
+            break;
+        }
+        assert!(
+            message.starts_with("starting language servers"),
+            "{message}"
+        );
+    }
+
+    std::fs::write(shim.release(), b"go").unwrap();
+    let response = server.wait_for(blocked);
+    let text = response
+        .pointer("/result/content/0/text")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    assert!(text.starts_with("no symbol named"), "{response}");
 }

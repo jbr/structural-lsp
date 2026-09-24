@@ -6,7 +6,6 @@
 //! does not, and a returned doc-link edit is applied faithfully like any
 //! other.
 
-use mcplease::traits::Tool;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -195,7 +194,7 @@ fn scratch_root(tag: &str, mock_body: &str, builtin: bool) -> PathBuf {
 }
 
 fn action(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     new_name: &str,
     mode: Option<&str>,
     digest: Option<&str>,
@@ -210,7 +209,7 @@ fn action(
         mode: mode.map(str::to_string),
         digest: digest.map(str::to_string),
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
     .unwrap_or_else(|error| panic!("rename greet → {new_name} ({mode:?}): {error:#}"))
 }
 
@@ -225,9 +224,9 @@ fn digest_of(preview: &str) -> String {
 #[test]
 fn a_mock_under_the_rust_analyzer_adapter_applies_its_doc_link_edit_and_carries_the_note() {
     let root = scratch_root("ra", RA_MOCK_BODY, true);
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
 
-    let preview = action(&mut state, "salute", None, None);
+    let preview = action(&state, "salute", None, None);
     let note = "note: rust-analyzer rename may leave intra-doc links unchanged; \
                 check doc comments for `greet`.\n"
         .to_string();
@@ -252,12 +251,7 @@ fn a_mock_under_the_rust_analyzer_adapter_applies_its_doc_link_edit_and_carries_
     let digest = digest_of(&preview);
 
     // A stale digest answers with a fresh preview: the caveat is on it too.
-    let stale = action(
-        &mut state,
-        "salute",
-        Some("apply"),
-        Some("0000000000000000"),
-    );
+    let stale = action(&state, "salute", Some("apply"), Some("0000000000000000"));
     assert!(
         stale.starts_with("nothing applied: the digest does not match"),
         "{stale}"
@@ -273,7 +267,7 @@ fn a_mock_under_the_rust_analyzer_adapter_applies_its_doc_link_edit_and_carries_
         "a stale apply writes nothing"
     );
 
-    let applied = action(&mut state, "salute", Some("apply"), Some(&digest));
+    let applied = action(&state, "salute", Some("apply"), Some(&digest));
     assert!(
         applied.starts_with("applied: rename greet → salute · fn greet · src/doc.rs:6 · 3 edits · 1 file\nsrc/doc.rs · 3 edits\n"),
         "{applied}"
@@ -294,9 +288,9 @@ fn a_mock_under_the_rust_analyzer_adapter_applies_its_doc_link_edit_and_carries_
 #[test]
 fn a_generic_server_gets_no_note_line_and_its_answer_is_applied_as_is() {
     let root = scratch_root("generic", GENERIC_MOCK_BODY, false);
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
 
-    let preview = action(&mut state, "salute", None, None);
+    let preview = action(&state, "salute", None, None);
     assert!(
         preview.starts_with(
             "rename greet → salute · function greet · src/doc.rs:6 · 2 edits · 1 file\n"
@@ -304,12 +298,7 @@ fn a_generic_server_gets_no_note_line_and_its_answer_is_applied_as_is() {
         "{preview}"
     );
     assert!(!preview.contains("note:"), "{preview}");
-    let applied = action(
-        &mut state,
-        "salute",
-        Some("apply"),
-        Some(&digest_of(&preview)),
-    );
+    let applied = action(&state, "salute", Some("apply"), Some(&digest_of(&preview)));
     assert!(
         applied
             == "applied: rename greet → salute · function greet · src/doc.rs:6 · 2 edits · 1 file\nsrc/doc.rs · 2 edits\n",

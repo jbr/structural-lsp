@@ -1,6 +1,7 @@
 //! The `structural` binary: an MCP server over stdio (`structural serve`) or a
-//! tool run directly from argv (`structural show choose`). mcplease owns the
-//! argv parsing for both.
+//! tool run directly from argv (`structural show choose`), parsed by mcplease's
+//! [`Cli`] and run on smol. Every tool call is spawned, so a call waiting on a
+//! cold index never holds up another, nor `ping`.
 //!
 //! The workspace root is the current directory, or `STRUCTURAL_ROOT` when
 //! set: the MCP front end's default workspace context, acquired through the
@@ -19,6 +20,8 @@
 //! closing our stdin — the same `host.shutdown()` runs on the way out.
 
 use anyhow::Context;
+use mcplease::{Cli, clap::Parser, traits::Dispatch, types::RequestContext};
+use smol::{Executor, Unblock};
 use std::path::PathBuf;
 use std::sync::Arc;
 use structural::host::{AgentId, Host};
@@ -36,7 +39,7 @@ fn main() -> anyhow::Result<()> {
         };
         let root = std::fs::canonicalize(&root)
             .with_context(|| format!("workspace root `{}` does not exist", root.display()))?;
-        let mut session = host.agent_started(AgentId::mcp(), &root);
+        let session = host.agent_started(AgentId::mcp(), &root);
         let instructions = "\
 show resolves a symbol to its definition's decorated source (or another \
 `view` of it: outline, implementations, calls, type); uses lists the \
@@ -58,23 +61,41 @@ server start; `path` only scopes inside it.";
 
         let config =
             mcplease::ServerConfig::new(mcplease::server_info!()).with_instructions(instructions);
-        if std::env::args().nth(1).as_deref() == Some("serve") {
-            #[cfg(unix)]
-            let reader = std::io::BufReader::new(input);
-            #[cfg(not(unix))]
-            let reader = std::io::BufReader::new(EofWatcher {
-                inner: std::io::stdin(),
-                host: Arc::clone(&host),
-            });
-            mcplease::serve_with::<tools::Tools, _, _, _>(
-                reader,
-                std::io::stdout(),
-                &mut session,
-                &config,
-            )
-        } else {
-            // Preserve clap dispatch, help, one-shot tool output and errors.
-            mcplease::run::<tools::Tools, _>(&mut session, config)
+        // `try_parse`, so help and usage errors return here and the host is
+        // still shut down on the way out.
+        let command = match Cli::<tools::Tools>::try_parse() {
+            Ok(command) => command,
+            Err(error) => {
+                let _ = error.print();
+                return Ok(());
+            }
+        };
+        match command {
+            Cli::Tool(tool) => {
+                let output = smol::block_on(tool.call_to_text(session, RequestContext::default()))?;
+                println!("{output}");
+                Ok(())
+            }
+            Cli::Serve => {
+                #[cfg(unix)]
+                let reader = input;
+                #[cfg(not(unix))]
+                let reader = EofWatcher {
+                    inner: std::io::stdin(),
+                    host: Arc::clone(&host),
+                };
+                let executor = Executor::new();
+                smol::block_on(executor.run(async {
+                    let stdin = Unblock::new(reader);
+                    let stdout = Unblock::new(std::io::stdout());
+                    let mut calls =
+                        mcplease::calls::<tools::Tools, _>(stdin, stdout, session, &config);
+                    while let Some(call) = calls.next().await {
+                        executor.spawn(call?).detach();
+                    }
+                    Ok(())
+                }))
+            }
         }
     })();
     if result.is_err() {
@@ -147,7 +168,7 @@ mod signals {
                 if requested.recv().is_ok() {
                     cleanup_host.wait_shutdown();
                     // End input only after admitted local work has finished.
-                    // serve_with still drains responses and returns naturally.
+                    // The serve loop still drains responses and returns naturally.
                     let _ = wake.shutdown(std::net::Shutdown::Both);
                 }
             })?;

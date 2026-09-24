@@ -6,7 +6,6 @@
 //! does not move.
 
 use crate::report::Outcome;
-use mcplease::traits::Tool;
 
 /// A server worth asking, with the argv the dataset recorded for it.
 ///
@@ -47,7 +46,7 @@ pub struct Candidate {
 pub struct Probe {
     pub name: &'static str,
     pub needs: &'static str,
-    pub run: fn(&mut structural::session::Session) -> Outcome,
+    pub run: fn(&structural::session::Session) -> Outcome,
 }
 
 /// A language's candidates, tree and questions.
@@ -79,7 +78,7 @@ pub struct Language {
 }
 
 pub fn show(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<(&str, &str)>,
@@ -91,21 +90,21 @@ pub fn show(
         focus: anchor.map(|(_, focus)| focus.to_string()),
         view: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }
 
-pub fn uses(state: &mut structural::session::Session, symbol: &str) -> anyhow::Result<String> {
+pub fn uses(state: &structural::session::Session, symbol: &str) -> anyhow::Result<String> {
     structural::tools::Uses {
         symbol: Some(symbol.to_string()),
         path: None,
         anchor: None,
         focus: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }
 
 pub fn rename_preview(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: &str,
     new_name: &str,
 ) -> anyhow::Result<String> {
@@ -119,5 +118,5 @@ pub fn rename_preview(
         mode: None,
         digest: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }

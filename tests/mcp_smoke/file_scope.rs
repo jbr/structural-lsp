@@ -9,7 +9,6 @@
 //!
 //! Gated: spawns rust-analyzer and pyright.
 
-use mcplease::traits::Tool;
 use std::path::PathBuf;
 
 /// Types in `src/models.rs`: enough same-named definitions in one file that
@@ -106,7 +105,7 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
@@ -117,11 +116,11 @@ fn show(
         focus: None,
         view: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }
 
 fn uses(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
@@ -131,21 +130,21 @@ fn uses(
         anchor: None,
         focus: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }
 
 #[test]
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn a_file_path_nominates_from_the_files_own_outline() {
     let root = scratch_root();
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // Qualified names late in a file with more same-named definitions than
     // the index pool holds: the file's own outline is what resolves them.
     for type_name in ["Model139", "Model135", "Model130"] {
         let output = ok(show(
-            &mut state,
+            &state,
             Some(&format!("{type_name}::new")),
             Some("src/models.rs"),
         ));
@@ -161,7 +160,7 @@ fn a_file_path_nominates_from_the_files_own_outline() {
 
     // The bare name in that file: every definition the file declares is a
     // candidate, so the ambiguity listing is the file's, not a sample of it.
-    let bare = ok(show(&mut state, Some("new"), Some("src/models.rs")));
+    let bare = ok(show(&state, Some("new"), Some("src/models.rs")));
     assert!(
         bare.starts_with(&format!("ambiguous: {MODELS} definitions of 'new'\n")),
         "every `new` in the file is a candidate: {bare}"
@@ -173,11 +172,7 @@ fn a_file_path_nominates_from_the_files_own_outline() {
 
     // A qualifier the file does not name is listed from the file's own
     // candidates, with the container each one carries.
-    let wrong = ok(show(
-        &mut state,
-        Some("Missing::new"),
-        Some("src/models.rs"),
-    ));
+    let wrong = ok(show(&state, Some("Missing::new"), Some("src/models.rs")));
     assert!(
         wrong
             .starts_with("no 'new' is in a container ending in `Missing`; the 'new' candidates:\n"),
@@ -196,7 +191,7 @@ fn a_file_path_nominates_from_the_files_own_outline() {
     // Two declarations of one name in a file are two definitions: listed,
     // not picked, whether the query names the type or only the method.
     for symbol in ["new", "Twin::new"] {
-        let twins = ok(show(&mut state, Some(symbol), Some("src/twins.rs")));
+        let twins = ok(show(&state, Some(symbol), Some("src/twins.rs")));
         assert!(
             twins.starts_with(&format!("ambiguous: 2 definitions of '{symbol}'\n")),
             "both declarations of {symbol} in the file are listed: {twins}"
@@ -204,11 +199,7 @@ fn a_file_path_nominates_from_the_files_own_outline() {
     }
 
     // References resolve through the same file scope.
-    let callers = ok(uses(
-        &mut state,
-        Some("Node03_5::new"),
-        Some("src/mod03.rs"),
-    ));
+    let callers = ok(uses(&state, Some("Node03_5::new"), Some("src/mod03.rs")));
     assert!(
         callers.starts_with("fn new · src/mod03.rs:") && callers.contains("1 reference"),
         "{callers}"
@@ -223,7 +214,7 @@ fn a_file_path_nominates_from_the_files_own_outline() {
          pub fn new(text: String) -> Self {\n        Self { text }\n    }\n}\n",
     );
     std::fs::write(&file, text).unwrap();
-    let added = ok(show(&mut state, Some("Fresh::new"), Some("src/twins.rs")));
+    let added = ok(show(&state, Some("Fresh::new"), Some("src/twins.rs")));
     assert!(
         added.starts_with("fn new · src/twins.rs:"),
         "a type added on disk resolves: {added}"
@@ -232,7 +223,7 @@ fn a_file_path_nominates_from_the_files_own_outline() {
         .unwrap()
         .replace("Fresh", "Fresher");
     std::fs::write(&file, renamed).unwrap();
-    let gone = ok(show(&mut state, Some("Fresh::new"), Some("src/twins.rs")));
+    let gone = ok(show(&state, Some("Fresh::new"), Some("src/twins.rs")));
     assert!(
         gone.starts_with("no 'new' is in a container ending in `Fresh`"),
         "a renamed type must not resolve from a stale index: {gone}"
@@ -240,7 +231,7 @@ fn a_file_path_nominates_from_the_files_own_outline() {
 
     // pyright's outline nests the same way, so a file scope works there too.
     let python = ok(show(
-        &mut state,
+        &state,
         Some("Config.doubled"),
         Some("python/helper.py"),
     ));

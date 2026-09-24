@@ -3,14 +3,13 @@
 //! by target. Gated: rust-analyzer indexes structural itself (tens of
 //! seconds).
 
-use mcplease::traits::Tool;
 use std::path::PathBuf;
 
 fn repo_root() -> PathBuf {
     std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap()
 }
 
-fn show(state: &mut structural::session::Session, symbol: &str, path: Option<&str>) -> String {
+fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) -> String {
     structural::tools::Show {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
@@ -18,14 +17,14 @@ fn show(state: &mut structural::session::Session, symbol: &str, path: Option<&st
         focus: None,
         view: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
     .unwrap_or_else(|error| panic!("show {symbol}: {error:#}"))
 }
 
 #[test]
 #[ignore = "spawns rust-analyzer on this repository; run explicitly with -- --ignored"]
 fn exact_hits_are_deduplicated_by_definition_target() {
-    let mut state = structural::session::Session::new(repo_root());
+    let state = structural::session::Session::new(repo_root());
 
     // `resolve` the function is reachable even though `Resolution` and
     // friends fuzzy-match it (the adapter asks for all symbols, not types
@@ -39,7 +38,7 @@ fn exact_hits_are_deduplicated_by_definition_target() {
     // one definition are one answer — while excluding a collision that
     // says nothing about it. Do not widen this back without replacing the
     // subject: the name has to be one a real tree makes common.
-    let resolve = show(&mut state, "resolve", Some("src"));
+    let resolve = show(&state, "resolve", Some("src"));
     assert!(
         resolve.starts_with("fn resolve · src/lsp/definition.rs:"),
         "{resolve}"
@@ -48,7 +47,7 @@ fn exact_hits_are_deduplicated_by_definition_target() {
 
     // `Server` is two things: the spike binary's enum and the smoke tests' struct.
     // Two exact hits, two distinct targets, listed with kinds and paths.
-    let server = show(&mut state, "Server", None);
+    let server = show(&state, "Server", None);
     assert!(
         server.starts_with("ambiguous: 2 definitions of 'Server'"),
         "{server}"
@@ -70,7 +69,7 @@ fn exact_hits_are_deduplicated_by_definition_target() {
         anchor: None,
         focus: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .unwrap_or_else(|error| panic!("uses group_by_target: {error:#}"));
     assert!(
         uses.starts_with("fn group_by_target · src/lsp/definition.rs:"),

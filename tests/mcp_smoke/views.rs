@@ -1,7 +1,6 @@
 //! Slice 4 item 2: `show` views on the fixtures (read-only, so the
 //! fixtures themselves), through rust-analyzer, pyright and gopls. Gated.
 
-use mcplease::traits::Tool;
 use std::path::PathBuf;
 
 fn scratch_root() -> PathBuf {
@@ -12,7 +11,7 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     view: &str,
     symbol: Option<&str>,
     path: Option<&str>,
@@ -26,7 +25,7 @@ fn show(
         focus: focus.map(str::to_string),
         view: Some(view.to_string()),
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
     .unwrap_or_else(|error| panic!("show view={view} {symbol:?} {path:?} {anchor:?}: {error:#}"))
 }
 
@@ -34,17 +33,10 @@ fn show(
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     let root = scratch_root();
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
 
     // A file outline: every item in order, methods under their impls.
-    let outline = show(
-        &mut state,
-        "outline",
-        None,
-        Some("rust/src/lib.rs"),
-        None,
-        None,
-    );
+    let outline = show(&state, "outline", None, Some("rust/src/lib.rs"), None, None);
     assert!(outline.starts_with("rust/src/lib.rs · "), "{outline}");
     let lines: Vec<&str> = outline.lines().collect();
     let index = |needle: &str| {
@@ -75,32 +67,18 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     );
 
     // A target's outline: its children.
-    let children = show(
-        &mut state,
-        "outline",
-        Some("Config"),
-        Some("rust"),
-        None,
-        None,
-    );
+    let children = show(&state, "outline", Some("Config"), Some("rust"), None, None);
     assert!(
         children.starts_with("struct Config · rust/src/lib.rs:5 · 1 children\n"),
         "{children}"
     );
     assert!(children.contains("  field limit · 7"), "{children}");
-    let leaf = show(
-        &mut state,
-        "outline",
-        Some("choose"),
-        Some("rust"),
-        None,
-        None,
-    );
+    let leaf = show(&state, "outline", Some("choose"), Some("rust"), None, None);
     assert!(leaf.ends_with("no children in the outline\n"), "{leaf}");
 
     // Implementations of a trait: the impl, with its line.
     let impls = show(
-        &mut state,
+        &state,
         "implementations",
         Some("Label"),
         Some("rust"),
@@ -122,7 +100,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     // that names the traits, with a note for what was folded
     // (backlog/implementations-derive-rows.md, shipped).
     let derived = show(
-        &mut state,
+        &state,
         "implementations",
         Some("Config"),
         Some("rust"),
@@ -145,7 +123,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
 
     // Calls both ways.
     let incoming = show(
-        &mut state,
+        &state,
         "incoming-calls",
         Some("choose"),
         Some("rust"),
@@ -161,7 +139,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
         "{incoming}"
     );
     let outgoing = show(
-        &mut state,
+        &state,
         "outgoing-calls",
         Some("run"),
         Some("rust"),
@@ -182,7 +160,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
         "{outgoing}"
     );
     let not_callable = show(
-        &mut state,
+        &state,
         "incoming-calls",
         Some("Config"),
         Some("rust"),
@@ -192,7 +170,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     assert!(not_callable.contains("not applicable"), "{not_callable}");
 
     // Types: a symbol's signature, and an expression's type over a focus.
-    let signature = show(&mut state, "type", Some("choose"), Some("rust"), None, None);
+    let signature = show(&state, "type", Some("choose"), Some("rust"), None, None);
     assert!(
         signature.starts_with("fn choose · rust/src/lib.rs:43\n"),
         "{signature}"
@@ -202,7 +180,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
         "{signature}"
     );
     let expression = show(
-        &mut state,
+        &state,
         "type",
         None,
         Some("rust/src/lib.rs"),
@@ -216,7 +194,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
 
     // rust-analyzer's own views.
     let expanded = show(
-        &mut state,
+        &state,
         "expanded",
         None,
         Some("rust/src/lib.rs"),
@@ -229,7 +207,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     );
     assert!(expanded.contains("limit="), "{expanded}");
     let tests = show(
-        &mut state,
+        &state,
         "related-tests",
         Some("run"),
         Some("rust"),
@@ -248,14 +226,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     assert!(tests.contains("tests::smoke --exact"), "{tests}");
 
     // pyright: a signature, and the views it does not offer.
-    let py_type = show(
-        &mut state,
-        "type",
-        Some("choose"),
-        Some("python"),
-        None,
-        None,
-    );
+    let py_type = show(&state, "type", Some("choose"), Some("python"), None, None);
     assert!(
         py_type.starts_with("def choose · python/helper.py:28\n"),
         "{py_type}"
@@ -265,7 +236,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
         "{py_type}"
     );
     let py_calls = show(
-        &mut state,
+        &state,
         "incoming-calls",
         Some("choose"),
         Some("python"),
@@ -277,7 +248,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
         "{py_calls}"
     );
     let py_expanded = show(
-        &mut state,
+        &state,
         "expanded",
         Some("choose"),
         Some("python"),
@@ -287,14 +258,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     assert_eq!(py_expanded, "view `expanded` is not supported by pyright\n");
 
     // An unknown view lists what exists.
-    let unknown = show(
-        &mut state,
-        "nonsense",
-        Some("choose"),
-        Some("rust"),
-        None,
-        None,
-    );
+    let unknown = show(&state, "nonsense", Some("choose"), Some("rust"), None, None);
     assert_eq!(
         unknown,
         "unknown view `nonsense`; views: definition, outline, implementations, incoming-calls, outgoing-calls, type, expanded, related-tests\n"

@@ -102,7 +102,13 @@ impl ToolMeta for Uses {
 impl Tool<Session> for Uses {
     type Output = String;
 
-    fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
+    async fn execute(self, session: Session, context: RequestContext) -> Result<Self::Output> {
+        crate::tools::unblock(&context, move || self.run(&session)).await
+    }
+}
+
+impl Uses {
+    pub fn run(self, session: &Session) -> Result<String> {
         let mut state = session.acquire(self.path.as_deref())?;
         let root = state.view().to_path_buf();
         let target = Target {

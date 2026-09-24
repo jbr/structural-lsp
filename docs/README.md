@@ -92,7 +92,7 @@ Every other invariant here is a consequence, and they are stated in full in
 
 One crate, one repository. `src/lib.rs` is the library surface the
 in-process tests use — the same tools and state the binary serves, without
-`mcplease::run`'s ownership of stdio; `src/main.rs` is the front end.
+the binary's stdio and argv; `src/main.rs` is the front end.
 `src/bin/spike/` is a separate binary, read-only by construction, kept as a
 diagnostic instrument ([spike.md](spike.md)).
 

@@ -39,8 +39,9 @@ change while the workspace is live is observation's
 (`../backlog/discovery/observation.md`).
 
 **`Session`** — a caller's binding to one `Entry`, and the working
-directory it was bound with (its **view**). A tool is handed
-`&mut Session` and takes the workspace guard for the duration of its call.
+directory it was bound with (its **view**). A tool is handed a clone of the
+`Session` and takes the workspace guard for the duration of its call; calls
+run concurrently, so two on one workspace take it in turn.
 The workspace is keyed by the project root above the view, so sibling
 members of one project share servers; the view is what `path` resolves
 against and what answers are filtered and rendered against, so each caller

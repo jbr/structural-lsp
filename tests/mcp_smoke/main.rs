@@ -1,7 +1,6 @@
 //! In-process and real-stdio MCP smokes for `show` and `uses`. Both need
 //! rust-analyzer and are gated: run with `cargo test --test mcp_smoke -- --ignored`.
 
-use mcplease::traits::Tool;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
@@ -59,7 +58,7 @@ fn rust_fixture_root() -> PathBuf {
 #[test]
 #[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
 fn in_process_show_resolves_the_fixture_struct() {
-    let mut state = structural::session::Session::new(rust_fixture_root());
+    let state = structural::session::Session::new(rust_fixture_root());
     // `choose` is unique in the fixture, so the positive path resolves.
     let output = structural::tools::Show {
         symbol: Some("choose".to_string()),
@@ -68,7 +67,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .expect("show choose succeeds");
     assert!(output.starts_with("fn choose · src/lib.rs:"), "{output}");
     assert!(output.contains("pub fn choose"), "{output}");
@@ -97,7 +96,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .expect("scoped show succeeds");
     assert!(scoped.starts_with("fn choose · src/lib.rs:"), "{scoped}");
 
@@ -111,7 +110,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .expect("show Config succeeds");
     assert!(
         config.starts_with("struct Config · src/lib.rs:"),
@@ -131,7 +130,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .unwrap();
     assert!(
         missing.starts_with("no symbol named 'definitely_not_here'"),
@@ -146,7 +145,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .expect("show Config::new succeeds");
     assert!(qualified.starts_with("fn new · src/lib.rs:"), "{qualified}");
 
@@ -158,7 +157,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         anchor: None,
         focus: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .expect("uses choose succeeds");
     let call_line = lib[..lib.find("let offset = choose(Mode::Fast);").unwrap()]
         .matches('\n')
@@ -183,7 +182,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         anchor: None,
         focus: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .expect("uses Config succeeds");
     assert!(
         config_uses.starts_with("struct Config · src/lib.rs:"),
@@ -219,7 +218,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default());
+    .run(&state);
     assert!(escaping.is_err(), "an out-of-root scope must be rejected");
 
     drop(state);
@@ -488,8 +487,8 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
     )
     .unwrap();
 
-    let mut state = structural::session::Session::new(scratch.clone());
-    let show = |state: &mut structural::session::Session, symbol: &str| {
+    let state = structural::session::Session::new(scratch.clone());
+    let show = |state: &structural::session::Session, symbol: &str| {
         structural::tools::Show {
             symbol: Some(symbol.to_string()),
             path: None,
@@ -497,13 +496,13 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
             focus: None,
             view: None,
         }
-        .execute(state, &mcplease::types::RequestContext::default())
+        .run(state)
     };
 
     // Call 1 opens both files the tool touches (lib.rs as candidate).
-    let first = show(&mut state, "choose").expect("first show resolves");
+    let first = show(&state, "choose").expect("first show resolves");
     assert!(first.contains("pub fn choose"), "{first}");
-    let helper_first = show(&mut state, "helper").expect("helper resolves cross-module");
+    let helper_first = show(&state, "helper").expect("helper resolves cross-module");
     assert!(helper_first.contains("pub fn helper"), "{helper_first}");
 
     let lib_path = scratch.join("src/lib.rs");
@@ -517,7 +516,7 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
     assert_ne!(shifted, std::fs::read_to_string(&lib_path).unwrap());
     std::fs::write(&lib_path, shifted).unwrap();
 
-    let second = show(&mut state, "choose").expect("show after shift resolves");
+    let second = show(&state, "choose").expect("show after shift resolves");
     assert!(
         second.contains("pub fn choose"),
         "the function must still be found and shaped after the shift: {second}"
@@ -536,7 +535,7 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
             .replacen("pub fn choose", "pub fn chooser", 1);
     std::fs::write(&lib_path, renamed).unwrap();
 
-    let third = show(&mut state, "choose").expect("the rename case is a stated result");
+    let third = show(&state, "choose").expect("the rename case is a stated result");
     // The renamed symbol may come back as a fuzzy near-match, but the exact
     // name must not resolve: nothing was resolved, no definition was queried.
     assert!(
@@ -553,7 +552,7 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
         .replace("x + 1", "x + 100");
     std::fs::write(&util_path, edited).unwrap();
 
-    let helper_second = show(&mut state, "helper").expect("helper re-resolves");
+    let helper_second = show(&state, "helper").expect("helper re-resolves");
     assert!(
         helper_second.contains("x + 100"),
         "the edited module body is served fresh: {helper_second}"

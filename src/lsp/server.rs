@@ -215,6 +215,8 @@ impl LspServer {
     /// server has been silent for the adapter's backstop or the connection
     /// failed.
     pub fn wait_ready(&self) -> Result<()> {
+        let _waiting =
+            crate::progress::waiting_on(format!("waiting for {} to finish indexing", self.name()));
         self.handle().wait_ready(self.adapter.backstop())
     }
 

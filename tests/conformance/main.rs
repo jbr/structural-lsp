@@ -250,11 +250,11 @@ fn measure(language: &Language) {
         }
         probed += 1;
         let root = scratch_root(language, candidate);
-        let mut state = structural::session::Session::new(root.clone());
+        let state = structural::session::Session::new(root.clone());
         let outcomes = language
             .probes
             .iter()
-            .map(|probe| (probe.run)(&mut state))
+            .map(|probe| (probe.run)(&state))
             .collect();
         scorecard.scored(
             candidate.name,

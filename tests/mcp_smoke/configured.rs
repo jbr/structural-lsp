@@ -2,7 +2,6 @@
 //! adapter path end to end, against gopls on a scratch Go module. Gated
 //! like the other real-server tests; needs `gopls` on `PATH`.
 
-use mcplease::traits::Tool;
 use std::path::PathBuf;
 
 fn scratch_module() -> PathBuf {
@@ -25,7 +24,10 @@ fn scratch_module() -> PathBuf {
 #[ignore = "spawns gopls (and the built-ins); run explicitly with -- --ignored"]
 fn a_configured_server_resolves_through_the_generic_adapter() {
     let root = scratch_module();
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
+    // Binding only starts the servers (`docs/ownership.md`); wait for them,
+    // as a query would, before asking which are running.
+    state.activate(None);
     {
         let workspace = state.workspace();
         assert!(
@@ -47,7 +49,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         focus: None,
         view: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .unwrap_or_else(|error| panic!("show Greet: {error:#}"));
     assert!(
         output.starts_with("function Greet · greet.go:4\n"),
@@ -69,7 +71,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         anchor: None,
         focus: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .unwrap_or_else(|error| panic!("uses Greet: {error:#}"));
     assert_eq!(
         uses,
@@ -89,7 +91,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         focus: Some("Greet".to_string()),
         view: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .unwrap_or_else(|error| panic!("anchored show Greet: {error:#}"));
     assert!(
         anchored.starts_with("function Greet · greet.go:4\n"),
@@ -104,7 +106,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         focus: None,
         view: Some("type".to_string()),
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .unwrap_or_else(|error| panic!("show type Greet: {error:#}"));
     assert!(
         signature.starts_with("function Greet · greet.go:4\n"),
@@ -126,7 +128,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         mode: None,
         digest: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .unwrap_or_else(|error| panic!("rename Greet: {error:#}"));
     assert!(
         preview.starts_with(
@@ -154,7 +156,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         mode: Some("apply".to_string()),
         digest: Some(digest),
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default())
+    .run(&state)
     .unwrap_or_else(|error| panic!("apply rename Greet: {error:#}"));
     assert!(
         applied.starts_with("applied: rename Greet → Hello"),

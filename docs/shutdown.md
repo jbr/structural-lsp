@@ -118,7 +118,7 @@ descriptor together, which separates two things that look alike:
   server that will never answer.
 - **Synthetic cancellation** after a soft cleanup completes is not
   escalation: a cleanup thread ends input once admitted work has finished, and
-  `serve_with` drains its responses and returns naturally.
+  the serve loop drains its responses and returns naturally.
 
 One-shot CLI dispatch (`structural show choose`) keeps its behaviour: the
 same `host.shutdown()` runs on the way out, and a failed run forces first.

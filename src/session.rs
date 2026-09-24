@@ -1,8 +1,8 @@
 //! A caller's binding to one workspace.
 //!
-//! This is what a tool is handed: mcplease gives each call a `&mut Session`
-//! and the caller's context, and the tool takes the workspace guard for the
-//! duration of the call. Two callers bound to the same root share one
+//! This is what a tool is handed: mcplease gives each call a clone of the
+//! `Session` and the caller's context, and the tool takes the workspace guard
+//! for the duration of the call. Two callers bound to the same root share one
 //! workspace — and so one set of language-server processes — while two
 //! bound to different roots lock independently.
 //!
@@ -25,6 +25,7 @@ use crate::workspace::{Workspace, canonical_root};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, MutexGuard};
 
+#[derive(Clone)]
 pub struct Session {
     workspace: Arc<Entry>,
     /// The caller's working directory: what `path` is relative to, what
@@ -109,6 +110,7 @@ impl Session {
     /// Lock the workspace for one operation. Serialized against other calls
     /// on the same workspace, and against nothing else.
     pub fn workspace(&self) -> MutexGuard<'_, Workspace> {
+        let _waiting = crate::progress::waiting_on("waiting for another query on this workspace");
         self.workspace.lock()
     }
 }

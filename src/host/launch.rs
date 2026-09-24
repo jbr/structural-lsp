@@ -37,6 +37,7 @@ impl Entry {
         // Start every needed launch first and wait afterwards. Waiting as we
         // went would serialize exactly what giving each launch a thread was
         // for: one server's `initialize` would still be a delay to the next.
+        let _waiting = crate::progress::waiting_on("starting language servers");
         for index in self.warm(scope) {
             let _ = self.slots[index].wait_for_launch();
         }

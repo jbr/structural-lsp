@@ -2,7 +2,6 @@
 //! fixtures with a second `new` added. Gated: spawns rust-analyzer and
 //! pyright.
 
-use mcplease::traits::Tool;
 use std::path::PathBuf;
 
 /// Both fixtures under one root, plus a second type with a `new` in the
@@ -19,7 +18,7 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<&str>,
@@ -32,11 +31,11 @@ fn show(
         focus: focus.map(str::to_string),
         view: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }
 
 fn uses(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<&str>,
@@ -48,30 +47,24 @@ fn uses(
         anchor: anchor.map(str::to_string),
         focus: focus.map(str::to_string),
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }
 
 #[test]
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn qualified_names_and_anchors_target_what_bare_names_cannot() {
     let root = scratch_root();
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // The bare name is two things; each qualifier picks one; a wrong
     // qualifier lists the containers the server reported.
-    let bare = ok(show(&mut state, Some("new"), Some("rust"), None, None));
+    let bare = ok(show(&state, Some("new"), Some("rust"), None, None));
     assert!(
         bare.starts_with("ambiguous: 2 definitions of 'new'"),
         "{bare}"
     );
-    let config_new = ok(show(
-        &mut state,
-        Some("Config::new"),
-        Some("rust"),
-        None,
-        None,
-    ));
+    let config_new = ok(show(&state, Some("Config::new"), Some("rust"), None, None));
     assert!(
         config_new.starts_with("fn new · rust/src/lib.rs:23\n"),
         "{config_new}"
@@ -80,13 +73,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
         config_new.contains("pub fn new(limit: usize) -> Self {"),
         "{config_new}"
     );
-    let other_new = ok(show(
-        &mut state,
-        Some("Other.new"),
-        Some("rust"),
-        None,
-        None,
-    ));
+    let other_new = ok(show(&state, Some("Other.new"), Some("rust"), None, None));
     assert!(
         other_new.starts_with("fn new · rust/src/lib.rs:"),
         "{other_new}"
@@ -95,13 +82,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
         other_new.contains("pub fn new() -> Self {\n        Other"),
         "{other_new}"
     );
-    let wrong = ok(show(
-        &mut state,
-        Some("Missing::new"),
-        Some("rust"),
-        None,
-        None,
-    ));
+    let wrong = ok(show(&state, Some("Missing::new"), Some("rust"), None, None));
     assert!(
         wrong
             .starts_with("no 'new' is in a container ending in `Missing`; the 'new' candidates:\n"),
@@ -114,7 +95,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
     assert!(wrong.contains(" · in Other\n"), "{wrong}");
     // pyright spells the container the same way.
     let doubled = ok(show(
-        &mut state,
+        &state,
         Some("Config.doubled"),
         Some("python"),
         None,
@@ -129,7 +110,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
     // word, and its uses are the local's, not the struct's.
     let anchor = "let config = Config::new(3);";
     let local = ok(show(
-        &mut state,
+        &state,
         None,
         Some("rust/src/lib.rs"),
         Some(anchor),
@@ -140,7 +121,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
         "{local}"
     );
     let local_uses = ok(uses(
-        &mut state,
+        &state,
         None,
         Some("rust/src/lib.rs"),
         Some(anchor),
@@ -153,7 +134,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
     );
     // A focus on a method call resolves to the method's definition.
     let method = ok(show(
-        &mut state,
+        &state,
         None,
         Some("rust/src/lib.rs"),
         Some("let count = config.doubled();"),
@@ -169,7 +150,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
     );
     // The whole anchor as the focus starts at its first token.
     let whole = ok(show(
-        &mut state,
+        &state,
         None,
         Some("rust/src/lib.rs"),
         Some("choose(Mode::Fast);"),
@@ -182,7 +163,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
 
     // Python: a local in `make`.
     let py_uses = ok(uses(
-        &mut state,
+        &state,
         None,
         Some("python/main.py"),
         Some("config = Config(DEFAULT_LIMIT)"),
@@ -199,7 +180,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
 
     // Errors say what to fix.
     let missing = show(
-        &mut state,
+        &state,
         None,
         Some("rust/src/lib.rs"),
         Some("nothing like this"),
@@ -211,7 +192,7 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
         "{missing:#}"
     );
     let twice = show(
-        &mut state,
+        &state,
         None,
         Some("rust/src/lib.rs"),
         Some("let count ="),
@@ -224,15 +205,15 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
             .contains("anchor occurs 2 times, at lines 58, 60"),
         "{twice:#}"
     );
-    let no_path = show(&mut state, None, None, Some(anchor), None).unwrap_err();
+    let no_path = show(&state, None, None, Some(anchor), None).unwrap_err();
     assert!(
         no_path.to_string().contains("`anchor` needs `path`"),
         "{no_path:#}"
     );
-    let dir = show(&mut state, None, Some("rust"), Some(anchor), None).unwrap_err();
+    let dir = show(&state, None, Some("rust"), Some(anchor), None).unwrap_err();
     assert!(dir.to_string().contains("must name a file"), "{dir:#}");
     let both = show(
-        &mut state,
+        &state,
         Some("choose"),
         Some("rust/src/lib.rs"),
         Some(anchor),
@@ -240,12 +221,12 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
     )
     .unwrap_err();
     assert!(both.to_string().contains("not both"), "{both:#}");
-    let neither = show(&mut state, None, None, None, None).unwrap_err();
+    let neither = show(&state, None, None, None, None).unwrap_err();
     assert!(
         neither.to_string().contains("give a `symbol`"),
         "{neither:#}"
     );
-    let stray_focus = show(&mut state, Some("choose"), None, None, Some("x")).unwrap_err();
+    let stray_focus = show(&state, Some("choose"), None, None, Some("x")).unwrap_err();
     assert!(
         stray_focus.to_string().contains("`focus` selects within"),
         "{stray_focus:#}"

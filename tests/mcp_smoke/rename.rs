@@ -1,7 +1,6 @@
 //! Slice 4 item 3: `action` rename on scratch copies (mutation never
 //! touches the fixtures). Gated: spawns rust-analyzer and pyright.
 
-use mcplease::traits::Tool;
 use std::path::PathBuf;
 
 /// Both fixtures under one root, the Rust one with a second module so a
@@ -31,7 +30,7 @@ fn scratch_root(tag: &str) -> PathBuf {
 }
 
 fn action(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: &str,
     path: &str,
     new_name: &str,
@@ -48,11 +47,11 @@ fn action(
         mode: mode.map(str::to_string),
         digest: digest.map(str::to_string),
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
     .unwrap_or_else(|error| panic!("rename {symbol} → {new_name} ({mode:?}): {error:#}"))
 }
 
-fn show(state: &mut structural::session::Session, symbol: &str, path: &str) -> String {
+fn show(state: &structural::session::Session, symbol: &str, path: &str) -> String {
     structural::tools::Show {
         symbol: Some(symbol.to_string()),
         path: Some(path.to_string()),
@@ -60,7 +59,7 @@ fn show(state: &mut structural::session::Session, symbol: &str, path: &str) -> S
         focus: None,
         view: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
     .unwrap_or_else(|error| panic!("show {symbol}: {error:#}"))
 }
 
@@ -93,9 +92,9 @@ fn the_rename_answer_carries_the_server_caveat() {
         ),
     )
     .unwrap();
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
 
-    let preview = action(&mut state, "choose", "rust", "pick", None, None);
+    let preview = action(&state, "choose", "rust", "pick", None, None);
     assert!(
         preview.contains(
             "note: rust-analyzer rename may leave intra-doc links unchanged; check doc comments for `choose`.\n"
@@ -106,7 +105,7 @@ fn the_rename_answer_carries_the_server_caveat() {
     let digest = digest_of(&preview);
 
     let applied = action(
-        &mut state,
+        &state,
         "choose",
         "rust",
         "pick",
@@ -137,11 +136,11 @@ fn the_rename_answer_carries_the_server_caveat() {
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn rename_previews_then_applies_with_a_matching_digest() {
     let root = scratch_root("digest");
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
 
     // Preview: the definition and the call, both lines shown, nothing
     // written.
-    let preview = action(&mut state, "choose", "rust", "pick", None, None);
+    let preview = action(&state, "choose", "rust", "pick", None, None);
     assert!(
         preview.starts_with(
             "rename choose → pick · fn choose · rust/src/lib.rs:45 · 2 edits · 1 file\n"
@@ -171,13 +170,13 @@ fn rename_previews_then_applies_with_a_matching_digest() {
 
     // Apply without a digest, or with a wrong one: a fresh preview and no
     // write.
-    let no_digest = action(&mut state, "choose", "rust", "pick", Some("apply"), None);
+    let no_digest = action(&state, "choose", "rust", "pick", Some("apply"), None);
     assert!(
         no_digest.starts_with("nothing applied: no digest given; a fresh preview follows\n"),
         "{no_digest}"
     );
     let wrong = action(
-        &mut state,
+        &state,
         "choose",
         "rust",
         "pick",
@@ -196,7 +195,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
 
     // Apply with the digest: written, and the servers see it.
     let applied = action(
-        &mut state,
+        &state,
         "choose",
         "rust",
         "pick",
@@ -220,12 +219,12 @@ fn rename_previews_then_applies_with_a_matching_digest() {
         !text.contains("fn choose") && !text.contains("= choose("),
         "{text}"
     );
-    let after = show(&mut state, "pick", "rust");
+    let after = show(&state, "pick", "rust");
     assert!(
         after.starts_with("fn pick · rust/src/lib.rs:45\n"),
         "{after}"
     );
-    let gone = show(&mut state, "choose", "rust");
+    let gone = show(&state, "choose", "rust");
     assert!(
         gone.starts_with("no symbol named 'choose'")
             || gone.starts_with("no exact match for 'choose'"),
@@ -234,7 +233,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
 
     // The old digest is stale now: applying it again changes nothing.
     let stale = action(
-        &mut state,
+        &state,
         "pick",
         "rust",
         "choose",
@@ -248,7 +247,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
 
     // A struct: the impl headers, the constructor call and the re-export
     // are rewritten; `Self` sites need nothing.
-    let config = action(&mut state, "Config", "rust", "Settings", None, None);
+    let config = action(&state, "Config", "rust", "Settings", None, None);
     assert!(config.contains("impl Settings {\n"), "{config}");
     assert!(config.contains("impl Label for Settings {\n"), "{config}");
     assert!(
@@ -257,7 +256,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     );
     assert!(config.contains("pub use super::Settings;\n"), "{config}");
     let config_applied = action(
-        &mut state,
+        &state,
         "Config",
         "rust",
         "Settings",
@@ -275,7 +274,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     );
 
     // A module: its file moves and the `mod` line and paths follow.
-    let module = action(&mut state, "util", "rust", "helpers", None, None);
+    let module = action(&state, "util", "rust", "helpers", None, None);
     assert!(
         module.contains("  1: mod util;\n     mod helpers;\n"),
         "{module}"
@@ -290,7 +289,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
         "{module}"
     );
     let module_applied = action(
-        &mut state,
+        &state,
         "util",
         "rust",
         "helpers",
@@ -299,14 +298,14 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     );
     assert!(module_applied.contains("moved "), "{module_applied}");
     assert!(root.join("rust/src/helpers.rs").is_file() && !root.join("rust/src/util.rs").exists());
-    let helper = show(&mut state, "helper", "rust");
+    let helper = show(&state, "helper", "rust");
     assert!(
         helper.starts_with("fn helper · rust/src/helpers.rs:1\n"),
         "{helper}"
     );
 
     // pyright: across two files.
-    let py = action(&mut state, "choose", "python", "select", None, None);
+    let py = action(&state, "choose", "python", "select", None, None);
     assert!(
         py.starts_with(
             "rename choose → select · def choose · python/helper.py:28 · 3 edits · 2 files\n"
@@ -320,7 +319,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     );
     assert!(py.contains("offset = select(True)\n"), "{py}");
     let py_applied = action(
-        &mut state,
+        &state,
         "choose",
         "python",
         "select",
@@ -336,7 +335,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
             .unwrap()
             .contains("offset = select(True)")
     );
-    let py_after = show(&mut state, "select", "python");
+    let py_after = show(&state, "select", "python");
     assert!(
         py_after.starts_with("def select · python/helper.py:28\n"),
         "{py_after}"
@@ -353,7 +352,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
         mode: None,
         digest: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default());
+    .run(&state);
     assert!(same.unwrap_err().to_string().contains("already the name"));
     let unknown = structural::tools::Action {
         action: "explode".to_string(),
@@ -365,7 +364,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
         mode: None,
         digest: None,
     }
-    .execute(&mut state, &mcplease::types::RequestContext::default());
+    .run(&state);
     assert!(unknown.unwrap_err().to_string().contains("unknown action"));
 
     drop(state);

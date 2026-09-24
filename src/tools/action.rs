@@ -114,7 +114,13 @@ pub enum Mode {
 impl Tool<Session> for Action {
     type Output = String;
 
-    fn execute(self, session: &mut Session, _context: &RequestContext) -> Result<Self::Output> {
+    async fn execute(self, session: Session, context: RequestContext) -> Result<Self::Output> {
+        crate::tools::unblock(&context, move || self.run(&session)).await
+    }
+}
+
+impl Action {
+    pub fn run(self, session: &Session) -> Result<String> {
         let mut state = session.acquire(self.path.as_deref())?;
         let mode = match self.mode.as_deref().map(str::trim) {
             None | Some("") | Some(PREVIEW) => Mode::Preview,

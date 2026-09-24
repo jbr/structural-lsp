@@ -8,7 +8,6 @@
 //! mock is the only server that runs; nothing here depends on rust-analyzer
 //! or pyright being installed.
 
-use mcplease::traits::Tool;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -199,7 +198,7 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &mut structural::session::Session,
+    state: &structural::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
@@ -210,18 +209,18 @@ fn show(
         focus: None,
         view: None,
     }
-    .execute(state, &mcplease::types::RequestContext::default())
+    .run(state)
 }
 
 #[test]
 fn a_file_scope_resolves_without_the_symbol_index() {
     let root = scratch_root();
-    let mut state = structural::session::Session::new(root.clone());
+    let state = structural::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // The index answered nothing at all; the file's own outline resolved the
     // qualified name, and the definition it navigated to is the body shown.
-    let resolved = ok(show(&mut state, Some("Tool::new"), Some("src/tool.rs")));
+    let resolved = ok(show(&state, Some("Tool::new"), Some("src/tool.rs")));
     assert_eq!(
         resolved,
         "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
@@ -231,7 +230,7 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     // Without the path there is only the index, and it knows nothing about
     // the name: the file scope is what resolved it, and the miss says so
     // rather than leaving the caller to discover the scope.
-    let bare = ok(show(&mut state, Some("Tool::new"), None));
+    let bare = ok(show(&state, Some("Tool::new"), None));
     assert_eq!(
         bare,
         "no symbol named 'Tool::new'\n\
@@ -244,7 +243,7 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     // qualifier note is for a container the index could not narrow, and a
     // bare name that missed has nothing to relocate, so it does not carry
     // that one.
-    let unqualified_miss = ok(show(&mut state, Some("Absent"), None));
+    let unqualified_miss = ok(show(&state, Some("Absent"), None));
     assert_eq!(
         unqualified_miss,
         "no symbol named 'Absent'\n\
@@ -253,12 +252,12 @@ fn a_file_scope_resolves_without_the_symbol_index() {
 
     // Naming a file is the thing the note asks for, so a miss inside one
     // does not repeat it.
-    let in_file = ok(show(&mut state, Some("Absent"), Some("src/tool.rs")));
+    let in_file = ok(show(&state, Some("Absent"), Some("src/tool.rs")));
     assert_eq!(in_file, "no symbol named 'Absent'\n");
 
     // A qualifier the file's own symbols do not carry is listed from those
     // symbols, not substituted from the index.
-    let wrong = ok(show(&mut state, Some("Missing::new"), Some("src/tool.rs")));
+    let wrong = ok(show(&state, Some("Missing::new"), Some("src/tool.rs")));
     assert_eq!(
         wrong,
         "no 'new' is in a container ending in `Missing`; the 'new' candidates:\n\
@@ -268,14 +267,14 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     // A flat outline carries no range that names each symbol, so its
     // declaration line is searched for the advertised name, and the
     // container it names in a field is what the qualifier filters on.
-    let flat = ok(show(&mut state, Some("Tool::new"), Some("src/flat.rs")));
+    let flat = ok(show(&state, Some("Tool::new"), Some("src/flat.rs")));
     assert!(
         flat.starts_with("function new · src/flat.rs:7"),
         "a flat outline nominates from the declaration line: {flat}"
     );
     // The container is the server's claim, and a qualifier it does not
     // carry is refused from the file's own symbols rather than substituted.
-    let flat_wrong = ok(show(&mut state, Some("Other::new"), Some("src/flat.rs")));
+    let flat_wrong = ok(show(&state, Some("Other::new"), Some("src/flat.rs")));
     assert_eq!(
         flat_wrong,
         "no 'new' is in a container ending in `Other`; the 'new' candidates:\n\
@@ -286,7 +285,7 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     // another identifier — is an error, because the name is the server's
     // claim and the file is what checks it. Not a resolved answer, and not a
     // fallback to the index.
-    let stale = show(&mut state, Some("Tool::new"), Some("src/stale.rs")).unwrap_err();
+    let stale = show(&state, Some("Tool::new"), Some("src/stale.rs")).unwrap_err();
     let message = format!("{stale:#}");
     assert!(
         message.contains("does not describe the file as read from disk"),
@@ -298,7 +297,7 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     // resolution: the qualifier matches nothing, so no definition is queried
     // and the unqualified listing would have been built from the stale range.
     // The check runs before any filter, so this errors too.
-    let listing = show(&mut state, Some("Missing::new"), Some("src/stale.rs")).unwrap_err();
+    let listing = show(&state, Some("Missing::new"), Some("src/stale.rs")).unwrap_err();
     let message = format!("{listing:#}");
     assert!(
         message.contains("does not describe the file as read from disk"),
