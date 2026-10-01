@@ -9,7 +9,7 @@ use crate::tools::hits::{FileGroup, render_groups};
 
 /// `header · N references · M files`, the production groups, then the
 /// tests section, then notes. Past `cap` hits, the rest is a count.
-pub(super) fn render_uses(
+pub(super) fn render_references(
     header: &str,
     total: usize,
     files: usize,

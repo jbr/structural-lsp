@@ -1,4 +1,4 @@
-use super::render::render_uses;
+use super::render::render_references;
 use crate::tools::hits::{FileGroup, HitLine, source_line};
 use crate::lsp::positions::Encoding;
 use lsp_types::Position;
@@ -31,7 +31,7 @@ fn the_listing_is_byte_exact() {
         path: "src/lib.rs".into(),
         hits: vec![hit(66, Some("tests::smoke"), "assert_eq!(choose(Mode::Fast), 1);")],
     }];
-    let text = render_uses(
+    let text = render_references(
         "fn choose · src/lib.rs:43",
         4,
         2,
@@ -54,7 +54,7 @@ fn the_listing_is_byte_exact() {
 #[test]
 fn zero_and_one_are_worded_plainly_and_the_cap_is_a_count() {
     assert_eq!(
-        render_uses("fn f · a.rs:1", 0, 0, &[], &[], 100, &[]),
+        render_references("fn f · a.rs:1", 0, 0, &[], &[], 100, &[]),
         "fn f · a.rs:1 · no references\n"
     );
     let one = [FileGroup {
@@ -62,7 +62,7 @@ fn zero_and_one_are_worded_plainly_and_the_cap_is_a_count() {
         hits: vec![hit(3, Some("g"), "f()")],
     }];
     assert_eq!(
-        render_uses("fn f · a.rs:1", 1, 1, &one, &[], 100, &[]),
+        render_references("fn f · a.rs:1", 1, 1, &one, &[], 100, &[]),
         "fn f · a.rs:1 · 1 reference · 1 file\na.rs\n  3 · g · f()\n"
     );
     let many = [
@@ -75,7 +75,7 @@ fn zero_and_one_are_worded_plainly_and_the_cap_is_a_count() {
             hits: vec![hit(9, None, "f()")],
         },
     ];
-    let capped = render_uses("fn f · a.rs:1", 5, 2, &many, &one, 2, &[]);
+    let capped = render_references("fn f · a.rs:1", 5, 2, &many, &one, 2, &[]);
     assert_eq!(
         capped,
         "fn f · a.rs:1 · 5 references · 2 files\na.rs\n  1 · f()\n  2 · f()\n\

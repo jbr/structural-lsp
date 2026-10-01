@@ -1,4 +1,4 @@
-//! Slice 4 item 3: `action` rename on scratch copies (mutation never
+//! Slice 4 item 3: `rename` on on scratch copies (mutation never
 //! touches the fixtures). Gated: spawns rust-analyzer and pyright.
 
 use std::path::PathBuf;
@@ -37,8 +37,7 @@ fn action(
     mode: Option<&str>,
     digest: Option<&str>,
 ) -> String {
-    structural::tools::Action {
-        action: "rename".to_string(),
+    structural::tools::Rename {
         symbol: Some(symbol.to_string()),
         path: Some(path.to_string()),
         anchor: None,
@@ -52,7 +51,7 @@ fn action(
 }
 
 fn show(state: &structural::session::Session, symbol: &str, path: &str) -> String {
-    structural::tools::Show {
+    structural::tools::Definition {
         symbol: Some(symbol.to_string()),
         path: Some(path.to_string()),
         anchor: None,
@@ -342,8 +341,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     );
 
     // Argument errors.
-    let same = structural::tools::Action {
-        action: "rename".to_string(),
+    let same = structural::tools::Rename {
         symbol: Some("pick".to_string()),
         path: Some("rust".to_string()),
         anchor: None,
@@ -354,8 +352,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     }
     .run(&state);
     assert!(same.unwrap_err().to_string().contains("already the name"));
-    let unknown = structural::tools::Action {
-        action: "explode".to_string(),
+    let missing = structural::tools::Rename {
         symbol: Some("pick".to_string()),
         path: None,
         anchor: None,
@@ -365,7 +362,12 @@ fn rename_previews_then_applies_with_a_matching_digest() {
         digest: None,
     }
     .run(&state);
-    assert!(unknown.unwrap_err().to_string().contains("unknown action"));
+    assert!(
+        missing
+            .unwrap_err()
+            .to_string()
+            .contains("needs `new_name`")
+    );
 
     drop(state);
     let _ = std::fs::remove_dir_all(&root);

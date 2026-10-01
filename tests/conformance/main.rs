@@ -5,7 +5,7 @@
 //! that the probes ran, and prints a scorecard. Nothing here fails when a
 //! server scores badly — a low score is the finding.
 //!
-//! The metric is deliberately narrow. `show`, `uses` and `action` need
+//! The metric is deliberately narrow. `definition`, `references` and `rename` need
 //! symbol lookup, definitions whose ranges match the text, cross-file
 //! references, containers from an outline, and a rename edit that can be
 //! verified. A server's advertised capability list is a claim about all of

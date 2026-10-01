@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 /// The fake server: answers `initialize`, reports `quiescent: false`, and
 /// only reports `quiescent: true` once the file named by `FAKE_RA_RELEASE`
-/// exists. `workspace/symbol` answers empty, so a released `show` completes
+/// exists. `workspace/symbol` answers empty, so a released `definition` completes
 /// with a not-found result.
 const FAKE_RUST_ANALYZER: &str = r#"#!/usr/bin/env python3
 import json, os, sys, threading, time
@@ -108,7 +108,7 @@ impl Drop for Shim {
 }
 
 fn show(symbol: &str) -> Value {
-    json!({ "name": "show", "arguments": { "symbol": symbol } })
+    json!({ "name": "definition", "arguments": { "symbol": symbol } })
 }
 
 #[test]

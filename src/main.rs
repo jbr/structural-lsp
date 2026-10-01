@@ -41,23 +41,21 @@ fn main() -> anyhow::Result<()> {
             .with_context(|| format!("workspace root `{}` does not exist", root.display()))?;
         let session = host.agent_started(AgentId::mcp(), &root);
         let instructions = "\
-show resolves a symbol to its definition's decorated source (or another \
-`view` of it: outline, implementations, calls, type); uses lists the \
-references to it, one source line per hit with its enclosing item, tests set \
-apart heuristically; action previews and applies a rename, following \
-identity across files. Target by name (`symbol`, bare or qualified by its \
-container: `Config::new`) or by quoting source text (`anchor` from the file \
-`path`, `focus` naming the token), which reaches locals and call sites. \
-Candidates come from the language servers' fuzzy symbol index (bounded, \
-not proven exhaustive) or, when `path` names a file, from that file's own \
-outline; neither is proven exhaustive. Only exact names resolve, and several \
-distinct definitions are listed rather than picked. \
-Owned files are re-synced from disk and the servers are waited for before \
-each query. A query whose target names a file syncs that file before it \
-reads it; the workspace-index lookup behind bare-name and directory-scoped \
-queries can miss a recent edit to a file no query has opened, and the \
-failure is silent (\"no such symbol\"). The workspace root is fixed at \
-server start; `path` only scopes inside it.";
+You have LSP-backed code intelligence: `definition` (go to definition and \
+other IDE views), `references` (find all references), `rename` (rename a \
+symbol everywhere). Prefer these over `read` when you need one item's body, \
+and over `grep` when a name may be re-exported, shadowed, or spread across \
+files: they follow symbol identity, not text. Start with \
+`{\"symbol\": \"Config::new\"}`; qualify (`Config::new`) when a bare name \
+is ambiguous. The same target takes `view` on `definition`: `outline`, \
+`implementations`, `incoming-calls`, `outgoing-calls`, `type` (hover), \
+plus per-server `expanded` and `related-tests`. To reach a local, call \
+site, or expression, quote source text (`anchor` in the file `path`, \
+`focus` naming the token) instead of a line number: your snapshot of a \
+file may be stale. `rename` previews with a `digest`, then `apply` needs \
+that digest back. `path` scopes where the symbol is looked up, not where \
+results are listed; a query that names a file syncs it first. The \
+workspace root is fixed at server start; `path` only scopes inside it.";
 
         let config =
             mcplease::ServerConfig::new(mcplease::server_info!()).with_instructions(instructions);

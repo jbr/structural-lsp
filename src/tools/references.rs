@@ -1,9 +1,9 @@
-//! `uses` — references to a symbol resolved by bare name, one line of
+//! `references` — references to a symbol resolved by bare name, one line of
 //! context per hit, grouped by file and enclosing item, tests set apart.
 //!
 //! Resolution is the shared pipeline in [`crate::tools::resolution`], so a
-//! name that `show` would list (not found, fuzzy, ambiguous) is listed here
-//! the same way. With one identity: own its target file, check the name
+//! name that `definition` would list (not found, fuzzy, ambiguous) is listed
+//! here the same way.
 //! sits at the target, wait, `textDocument/references` there without the
 //! declaration. Every file with hits is then owned too, and each hit's
 //! range is checked against the text just read — it must hold the name or
@@ -21,7 +21,7 @@ use crate::workspace::Workspace;
 use anyhow::{Context, Result};
 use mcplease::{
     traits::{Tool, ToolMeta},
-    types::{RequestContext, ToolAnnotations},
+    types::{Example, RequestContext, ToolAnnotations},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -29,49 +29,51 @@ use std::path::Path;
 
 mod render;
 use crate::tools::hits::{FileGroup, HitLine, OutlineGap, lines_for};
-use render::render_uses;
+use render::render_references;
 
 /// Hits listed before the rest is reported as a count.
 const MAX_HITS: usize = 100;
 
-/// Find the references to a code symbol: every use the language server
-/// knows of, with the source line and the enclosing item for each, grouped
-/// by file. Target it as `show` does: by name (`symbol`, bare or qualified,
-/// with an optional `path` scope) or by quoting source text (`anchor` in
-/// `path`, `focus` naming the token), which reaches locals and parameters.
-/// Tests are listed separately by a heuristic: a file or directory named
-/// for tests, or a module named `tests`; test code elsewhere (an inline
-/// `#[cfg(test)]` block under another name) is listed as production.
+/// Find all references through the language server (LSP): the replacement
+/// for `grep "name("` when you want callers and uses.
 ///
-/// An ambiguous or unknown target returns the same listing `show` gives.
-/// The declaration itself is not a reference. References follow symbol
-/// identity, not text, so renames, re-exports and method calls are found
-/// and same-named strangers are not. Owned files are re-synced from disk
-/// and the server is waited for before every query. An anchor resolves
-/// inside its `path` file, and a `symbol` with a `path` naming a file
-/// nominates from that file's own outline; a bare `symbol`, or a
-/// directory-scoped one, is a workspace-index lookup that can miss a
-/// recent edit to a file no query has opened. `path` scopes where the
-/// *symbol* is looked up, not where its references are listed.
+/// Use when you want every use of a symbol: `{"symbol": "Config::new"}`
+/// lists one source line per hit with its enclosing item, grouped by file,
+/// tests set apart. Prefer this over `grep` because it follows identity,
+/// not text: re-exports, renames, and method calls are found and
+/// same-named strangers are not. The declaration itself is not listed. An
+/// ambiguous or unknown target returns the same listing `definition` gives.
+///
+/// Target as `definition` does: by name (`symbol`, bare like `choose` or
+/// qualified like `Config::new`) or by quoting source text (`anchor` in the
+/// file `path`, `focus` naming the token), which reaches locals and
+/// parameters. `path` scopes where the symbol is looked up, not where
+/// references are listed (docs/resolution.md). Tests are split out by a
+/// filename/module heuristic; an inline `#[cfg(test)]` block elsewhere
+/// stays with production code.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
-#[serde(rename = "uses")]
+#[serde(rename = "references")]
 #[group(skip)]
-pub struct Uses {
+pub struct References {
     /// The symbol's name: bare (`choose`) or qualified by its container
-    /// (`Config::new`, `Config.doubled`). Exact match on the name.
+    /// (`Config::new`). Exact match. Start here:
+    /// `{"symbol": "Config::new"}`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
 
     /// A file or directory under the workspace root, relative to it. A file
-    /// nominates `symbol` from that file's own outline rather than the
-    /// workspace index, and picks its language server; a directory narrows
-    /// the index. With `anchor`, the file the quoted text is in.
+    /// resolves `symbol` from that file's own outline (fresh, and it picks
+    /// the language server); a directory narrows the workspace index. With
+    /// `anchor`, the file the quoted text is in. Scopes the lookup, not the
+    /// results.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub path: Option<String>,
 
     /// Source text quoted verbatim from `path`, occurring exactly once in
-    /// it; an alternative to `symbol`.
+    /// it; the way to reach anything a name cannot (a local, a parameter, a
+    /// call site). Quoted text, not a line number, so a stale snapshot of
+    /// the file still resolves.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub anchor: Option<String>,
@@ -83,9 +85,41 @@ pub struct Uses {
     pub focus: Option<String>,
 }
 
-impl ToolMeta for Uses {
+impl ToolMeta for References {
     fn title() -> Option<&'static str> {
-        Some("Find references to a code symbol")
+        Some("Find all references (LSP)")
+    }
+
+    fn examples() -> Vec<Example<Self>> {
+        vec![
+            Example {
+                description: "Find every use of a symbol (Rust)",
+                item: Self {
+                    symbol: Some("Config::new".to_string()),
+                    path: None,
+                    anchor: None,
+                    focus: None,
+                },
+            },
+            Example {
+                description: "Disambiguate a common name with a file scope (Python)",
+                item: Self {
+                    symbol: Some("Config".to_string()),
+                    path: Some("helper.py".to_string()),
+                    anchor: None,
+                    focus: None,
+                },
+            },
+            Example {
+                description: "Find the uses of a name at a call site with quoted source (TypeScript)",
+                item: Self {
+                    symbol: None,
+                    path: Some("main.ts".to_string()),
+                    anchor: Some("count = identity(count);".to_string()),
+                    focus: Some("identity".to_string()),
+                },
+            },
+        ]
     }
 
     fn annotations() -> Option<ToolAnnotations> {
@@ -99,7 +133,7 @@ impl ToolMeta for Uses {
     }
 }
 
-impl Tool<Session> for Uses {
+impl Tool<Session> for References {
     type Output = String;
 
     async fn execute(self, session: Session, context: RequestContext) -> Result<Self::Output> {
@@ -107,7 +141,7 @@ impl Tool<Session> for Uses {
     }
 }
 
-impl Uses {
+impl References {
     pub fn run(self, session: &Session) -> Result<String> {
         let mut state = session.acquire(self.path.as_deref())?;
         let root = state.view().to_path_buf();
@@ -198,7 +232,7 @@ fn references_of(state: &mut Workspace, root: &Path, found: &Found) -> Result<St
             grouped.out_of_root
         ));
     }
-    Ok(render_uses(
+    Ok(render_references(
         &header,
         total,
         file_count,

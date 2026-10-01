@@ -27,7 +27,7 @@ pub(super) fn run(
         Resolved::Listed(listing) => return Ok(listing),
         Resolved::One(found) => *found,
     };
-    let header = crate::tools::show::target_header(state, &root, &found)?;
+    let header = crate::tools::definition::target_header(state, &root, &found)?;
     let (_, synced) = sync_target(state, &root, &found)?;
     let server = server_named(state, &found.identity.server)?;
     if !server.supports("renameProvider") {

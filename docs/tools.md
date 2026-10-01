@@ -1,10 +1,10 @@
 # The tools
 
-Three MCP tools, declared in `src/tools.rs`: `show`, `uses`, `action`. The
-same three run from argv (`structural show choose`), since mcplease owns
+Three MCP tools, declared in `src/tools.rs`: `definition`, `references`, `rename` — LSP go-to-definition plus related views, find-all-references, and rename. The
+same three run from argv (`structural definition choose`), since mcplease owns
 both dispatch paths. All three take their target the same way and share the
 resolution pipeline ([resolution.md](resolution.md)), so a target that
-`show` would list as ambiguous is listed identically by the other two.
+`definition` would list as ambiguous is listed identically by the other two.
 
 ## Targeting, common to all three
 
@@ -20,7 +20,7 @@ The workspace root is fixed at server start (cwd, or `STRUCTURAL_ROOT`).
 rejected. `path` scopes where the **symbol is looked up**, not where results
 are listed.
 
-## `show`
+## `definition`
 
 Returns a definition's decorated source — the item with its doc comments and
 attributes — not just a location. Resolution, then: own the target's file,
@@ -35,7 +35,7 @@ silent.
 | --- | --- |
 | `definition` (default) | the decorated source |
 | `outline` | the target's children, or a whole file's symbols with only `path` |
-| `implementations` | `textDocument/implementation`, rendered as `uses` renders hits, with results at one line folded into one row |
+| `implementations` | `textDocument/implementation`, rendered as `references` renders hits, with results at one line folded into one row |
 | `incoming-calls` / `outgoing-calls` | the call hierarchy, one line per caller/callee with its call sites under it |
 | `type` | `textDocument/hover` reduced to its code blocks. With an anchor, rust-analyzer answers with the type of the expression the focus spans (`hoverRange`); other servers answer at its start. |
 | `expanded` | rust-analyzer only: macro expansion at the focus |
@@ -56,7 +56,7 @@ unknown (and the known ones are listed), no running server supports it, or it
 does not apply to this target. Listings cap at 200 lines with the remainder
 reported as a count.
 
-## `uses`
+## `references`
 
 References to the resolved identity: one source line per hit, with its
 1-based line number and its enclosing item, grouped by file, tests set apart.
@@ -74,14 +74,14 @@ References follow **symbol identity, not text**, so renames, re-exports and
 method calls are found and same-named strangers are not. Cap: 100 hits, with
 the remainder reported as a count; ordering is alphabetical by path and there
 is no pagination or reference-side scope yet
-(`../backlog/uses-scope-and-paging.md`).
+(`../backlog/references-scope-and-paging.md`).
 
-## `action`
+## `rename`
 
-A named semantic change at a target, previewed before it is applied. Today
-the one action is `rename` (with `new_name`).
+A named semantic change at a target, previewed before it is applied. A
+A rename at a target, previewed before it is applied.
 
-Two identities are kept apart. The **intent** — target, action, arguments —
+Two identities are kept apart. The **intent** — target plus new name —
 is re-resolved on every call. The **prepared edit** is what the server
 returns for that intent *now*, shown as a preview of every changed line and
 every file rename, with a `digest` over the files it touches.
@@ -109,8 +109,8 @@ a server without a declared blind spot adds no note.
 
 ## What every answer carries
 
-Rendering lives apart from logic (`show/render.rs`, `uses/render.rs`,
-`action/render.rs`, `listing.rs`, `hits.rs`) and obeys the byte budget in
+Rendering lives apart from logic (`definition/render.rs`, `references/render.rs`,
+`rename/render.rs`, `listing.rs`, `hits.rs`) and obeys the byte budget in
 [correctness.md](correctness.md): one line per entry, provenance in a footer
 (which servers answered), and notes only when something is degraded — a cap
 hit, a body truncated, a view unsupported, a server not running with its
@@ -120,5 +120,5 @@ can miss a recent edit to a file no query has opened — are stated once in
 the tool descriptions and in the MCP server instructions, not repeated per
 answer.
 
-Tool annotations: `show` and `uses` are read-only and idempotent; all three
+Tool annotations: `definition` and `references` are read-only and idempotent; all three
 are closed-world (they touch only the root they were started with).

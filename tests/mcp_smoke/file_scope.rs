@@ -109,7 +109,7 @@ fn show(
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
-    structural::tools::Show {
+    structural::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: None,
@@ -124,7 +124,7 @@ fn uses(
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
-    structural::tools::Uses {
+    structural::tools::References {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: None,

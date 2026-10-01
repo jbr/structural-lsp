@@ -1,7 +1,7 @@
 # structural — architecture
 
 > An MCP server that gives coding agents LSP-backed code intelligence:
-> `show`, `uses` and `action`, answered by real language servers rather than
+> `definition`, `references` and `rename`, answered by real language servers rather than
 > by grep or a bundled grammar. A model's view of code is a token stream, not
 > an editor viewport — it pays per byte, cannot point with a cursor, and its
 > memory of a file is a snapshot from N turns ago.
@@ -21,7 +21,7 @@ are [`../reference/`](../reference/).
 ## What this is
 
 One Rust binary. `structural serve` speaks MCP over stdio and exposes three
-tools; `structural show choose` runs the same tool once from argv. Behind
+tools; `structural definition choose` runs the same tool once from argv. Behind
 either front end sits a **host**: a process's workspaces, keyed by canonical
 root, each owning the language-server processes for that root and shared by
 every caller bound to it. The MCP front end is one such caller
@@ -84,7 +84,7 @@ Every other invariant here is a consequence, and they are stated in full in
 | The transport — one server on three threads, the backstop, the probe, the bounds | [transport.md](transport.md) | `src/lsp/handle.rs` (+ `src/lsp/handle/`), `src/lsp/framing.rs`, `src/lsp/jsonrpc.rs`, `src/lsp/handlers.rs` |
 | Servers and adapters — what each language server needs said to it, and `structural.toml` | [servers.md](servers.md) | `src/lsp/adapter.rs` (+ `src/lsp/adapter/`), `src/lsp/server.rs`, `src/config.rs` |
 | Resolution — a name or an anchor to one identity, or a listing that says why not | [resolution.md](resolution.md) | `src/tools/resolution.rs` (+ `src/tools/resolution/`), `src/lsp/definition.rs`, `src/lsp/anchor.rs`, `src/lsp/shape.rs` |
-| The three tools — `show`, `uses`, `action`, their views, and how answers render | [tools.md](tools.md) | `src/tools.rs`, `src/tools/show.rs`, `src/tools/uses.rs`, `src/tools/action.rs`, `src/tools/listing.rs`, `src/tools/hits.rs` |
+| The three tools — `definition`, `references`, `rename`, their views, and how answers render | [tools.md](tools.md) | `src/tools.rs`, `src/tools/definition.rs`, `src/tools/references.rs`, `src/tools/rename.rs`, `src/tools/listing.rs`, `src/tools/hits.rs` |
 | Discovery — where a project begins, what a tree is, and which servers it calls for | [discovery.md](discovery.md) | `src/discovery.rs` (+ `src/discovery/`) |
 | The raw-LSP spike — the dev instrument that dumps unrendered server answers | [spike.md](spike.md) | `src/bin/spike/` |
 
@@ -97,7 +97,7 @@ the binary's stdio and argv; `src/main.rs` is the front end.
 diagnostic instrument ([spike.md](spike.md)).
 
 Where a module has grown a directory beside it (`src/lsp/handle/`,
-`src/lsp/adapter/`, `src/tools/show/`, `src/tools/resolution/`,
+`src/lsp/adapter/`, `src/tools/definition/`, `src/tools/resolution/`,
 `src/workspace/`, `src/host/`, `src/discovery/`), the `.rs` file holds that subsystem's
 vocabulary and public surface and the directory holds one file per concern.
 Tests live in a sibling module — `foo.rs` + `foo/tests.rs` — so the module

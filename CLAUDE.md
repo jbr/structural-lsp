@@ -1,7 +1,7 @@
 # structural
 
-An MCP server that gives coding agents LSP-backed code intelligence: `show`,
-`uses` and `action`, answered by real language servers (rust-analyzer,
+An MCP server that gives coding agents LSP-backed code intelligence: `definition`,
+`references` and `rename`, answered by real language servers (rust-analyzer,
 pyright, and anything named in `structural.toml`) rather than by grep. It
 also embeds: a host process running several agents, each with its own
 effective working directory, shares language servers instead of starting a

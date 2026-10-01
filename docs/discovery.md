@@ -111,7 +111,7 @@ a build; `Adapter` (`servers.md`) remains only for protocol behaviour that
 differs, and most entries need none.
 
 Rank is a **measured score**: what the server answered when asked the
-questions `show`, `uses` and `action` ask, through structural's own tool
+questions `definition`, `references` and `rename` ask, through structural's own tool
 layer (`tests/conformance/`). Breadth of advertised capability is not the
 metric and neither is how many editors ship a server — pylsp advertises
 more than pyright and is worse on this path.

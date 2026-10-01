@@ -199,8 +199,7 @@ fn action(
     mode: Option<&str>,
     digest: Option<&str>,
 ) -> String {
-    structural::tools::Action {
-        action: "rename".to_string(),
+    structural::tools::Rename {
         symbol: Some("greet".to_string()),
         path: Some("src/doc.rs".to_string()),
         anchor: None,

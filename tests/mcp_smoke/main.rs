@@ -1,4 +1,4 @@
-//! In-process and real-stdio MCP smokes for `show` and `uses`. Both need
+//! In-process and real-stdio MCP smokes for `definition` and `references`. Both need
 //! rust-analyzer and are gated: run with `cargo test --test mcp_smoke -- --ignored`.
 
 use serde_json::{Value, json};
@@ -60,7 +60,7 @@ fn rust_fixture_root() -> PathBuf {
 fn in_process_show_resolves_the_fixture_struct() {
     let state = structural::session::Session::new(rust_fixture_root());
     // `choose` is unique in the fixture, so the positive path resolves.
-    let output = structural::tools::Show {
+    let output = structural::tools::Definition {
         symbol: Some("choose".to_string()),
         path: None,
         anchor: None,
@@ -89,7 +89,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     );
 
     // A `path` scope narrows to the fixture file and still resolves.
-    let scoped = structural::tools::Show {
+    let scoped = structural::tools::Definition {
         symbol: Some("choose".to_string()),
         path: Some("src/lib.rs".to_string()),
         anchor: None,
@@ -103,7 +103,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     // The fixture's `Config` is declared once and re-imported in its tests
     // module; the adapter asks rust-analyzer to exclude imports from the
     // symbol search, so the bare name resolves to the struct.
-    let config = structural::tools::Show {
+    let config = structural::tools::Definition {
         symbol: Some("Config".to_string()),
         path: None,
         anchor: None,
@@ -123,7 +123,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     );
 
     // A missing name is a stated result, not an invented candidate.
-    let missing = structural::tools::Show {
+    let missing = structural::tools::Definition {
         symbol: Some("definitely_not_here".to_string()),
         path: None,
         anchor: None,
@@ -138,7 +138,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     );
 
     // A qualified name narrows by the container the server reports.
-    let qualified = structural::tools::Show {
+    let qualified = structural::tools::Definition {
         symbol: Some("Config::new".to_string()),
         path: None,
         anchor: None,
@@ -151,7 +151,7 @@ fn in_process_show_resolves_the_fixture_struct() {
 
     // `uses` on the same fixture: every call to `choose` is in `run`, the
     // declaration is not a reference, and each hit carries its line.
-    let uses = structural::tools::Uses {
+    let uses = structural::tools::References {
         symbol: Some("choose".to_string()),
         path: None,
         anchor: None,
@@ -176,7 +176,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     // the struct and verify through the adapter's alias, not an error. The
     // re-export in `alias` and the `use super::*` glob are not hits by
     // name; the impl headers and the constructor call are.
-    let config_uses = structural::tools::Uses {
+    let config_uses = structural::tools::References {
         symbol: Some("Config".to_string()),
         path: None,
         anchor: None,
@@ -211,7 +211,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     );
 
     // A scope escaping the root is rejected.
-    let escaping = structural::tools::Show {
+    let escaping = structural::tools::Definition {
         symbol: Some("Config".to_string()),
         path: Some("../semantic-edit-mcp".to_string()),
         anchor: None,
@@ -249,19 +249,31 @@ fn stdio_mcp_serves_and_reports_actionable_error_without_rust_analyzer() {
     assert!(initialize.get("result").is_some(), "{initialize}");
 
     let list = request(2, "tools/list", json!({}));
-    let names: Vec<&str> = list
+    let tools = list
         .pointer("/result/tools")
         .and_then(Value::as_array)
-        .expect("tools array")
+        .expect("tools array");
+    let names: Vec<&str> = tools
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str))
         .collect();
-    assert_eq!(names, ["show", "uses", "action"], "{names:?}");
+    assert_eq!(names, ["definition", "references", "rename"], "{names:?}");
+    for tool in tools {
+        let name = tool.get("name").and_then(Value::as_str).unwrap_or("?");
+        let examples = tool
+            .pointer("/inputSchema/examples")
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("{name} inputSchema carries worked examples"));
+        assert!(
+            !examples.is_empty(),
+            "{name} inputSchema carries worked examples"
+        );
+    }
 
     let call = request(
         3,
         "tools/call",
-        json!({ "name": "show", "arguments": { "symbol": "choose" } }),
+        json!({ "name": "definition", "arguments": { "symbol": "choose" } }),
     );
     assert_eq!(
         call.pointer("/result/isError"),
@@ -330,17 +342,41 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
         .collect();
     assert_eq!(
         names,
-        ["show", "uses", "action"],
+        ["definition", "references", "rename"],
         "the three tools: {names:?}"
     );
     let schema = tools[0].get("inputSchema").expect("input schema");
     assert!(schema.to_string().contains("symbol"), "{schema}");
+    for tool in tools {
+        let name = tool.get("name").and_then(Value::as_str).unwrap_or("?");
+        let examples = tool
+            .pointer("/inputSchema/examples")
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("{name} inputSchema carries worked examples"));
+        assert!(
+            !examples.is_empty(),
+            "{name} inputSchema carries worked examples"
+        );
+    }
+    let definitions: Vec<&str> = tools[0]
+        .pointer("/inputSchema/examples")
+        .and_then(Value::as_array)
+        .expect("definition examples")
+        .iter()
+        .filter_map(|example| example.get("description").and_then(Value::as_str))
+        .collect();
+    for language in ["(Rust)", "(Python)", "(TypeScript)"] {
+        assert!(
+            definitions.iter().any(|each| each.contains(language)),
+            "definition examples span languages: {definitions:?}"
+        );
+    }
 
     // The real call: the server waits internally for rust-analyzer's
     // quiescence (cold start is ~10s here), then answers.
     let call = server.request(
         "tools/call",
-        json!({ "name": "show", "arguments": { "symbol": "choose" } }),
+        json!({ "name": "definition", "arguments": { "symbol": "choose" } }),
     );
     let text = call
         .pointer("/result/content/0/text")
@@ -357,7 +393,7 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
     // symbol search by the adapter.
     let config = server.request(
         "tools/call",
-        json!({ "name": "show", "arguments": { "symbol": "Config" } }),
+        json!({ "name": "definition", "arguments": { "symbol": "Config" } }),
     );
     let text = config
         .pointer("/result/content/0/text")
@@ -369,7 +405,7 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
     // The qualified name resolves through the same path.
     let qualified = server.request(
         "tools/call",
-        json!({ "name": "show", "arguments": { "symbol": "Config::new" } }),
+        json!({ "name": "definition", "arguments": { "symbol": "Config::new" } }),
     );
     let text = qualified
         .pointer("/result/content/0/text")
@@ -419,7 +455,7 @@ fn stdio_mcp_show_refreshes_a_document_changed_on_disk() {
 
     let before = server.request(
         "tools/call",
-        json!({ "name": "show", "arguments": { "symbol": "choose" } }),
+        json!({ "name": "definition", "arguments": { "symbol": "choose" } }),
     );
     let text = before
         .pointer("/result/content/0/text")
@@ -438,7 +474,7 @@ fn stdio_mcp_show_refreshes_a_document_changed_on_disk() {
 
     let after = server.request(
         "tools/call",
-        json!({ "name": "show", "arguments": { "symbol": "choose" } }),
+        json!({ "name": "definition", "arguments": { "symbol": "choose" } }),
     );
     let text = after
         .pointer("/result/content/0/text")
@@ -489,7 +525,7 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
 
     let state = structural::session::Session::new(scratch.clone());
     let show = |state: &structural::session::Session, symbol: &str| {
-        structural::tools::Show {
+        structural::tools::Definition {
             symbol: Some(symbol.to_string()),
             path: None,
             anchor: None,

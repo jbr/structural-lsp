@@ -10,9 +10,9 @@ pub mod resolution;
 
 mcplease::tools!(
     Session,
-    (Show, show, "show"),
-    (Uses, uses, "uses"),
-    (Action, action, "action")
+    (Definition, definition, "definition"),
+    (References, references, "references"),
+    (Rename, rename, "rename")
 );
 
 /// How long a call runs before its first progress notification: long enough

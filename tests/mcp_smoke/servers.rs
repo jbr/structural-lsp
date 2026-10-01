@@ -16,7 +16,7 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) -> String {
-    structural::tools::Show {
+    structural::tools::Definition {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
         anchor: None,
@@ -28,7 +28,7 @@ fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
 }
 
 fn uses(state: &structural::session::Session, symbol: &str, path: Option<&str>) -> String {
-    structural::tools::Uses {
+    structural::tools::References {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
         anchor: None,

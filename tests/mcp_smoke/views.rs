@@ -1,4 +1,4 @@
-//! Slice 4 item 2: `show` views on the fixtures (read-only, so the
+//! Slice 4 item 2: `definition` views on the fixtures (read-only, so the
 //! fixtures themselves), through rust-analyzer, pyright and gopls. Gated.
 
 use std::path::PathBuf;
@@ -18,7 +18,7 @@ fn show(
     anchor: Option<&str>,
     focus: Option<&str>,
 ) -> String {
-    structural::tools::Show {
+    structural::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: anchor.map(str::to_string),

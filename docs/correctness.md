@@ -144,16 +144,16 @@ said.
 ## Every byte is paid for
 
 The answer is read by a model that pays per token. One line per entry in a
-listing; the happy path for `show` is one header line and the body; notes
+listing; the happy path for `definition` is one header line and the body; notes
 appear only when something is degraded, one line each; caveats live once, in
 the tool descriptions and the server's instructions, not in every result.
-Current bounds: `show` body 12,000 bytes, listings 200 lines, `uses` 100
+Current bounds: `definition` body 12,000 bytes, listings 200 lines, `references` 100
 hits. Pagination does not exist yet
-(`../backlog/uses-scope-and-paging.md`, `../backlog/outline-limits.md`).
+(`../backlog/references-scope-and-paging.md`, `../backlog/outline-limits.md`).
 
 ## Mutation is the server's edit, applied faithfully
 
-`action` never composes an edit itself: it asks the server for one, shows it
+`rename` never composes an edit itself: it asks the server for one, shows it
 as a preview with a digest over the files it touches, and applies it only
 when a later call presents that digest and nothing has changed underneath.
 A server's own `workspace/applyEdit` is always declined (`{"applied":

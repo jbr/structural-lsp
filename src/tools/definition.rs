@@ -1,4 +1,4 @@
-//! `show` — resolve a symbol by bare name and return its definition's
+//! `definition` — resolve a symbol by bare name and return its definition's
 //! decorated source, not just a location.
 //!
 //! Resolution is the shared pipeline in [`crate::tools::resolution`]; this
@@ -19,7 +19,7 @@ use crate::workspace::Workspace;
 use anyhow::{Context, Result};
 use mcplease::{
     traits::{Tool, ToolMeta},
-    types::{RequestContext, ToolAnnotations},
+    types::{Example, RequestContext, ToolAnnotations},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -34,48 +34,56 @@ pub use views::target_header;
 /// pagination is not implemented in this slice.
 const BODY_BUDGET_BYTES: usize = 12_000;
 
-/// Show a code definition: the item's source, including its doc comments
-/// and attributes, not just a location. Target it by name (`symbol`, with
-/// an optional `path` scope) or by quoting source text from a file
-/// (`anchor` in `path`, with `focus` naming the token meant).
+/// Go to definition through the language server (LSP): the replacement for
+/// reading a whole file to find one item, or guessing with grep where a name
+/// is defined.
 ///
-/// Other `view`s of a target: `outline` (its children; or a whole file's
-/// symbols with only `path`), `implementations`, `incoming-calls`,
-/// `outgoing-calls`, `type` (the hover signature; with an anchor, the type
-/// of the focused expression), and per server `expanded` (rust-analyzer
-/// macro expansion at the focus) and `related-tests` (rust-analyzer, with
-/// the cargo command for each).
+/// Use when you want a symbol's source: `{"symbol": "Config::new"}` returns
+/// its definition with doc comments and attributes, not just a location.
+/// Prefer this over `read` when you need one item's body, and over `grep`
+/// when the name may be re-exported, shadowed, or implemented across files.
+/// The same target selects other IDE views through `view`: `outline` (the
+/// target's children, or a whole file's symbols with only `path`),
+/// `implementations`, `incoming-calls`, `outgoing-calls`, `type` (the hover
+/// signature; with an anchor, the type of the focused expression), and per
+/// server `expanded` (rust-analyzer macro expansion at the focus) and
+/// `related-tests` (rust-analyzer, with the cargo command for each).
 ///
-/// Candidates come from the language servers' fuzzy symbol index, or — for
-/// a `path` naming a file — from that file's own outline; neither is proven
-/// exhaustive. Only exact-name matches resolve, and several distinct
-/// definitions are listed rather than picked. A qualifier (`Config::new`)
-/// narrows by the container the symbol sits in. Owned files are re-synced
-/// from disk and the servers are waited for before every query. A query
-/// whose target names a file syncs that file before it reads it, while the
-/// workspace-index lookup behind a bare-name or directory-scoped query can
-/// miss a recent edit to a file no query has opened. The workspace root is
-/// fixed at server start.
+/// Target by name (`symbol`, bare like `choose` or qualified by its
+/// container like `Config::new`) or by quoting source text (`anchor` in the
+/// file `path`, `focus` naming the token meant), which reaches anything a
+/// name cannot: locals, call sites, expressions. `anchor` takes quoted
+/// source instead of a line number because the model's snapshot of a file
+/// may be stale; `focus` names the token inside it (`config` in
+/// `let config = Config::new(3);`). Only exact names resolve, and several
+/// distinct definitions are listed rather than picked (docs/resolution.md).
+///
+/// Servers are waited for before each query and owned files are re-synced
+/// from disk; a query that names a file syncs it first, while a bare-name
+/// lookup can miss a recent edit to a file no query has opened
+/// (docs/correctness.md). The workspace root is fixed at server start.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
-#[serde(rename = "show")]
+#[serde(rename = "definition")]
 #[group(skip)]
-pub struct Show {
+pub struct Definition {
     /// The symbol's name: bare (`choose`) or qualified by its container
-    /// (`Config::new`, `Config.doubled`). Exact match on the name.
+    /// (`Config::new`). Exact match. Start here: `{"symbol": "Config::new"}`
+    /// is the whole happy path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
 
     /// A file or directory under the workspace root, relative to it. A file
-    /// nominates `symbol` from that file's own outline rather than the
-    /// workspace index, and picks its language server; a directory narrows
-    /// the index. With `anchor`, the file the quoted text is in.
+    /// resolves `symbol` from that file's own outline (fresh, and it picks
+    /// the language server); a directory narrows the workspace index. With
+    /// `anchor`, the file the quoted text is in.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub path: Option<String>,
 
     /// Source text quoted verbatim from `path`, occurring exactly once in
-    /// it; an alternative to `symbol` for anything a name cannot reach (a
-    /// local, a call site, an expression).
+    /// it; the way to reach anything a name cannot (a local, a call site, an
+    /// expression). Quoted text, not a line number, so a stale snapshot of
+    /// the file still resolves.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub anchor: Option<String>,
@@ -87,17 +95,52 @@ pub struct Show {
     #[arg(long)]
     pub focus: Option<String>,
 
-    /// What to show: `definition` (default), `outline`, `implementations`,
-    /// `incoming-calls`, `outgoing-calls`, `type`, `expanded`,
-    /// `related-tests`.
+    /// Which IDE view of the same target: `definition` (default), `outline`,
+    /// `implementations`, `incoming-calls`, `outgoing-calls`, `type`,
+    /// `expanded`, `related-tests`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub view: Option<String>,
 }
 
-impl ToolMeta for Show {
+impl ToolMeta for Definition {
     fn title() -> Option<&'static str> {
-        Some("Show a code definition")
+        Some("Go to definition (LSP)")
+    }
+
+    fn examples() -> Vec<Example<Self>> {
+        vec![
+            Example {
+                description: "Go to a definition by name (Rust)",
+                item: Self {
+                    symbol: Some("Config::new".to_string()),
+                    path: None,
+                    anchor: None,
+                    focus: None,
+                    view: None,
+                },
+            },
+            Example {
+                description: "Disambiguate a common name with a file scope (Python)",
+                item: Self {
+                    symbol: Some("doubled".to_string()),
+                    path: Some("helper.py".to_string()),
+                    anchor: None,
+                    focus: None,
+                    view: None,
+                },
+            },
+            Example {
+                description: "Reach a call site with quoted source instead of a line number (TypeScript)",
+                item: Self {
+                    symbol: None,
+                    path: Some("main.ts".to_string()),
+                    anchor: Some("const offset = choose(true);".to_string()),
+                    focus: Some("choose".to_string()),
+                    view: None,
+                },
+            },
+        ]
     }
 
     fn annotations() -> Option<ToolAnnotations> {
@@ -112,7 +155,7 @@ impl ToolMeta for Show {
     }
 }
 
-impl Tool<Session> for Show {
+impl Tool<Session> for Definition {
     type Output = String;
 
     async fn execute(self, session: Session, context: RequestContext) -> Result<Self::Output> {
@@ -120,7 +163,7 @@ impl Tool<Session> for Show {
     }
 }
 
-impl Show {
+impl Definition {
     pub fn run(self, session: &Session) -> Result<String> {
         let mut state = session.acquire(self.path.as_deref())?;
         let root = state.view().to_path_buf();

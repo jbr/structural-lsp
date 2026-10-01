@@ -10,7 +10,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) -> String {
-    structural::tools::Show {
+    structural::tools::Definition {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
         anchor: None,
@@ -63,7 +63,7 @@ fn exact_hits_are_deduplicated_by_definition_target() {
 
     // `uses` on this repository: `group_by_target` is called from the
     // shared resolution pipeline, and its unit tests are set apart.
-    let uses = structural::tools::Uses {
+    let uses = structural::tools::References {
         symbol: Some("group_by_target".to_string()),
         path: None,
         anchor: None,

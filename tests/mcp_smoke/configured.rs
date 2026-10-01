@@ -42,7 +42,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         );
     }
 
-    let output = structural::tools::Show {
+    let output = structural::tools::Definition {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,
@@ -65,7 +65,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
 
     // `uses` through the generic adapter: the call in `Run`, and the test
     // file's call set apart by its `_test.go` name.
-    let uses = structural::tools::Uses {
+    let uses = structural::tools::References {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,
@@ -84,7 +84,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
 
     // An anchor in the caller resolves to the same definition through
     // gopls; the header is the outline's kind and name.
-    let anchored = structural::tools::Show {
+    let anchored = structural::tools::Definition {
         symbol: None,
         path: Some("main.go".to_string()),
         anchor: Some("return Greet(\"world\")".to_string()),
@@ -99,7 +99,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     );
 
     // The hover signature through the generic adapter.
-    let signature = structural::tools::Show {
+    let signature = structural::tools::Definition {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,
@@ -118,8 +118,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     );
 
     // Rename through the generic adapter: both files change.
-    let preview = structural::tools::Action {
-        action: "rename".to_string(),
+    let preview = structural::tools::Rename {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,
@@ -146,8 +145,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         .find_map(|line| line.strip_prefix("digest: "))
         .expect("a digest")
         .to_string();
-    let applied = structural::tools::Action {
-        action: "rename".to_string(),
+    let applied = structural::tools::Rename {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,

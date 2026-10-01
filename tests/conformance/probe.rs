@@ -83,7 +83,7 @@ pub fn show(
     path: Option<&str>,
     anchor: Option<(&str, &str)>,
 ) -> anyhow::Result<String> {
-    structural::tools::Show {
+    structural::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: anchor.map(|(text, _)| text.to_string()),
@@ -94,7 +94,7 @@ pub fn show(
 }
 
 pub fn uses(state: &structural::session::Session, symbol: &str) -> anyhow::Result<String> {
-    structural::tools::Uses {
+    structural::tools::References {
         symbol: Some(symbol.to_string()),
         path: None,
         anchor: None,
@@ -108,8 +108,7 @@ pub fn rename_preview(
     symbol: &str,
     new_name: &str,
 ) -> anyhow::Result<String> {
-    structural::tools::Action {
-        action: "rename".to_string(),
+    structural::tools::Rename {
         symbol: Some(symbol.to_string()),
         path: None,
         anchor: None,

@@ -124,7 +124,7 @@ fn started(server: &Server) -> i32 {
 fn query(server: &mut Server) -> u64 {
     let id = server.send(
         "tools/call",
-        json!({"name": "show", "arguments": {"symbol": "warmup"}}),
+        json!({"name": "definition", "arguments": {"symbol": "warmup"}}),
     );
     server.event("mock: query pending");
     id

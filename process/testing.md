@@ -14,8 +14,8 @@ cargo test --test conformance -- --ignored --nocapture   # the scorecard
 ## The conformance probe measures servers, not this code
 
 `tests/conformance/` is a measurement harness rather than a regression
-suite. It asks every installed server of a language the questions `show`,
-`uses` and `action` need — bare-name lookup, a file-scoped name, a
+suite. It asks every installed server of a language the questions `definition`,
+`references` and `rename` need — bare-name lookup, a file-scoped name, a
 qualified name through the index and through a file's outline, cross-file
 references, an anchor to a local, a rename preview — and prints a
 scorecard. It asserts only that it probed something:
