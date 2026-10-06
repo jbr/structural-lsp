@@ -370,9 +370,8 @@ fn ladders(selection: &Selection, layout: &Layout) -> Vec<Vec<Arc<dyn Adapter>>>
             .find(|existing| existing[0].name() == ladder[0].name())
         {
             Some(existing) => {
-                existing.retain(|adapter| {
-                    ladder.iter().any(|other| other.name() == adapter.name())
-                });
+                existing
+                    .retain(|adapter| ladder.iter().any(|other| other.name() == adapter.name()));
             }
             None => ladders.push(ladder),
         }

@@ -174,13 +174,23 @@ fn quoted(path: &Path) -> String {
         .replace('"', "\\\"")
 }
 
-fn scratch_root() -> PathBuf {
-    let root = std::env::temp_dir().join(format!("structural-mock-scope-{}", std::process::id()));
+fn scratch_root(name: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!(
+        "structural-mock-scope-{}-{name}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("src/tool.rs"), TOOL_RS).unwrap();
     std::fs::write(root.join("src/flat.rs"), TOOL_RS).unwrap();
     std::fs::write(root.join("src/stale.rs"), STALE_RS).unwrap();
+    std::fs::create_dir_all(root.join("web")).unwrap();
+    std::fs::write(
+        root.join("web/app.ts"),
+        "export function app(): string {\n    return \"app\";\n}\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("web/app.py"), "def app():\n    return \"app\"\n").unwrap();
     let mock = root.join("mock.py");
     std::fs::write(&mock, MOCK_PY).unwrap();
     std::fs::write(
@@ -214,7 +224,7 @@ fn show(
 
 #[test]
 fn a_file_scope_resolves_without_the_symbol_index() {
-    let root = scratch_root();
+    let root = scratch_root("file-scope");
     let state = structural::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
@@ -304,6 +314,36 @@ fn a_file_scope_resolves_without_the_symbol_index() {
         "{message}"
     );
     assert!(message.contains("found `old`"), "{message}");
+
+    drop(state);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_directory_scope_over_unserved_languages_names_them() {
+    let root = scratch_root("dir-scope");
+    let state = structural::session::Session::new(root.clone());
+    let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
+
+    // `web/` holds only TypeScript and Python, and the only running server
+    // speaks Rust: the miss names the routing failure instead of reading as
+    // an absent name.
+    let miss = ok(show(&state, Some("Absent"), Some("web")));
+    assert_eq!(
+        miss,
+        "no symbol named 'Absent'\n\
+         note: no symbol index is available for rust; a name defined there resolves only when `path` names its file\n\
+         note: `web/` holds `py`, `ts` files; no running language server serves `py`, `ts` files (running: mock)\n"
+    );
+
+    // `src/` holds only Rust, which the running server does serve: the same
+    // miss carries no directory note.
+    let served = ok(show(&state, Some("Absent"), Some("src")));
+    assert_eq!(
+        served,
+        "no symbol named 'Absent'\n\
+         note: no symbol index is available for rust; a name defined there resolves only when `path` names its file\n"
+    );
 
     drop(state);
     let _ = std::fs::remove_dir_all(&root);

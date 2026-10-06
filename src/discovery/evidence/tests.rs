@@ -64,8 +64,16 @@ fn build_output_and_dependencies_do_not_describe_the_project() {
     );
 
     let sources = Sources::scan(&root);
-    assert_eq!(sources.count("rs"), 1, "target/ is not the project's source");
-    assert_eq!(sources.count("js"), 0, "node_modules is not evidence of JavaScript");
+    assert_eq!(
+        sources.count("rs"),
+        1,
+        "target/ is not the project's source"
+    );
+    assert_eq!(
+        sources.count("js"),
+        0,
+        "node_modules is not evidence of JavaScript"
+    );
     assert_eq!(sources.files_seen, 1);
 }
 
@@ -78,7 +86,10 @@ fn a_dotfile_is_a_name_not_an_extension() {
     let sources = Sources::scan(&root);
     assert_eq!(sources.count("gitignore"), 0);
     assert_eq!(sources.by_extension.keys().collect::<Vec<_>>(), vec!["rs"]);
-    assert_eq!(sources.files_seen, 3, "they are seen, they just name nothing");
+    assert_eq!(
+        sources.files_seen, 3,
+        "they are seen, they just name nothing"
+    );
 }
 
 #[test]
@@ -131,7 +142,11 @@ fn the_scan_starts_at_the_root_not_the_working_directory() {
 
 #[test]
 fn a_tree_with_no_marker_is_scanned_from_the_working_directory() {
-    let root = tree("no-marker", &["scripts"], &["scripts/deploy.sh", "notes.txt"]);
+    let root = tree(
+        "no-marker",
+        &["scripts"],
+        &["scripts/deploy.sh", "notes.txt"],
+    );
 
     let evidence = Evidence::gather(&root.join("scripts"));
     assert_eq!(evidence.ancestry.root().path, root.join("scripts"));

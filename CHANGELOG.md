@@ -16,6 +16,7 @@ change, see [`journal/`](journal/); for what is left, see
 - **An anchor with no `focus`** (docs/resolution.md): the name is what the definition carries rather than how the anchor spelled it, so `choose(Mode::Fast);` resolves to `choose` instead of erroring that the server's target "does not name it in the file on disk".
 
 ### Added
+- **A directory scope over unserved languages names them** (docs/resolution.md): a directory scope that missed on every running server says which extensions the directory holds and which no running server serves — routing, not absence — instead of reporting the symbol absent.
 - **A server that will not start falls back to the next candidate** (docs/discovery.md, docs/ownership.md): a slot holds its plan's whole ladder in rank order and one launch walks it, bounded by the list, retaining every failure — so a candidate that spawns and then fails its handshake is stepped over, and both the message and the result footer say what was tried.
 
 - **Workspaces are keyed by the project root** (docs/discovery.md, docs/ownership.md): two agents in sibling members of one cargo workspace share a server instead of each starting one that indexes the whole workspace anyway, while each session keeps its working directory as the view `path`, filtering and rendering are relative to. `structural.toml` is now read from the project root.

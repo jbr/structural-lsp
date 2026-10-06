@@ -118,11 +118,17 @@ fn a_reserved_token_a_server_never_reports_through_does_not_gate_readiness() {
 
     // What the server does report is tracked as it always was.
     handle
-        .request("test/progress", json!({ "action": "begin", "token": "index" }))
+        .request(
+            "test/progress",
+            json!({ "action": "begin", "token": "index" }),
+        )
         .unwrap();
     assert!(!handle.snapshot().unwrap().ready, "begin is work");
     handle
-        .request("test/progress", json!({ "action": "end", "token": "index" }))
+        .request(
+            "test/progress",
+            json!({ "action": "end", "token": "index" }),
+        )
         .unwrap();
     assert!(handle.snapshot().unwrap().ready);
     handle.shutdown().unwrap();

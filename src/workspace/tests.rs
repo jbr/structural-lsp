@@ -10,8 +10,10 @@ use std::sync::atomic::AtomicBool;
 
 /// A scratch tree, and a `structural.toml` written verbatim.
 fn workspace(name: &str, files: &[(&str, &str)], config: &str) -> Workspace {
-    let root =
-        std::env::temp_dir().join(format!("structural-workspace-{}-{name}", std::process::id()));
+    let root = std::env::temp_dir().join(format!(
+        "structural-workspace-{}-{name}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     for (path, contents) in files {
@@ -121,11 +123,7 @@ fn a_file_no_slot_serves_is_told_what_is_not_here_and_why() {
     // appears later would otherwise get "no language server serves `py`
     // files" — true, and useless, because it does not say that a server
     // for it exists and was left out.
-    let rust = workspace(
-        "late-python",
-        &[("Cargo.toml", ""), ("src/lib.rs", "")],
-        "",
-    );
+    let rust = workspace("late-python", &[("Cargo.toml", ""), ("src/lib.rs", "")], "");
     let late = rust.root().join("late.py");
     std::fs::write(&late, "def a():\n    pass\n").unwrap();
 

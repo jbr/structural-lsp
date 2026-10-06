@@ -99,7 +99,9 @@ impl Sources {
             for entry in entries.flatten() {
                 let name = entry.file_name();
                 let name = name.to_string_lossy();
-                let Ok(kind) = entry.file_type() else { continue };
+                let Ok(kind) = entry.file_type() else {
+                    continue;
+                };
                 if kind.is_dir() {
                     // Symlinked directories are not followed: a link into
                     // a parent makes the walk unbounded, and a link out of

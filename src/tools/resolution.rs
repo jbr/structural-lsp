@@ -26,6 +26,7 @@
 //! Servers: a `path` naming a file goes to the server for its language;
 //! otherwise every running server is asked and the candidates are merged.
 
+use crate::discovery::evidence::Sources;
 use crate::lsp::definition::{
     Candidate, DefinitionSet, DefinitionTarget, Identity, Origin, group_by_target, locate_name_at,
     parse_definition_result, verify_name_at,
@@ -34,8 +35,8 @@ use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::tools::listing::{
-    AmbiguousEntry, location_line, no_index_note, qualifier_scope_note, render_ambiguous,
-    render_fuzzy, render_not_found, render_null_definition, render_unqualified,
+    AmbiguousEntry, directory_scope_note, location_line, no_index_note, qualifier_scope_note,
+    render_ambiguous, render_fuzzy, render_not_found, render_null_definition, render_unqualified,
 };
 use crate::tools::resolution::nominate::{Nominated, nominate};
 use crate::workspace::Workspace;
@@ -152,6 +153,16 @@ fn resolve_symbol(
             &unindexed,
             scope.as_deref().is_some_and(Path::is_file),
         ));
+        // A directory scope that found nothing at all may sit over files no
+        // running server serves; that is routing, not absence, and it gets
+        // its own note. Fuzzy or container-narrowable hits are candidates,
+        // so the note is for the miss alone.
+        if fuzzy.is_empty()
+            && unqualified.is_empty()
+            && let Some(dir) = scope.as_deref().filter(|scope| scope.is_dir())
+        {
+            listed.push_str(&directory_languages_note(state, root, dir));
+        }
         listed.push_str(qualifier_scope_note(&qualified, scope.is_some()));
         return Ok(Resolved::Listed(listed));
     }
@@ -171,6 +182,53 @@ fn resolve_symbol(
         &display,
         exclusions,
     )
+}
+
+/// Which extensions live under a directory scope that found nothing, and
+/// which of them no running server serves.
+///
+/// A directory scope asks every running server by design
+/// (`Workspace::select`), so a miss over an unserved tree reads as an
+/// absent name. The scan is the discovery budget walk (`Sources::scan`):
+/// presence claims hold under truncation, and build and hidden directories
+/// are skipped. Served-ness is what the query observed — running servers —
+/// rather than what is configured: a configured server that is down serves
+/// nothing either, and the note names running servers so the two cases read
+/// the same way (`backlog/directory-scope-message.md`).
+fn directory_languages_note(state: &Workspace, root: &Path, dir: &Path) -> String {
+    let sources = Sources::scan(dir);
+    let contained: Vec<String> = sources.by_extension.keys().cloned().collect();
+    if contained.is_empty() {
+        return String::new();
+    }
+    let running: Vec<&LspServer> = state.running().collect();
+    let serves = |extension: &str| {
+        running.iter().any(|server| {
+            server
+                .adapter()
+                .languages()
+                .iter()
+                .flat_map(|language| language.extensions.iter())
+                .any(|known| known.eq_ignore_ascii_case(extension))
+        })
+    };
+    let unserved: Vec<String> = contained
+        .iter()
+        .filter(|extension| !serves(extension))
+        .cloned()
+        .collect();
+    let display = dir
+        .strip_prefix(root)
+        .map(|relative| relative.display().to_string())
+        .ok()
+        .filter(|relative| !relative.is_empty())
+        .unwrap_or_else(|| dir.display().to_string());
+    let names = running
+        .iter()
+        .map(|server| server.name())
+        .collect::<Vec<_>>()
+        .join(", ");
+    directory_scope_note(&format!("{display}/"), &contained, &unserved, &names)
 }
 
 /// One identity is the resolution; several are the ambiguous listing; one

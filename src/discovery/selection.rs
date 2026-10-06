@@ -174,7 +174,12 @@ impl Plan {
     /// One line, for an operator log and for a plan's own report.
     pub fn explain(&self) -> String {
         let why: Vec<String> = self.why.iter().map(Reason::describe).collect();
-        format!("{} for {}: {}", self.server(), self.language, why.join("; "))
+        format!(
+            "{} for {}: {}",
+            self.server(),
+            self.language,
+            why.join("; ")
+        )
     }
 }
 

@@ -18,8 +18,10 @@ use std::path::PathBuf;
 
 /// A scratch tree: directories to create, then files to write (empty).
 fn tree(name: &str, directories: &[&str], files: &[&str]) -> PathBuf {
-    let root =
-        std::env::temp_dir().join(format!("structural-selection-{}-{name}", std::process::id()));
+    let root = std::env::temp_dir().join(format!(
+        "structural-selection-{}-{name}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     for directory in directories {
@@ -59,7 +61,11 @@ fn entry(name: &str, language: &str, score: Option<u8>) -> Entry {
 }
 
 fn servers(selection: &Selection) -> Vec<String> {
-    selection.plans.iter().map(|p| p.server().to_string()).collect()
+    selection
+        .plans
+        .iter()
+        .map(|p| p.server().to_string())
+        .collect()
 }
 
 fn plan_for<'a>(selection: &'a Selection, language: &str) -> &'a Plan {
@@ -141,7 +147,10 @@ fn one_candidate_did_not_beat_anything() {
 
     assert!(plan.why.contains(&Reason::OnlyCandidate));
     assert!(
-        !plan.why.iter().any(|r| matches!(r, Reason::HighestScore { .. })),
+        !plan
+            .why
+            .iter()
+            .any(|r| matches!(r, Reason::HighestScore { .. })),
         "it outranked nothing, so it must not claim to have"
     );
     assert!(plan.alternatives().is_empty());
@@ -155,7 +164,11 @@ fn an_unmeasured_winner_says_so() {
 
     let selection = select(&evidence, &catalogue, &Overrides::new());
 
-    assert!(plan_for(&selection, "python").why.contains(&Reason::Unmeasured));
+    assert!(
+        plan_for(&selection, "python")
+            .why
+            .contains(&Reason::Unmeasured)
+    );
 }
 
 #[test]
@@ -166,7 +179,12 @@ fn plans_are_ordered_by_a_stated_rule_not_by_the_catalogue() {
     let root = tree(
         "polyglot",
         &["src", "pysrc"],
-        &["Cargo.toml", "pyproject.toml", "src/main.rs", "pysrc/app.py"],
+        &[
+            "Cargo.toml",
+            "pyproject.toml",
+            "src/main.rs",
+            "pysrc/app.py",
+        ],
     );
     let evidence = Evidence::gather(&root);
 

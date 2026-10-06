@@ -103,6 +103,43 @@ pub fn no_index_note(unindexed: &[String], file_scoped: bool) -> String {
     )
 }
 
+/// A directory scope that found nothing, over files no running server serves.
+///
+/// A file scope with no server refuses outright (`Workspace::select`), but a
+/// directory scope asks every running server by design, so a tree in an
+/// unserved language misses as an absent name. When the directory holds
+/// extensions no running server's languages cover, the miss says which
+/// extensions and where, with the running servers named. Empty when every
+/// extension under the scope is served (docs/resolution.md).
+pub fn directory_scope_note(
+    scope: &str,
+    contained: &[String],
+    unserved: &[String],
+    running: &str,
+) -> String {
+    if unserved.is_empty() {
+        return String::new();
+    }
+    format!(
+        "note: `{scope}` holds {} files; no running language server serves {} files (running: {running})\n",
+        join_capped(contained, 8),
+        join_capped(unserved, 5),
+    )
+}
+
+/// Backticked extensions, capped so one wild directory cannot flood a miss.
+fn join_capped(extensions: &[String], limit: usize) -> String {
+    let mut items: Vec<String> = extensions
+        .iter()
+        .take(limit)
+        .map(|extension| format!("`{extension}`"))
+        .collect();
+    if extensions.len() > limit {
+        items.push(format!("and {} more", extensions.len() - limit));
+    }
+    items.join(", ")
+}
+
 /// Exact hits by name, none in a container matching the qualifier: listed
 /// with the containers the server reported, so the qualifier can be fixed.
 pub fn render_unqualified(

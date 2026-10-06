@@ -86,7 +86,6 @@ fn a_disabled_server_does_not_start_where_its_language_is() {
     host.shutdown();
 }
 
-
 #[test]
 fn sibling_members_of_one_workspace_share_one_launch_and_keep_their_own_view() {
     // The sharing bug this milestone's second half closes. `agent_started`
@@ -132,7 +131,11 @@ fn sibling_members_of_one_workspace_share_one_launch_and_keep_their_own_view() {
     );
     assert_eq!(beta.workspace().root(), root);
 
-    assert_eq!(alpha.view(), alpha_dir, "each still asks about its own member");
+    assert_eq!(
+        alpha.view(),
+        alpha_dir,
+        "each still asks about its own member"
+    );
     assert_eq!(beta.view(), beta_dir);
 
     host.shutdown();

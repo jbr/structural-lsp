@@ -94,7 +94,10 @@ fn a_zero_score_is_still_in_the_catalogue() {
     let catalogue = Catalogue::new(vec![entry("serves-nothing", "python", Some(0), 1)]);
 
     assert_eq!(names(&catalogue.ranked()), vec!["serves-nothing"]);
-    assert_eq!(names(&catalogue.candidates_for("python")), vec!["serves-nothing"]);
+    assert_eq!(
+        names(&catalogue.candidates_for("python")),
+        vec!["serves-nothing"]
+    );
 }
 
 #[test]

@@ -158,6 +158,17 @@ unindexed language carries the note on any miss, whichever language the name
 was in. The alternative — refusing the query — is wrong whenever another
 running server does have an index and answered.
 
+A directory scope that finds nothing at all carries a second note when the
+directory holds extensions no running server serves: the scope asked every
+running server by design, so a tree in an unserved language would otherwise
+miss as an absent name. The note names the directory, the extensions it
+holds, and the unserved ones with the running servers — routing, not
+absence. Served-ness is what the query observed (running servers), since a
+configured server that is down serves nothing either. The extensions come
+from the discovery budget walk, so build and hidden directories are
+skipped; the note appears only on a total miss, never alongside fuzzy or
+container-narrowable candidates.
+
 ## Qualified names
 
 `Config::new`, `Config.doubled`, `pkg/Greet`. The **last** segment is the

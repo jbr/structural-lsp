@@ -204,7 +204,11 @@ pub(super) fn asymmetric_fixture(name: &str, rust: &str) -> Option<Fixture> {
 /// Both built-ins run the mock, so what varies between these cases is only
 /// what the tree says about itself and what the file says about the
 /// servers — which is exactly what selection reads.
-pub(super) fn selective_fixture(name: &str, sources: &[(&str, &str)], extra: &str) -> Option<Fixture> {
+pub(super) fn selective_fixture(
+    name: &str,
+    sources: &[(&str, &str)],
+    extra: &str,
+) -> Option<Fixture> {
     let python = crate::test_support::python()?;
     let (dir, script) = scratch(name);
     std::fs::create_dir_all(dir.join("src")).unwrap();
@@ -361,4 +365,3 @@ pub(super) fn alive(pid: u32) -> bool {
         .map(|status| status.success())
         .unwrap_or(false)
 }
-
