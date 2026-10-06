@@ -37,6 +37,7 @@ use crate::lsp::server::LspServer;
 use crate::tools::listing::{
     AmbiguousEntry, directory_scope_note, location_line, no_index_note, qualifier_scope_note,
     render_ambiguous, render_fuzzy, render_not_found, render_null_definition, render_unqualified,
+    unanswered_note,
 };
 use crate::tools::resolution::nominate::{Nominated, nominate};
 use crate::workspace::Workspace;
@@ -153,8 +154,16 @@ fn resolve_symbol(
             &unindexed,
             scope.as_deref().is_some_and(Path::is_file),
         ));
+        // A server that was asked and has answered nothing all session is a
+        // project not set up for it, not an absent name. Fuzzy or
+        // container-narrowable hits are candidates, so the note is for the
+        // miss alone, as with the directory note below.
+        if fuzzy.is_empty() && unqualified.is_empty() {
+            listed.push_str(&unanswered_note_for(state, &selected));
+        }
         // A directory scope that found nothing at all may sit over files no
         // running server serves; that is routing, not absence, and it gets
+
         // its own note. Fuzzy or container-narrowable hits are candidates,
         // so the note is for the miss alone.
         if fuzzy.is_empty()
@@ -229,6 +238,33 @@ fn directory_languages_note(state: &Workspace, root: &Path, dir: &Path) -> Strin
         .collect::<Vec<_>>()
         .join(", ");
     directory_scope_note(&format!("{display}/"), &contained, &unserved, &names)
+}
+
+/// The asked servers behind a total miss that advertised an index yet have
+/// answered nothing all session.
+///
+/// Only servers that were asked and could have answered: one with no
+/// workspace index is unserved rather than silent, and a server that yielded
+/// once — from its index or from an outline — has shown it is working
+/// (docs/resolution.md).
+fn unanswered_note_for(state: &Workspace, selected: &[usize]) -> String {
+    let mut servers = Vec::new();
+    let mut languages = Vec::new();
+    for &index in selected {
+        let Ok(server) = state.server(index) else {
+            continue;
+        };
+        if !server.supports("workspaceSymbolProvider") || server.has_answered() {
+            continue;
+        }
+        servers.push(server.name().to_string());
+        for language in server.adapter().languages() {
+            if !languages.contains(&language.id) {
+                languages.push(language.id);
+            }
+        }
+    }
+    unanswered_note(&servers, &languages)
 }
 
 /// One identity is the resolution; several are the ambiguous listing; one

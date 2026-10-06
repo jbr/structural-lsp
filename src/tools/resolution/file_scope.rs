@@ -108,7 +108,13 @@ fn from_server(server: &mut LspServer, file: &Path, symbol: &str) -> Result<Vec<
         path: file,
         decorated: false,
     };
-    candidates(&outline, &named)
+    let found = candidates(&outline, &named)?;
+    // An outline that names the symbol is an answer even though the index
+    // never spoke: a server that only serves documents still serves.
+    if !found.is_empty() {
+        server.mark_answered();
+    }
+    Ok(found)
 }
 
 /// The pure part: an outline result and the file it was read from, to the

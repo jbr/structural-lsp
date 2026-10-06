@@ -169,6 +169,15 @@ from the discovery budget walk, so build and hidden directories are
 skipped; the note appears only on a total miss, never alongside fuzzy or
 container-narrowable candidates.
 
+A server that advertised an index, was asked, and has answered nothing all
+session carries its own note: the server started but may not be configured
+for this project. Answering means yielding once — a candidate from the
+index, even one the filters remove, or a symbol from a file outline — so a
+server that spoke once is never named again, and a server with no index to
+ask is unindexed rather than silent. Like the directory note, it appears
+only on a total miss, never alongside fuzzy or container-narrowable
+candidates.
+
 ## Qualified names
 
 `Config::new`, `Config.doubled`, `pkg/Greet`. The **last** segment is the

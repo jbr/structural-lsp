@@ -127,6 +127,27 @@ pub fn directory_scope_note(
     )
 }
 
+/// Servers that advertised an index, were asked, and have answered nothing
+/// all session.
+///
+/// An empty answer from such a server is a different claim from an empty
+/// answer from a working one: the server started but may not be configured
+/// for this project. A server with no index to ask is not silent, it is
+/// unindexed, and gets [`no_index_note`] instead. Empty when every asked
+/// server has answered something (docs/resolution.md).
+pub fn unanswered_note(servers: &[String], languages: &[String]) -> String {
+    if servers.is_empty() {
+        return String::new();
+    }
+    let verb = if servers.len() == 1 { "has" } else { "have" };
+    format!(
+        "note: {} started but {} answered nothing this session; the project may not be set up for {} files\n",
+        servers.join(", "),
+        verb,
+        join_capped(languages, 5),
+    )
+}
+
 /// Backticked extensions, capped so one wild directory cannot flood a miss.
 fn join_capped(extensions: &[String], limit: usize) -> String {
     let mut items: Vec<String> = extensions

@@ -109,6 +109,7 @@ impl Spawning {
             capabilities,
             opened: HashMap::new(),
             registration: None,
+            answered: false,
         })
     }
 }
@@ -128,6 +129,9 @@ pub struct LspServer {
     /// server was last given.
     opened: HashMap<String, OpenedDoc>,
     registration: Option<crate::host::Registration>,
+    /// Whether the server has answered anything non-empty this session
+    /// ([`LspServer::has_answered`]).
+    answered: bool,
 }
 
 impl LspServer {
@@ -545,6 +549,20 @@ impl LspServer {
                 json!({ "textDocument": { "uri": uri } }),
             )
             .map(Some)
+    }
+
+    /// Whether the server has answered anything non-empty this session: a
+    /// candidate from its symbol index, or a symbol from a file outline
+    /// (docs/resolution.md). A server that initializes and answers every
+    /// query empty is a project not set up for it rather than an absent
+    /// symbol, and only asking answers that.
+    pub fn has_answered(&self) -> bool {
+        self.answered
+    }
+
+    /// Record a non-empty answer; see [`LspServer::has_answered`].
+    pub fn mark_answered(&mut self) {
+        self.answered = true;
     }
 
     /// Shut the server down (graceful, then kill). Idempotent.

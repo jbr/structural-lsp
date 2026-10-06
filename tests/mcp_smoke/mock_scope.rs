@@ -348,3 +348,77 @@ fn a_directory_scope_over_unserved_languages_names_them() {
     drop(state);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The same mock with a symbol index advertised and always empty: the
+/// availability case, where the miss must name the silent server rather
+/// than report the symbol absent.
+///
+/// Derived from [`MOCK_PY`] by string surgery so harness fixes land in
+/// both; the asserts fail loudly if the surgery stops matching.
+fn empty_py() -> String {
+    let derived = MOCK_PY
+        .replace(
+            "\"documentSymbolProvider\": True, \"definitionProvider\": True}",
+            "\"documentSymbolProvider\": True, \"definitionProvider\": True, \
+             \"workspaceSymbolProvider\": True}",
+        )
+        .replace(
+            "            # Never reached: this mock does not advertise\n            \
+             # workspaceSymbolProvider, and structural does not send a\n            \
+             # request a server did not offer. pylsp 1.15.0 answers exactly\n            \
+             # this way, and the error used to end the whole query — a\n            \
+             # file-scoped one included, which never needed the index.\n            \
+             send({\"jsonrpc\": \"2.0\", \"id\": msg[\"id\"], \"error\": {\n                \
+             \"code\": -32601, \"message\": \"Method Not Found: workspace/symbol\"}})",
+            "            # Advertised and always empty: the availability case.\n            \
+             # The index is offered and answers nothing, for every query.\n            \
+             reply(msg, [])",
+        );
+    assert!(derived.contains("\"workspaceSymbolProvider\": True}"));
+    assert!(derived.contains("reply(msg, [])"));
+    assert!(!derived.contains("Method Not Found"));
+    derived
+}
+
+#[test]
+fn a_server_that_answers_nothing_is_named_on_the_miss() {
+    let root = scratch_root("silent");
+    std::fs::write(root.join("mock.py"), empty_py()).unwrap();
+    let state = structural::session::Session::new(root.clone());
+    let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
+
+    // The mock advertises an index and answers it empty, so there is no
+    // no-index note — and the miss names the silent server instead of
+    // reporting the symbol absent.
+    let miss = ok(show(&state, Some("Absent"), None));
+    assert_eq!(
+        miss,
+        "no symbol named 'Absent'\n\
+         note: mock started but has answered nothing this session; the project may not be set up for `rust` files\n"
+    );
+
+    drop(state);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_server_that_answered_once_is_not_named() {
+    let root = scratch_root("answered");
+    std::fs::write(root.join("mock.py"), empty_py()).unwrap();
+    let state = structural::session::Session::new(root.clone());
+    let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
+
+    // The file's own outline resolved through this server, so it has shown
+    // it serves: the later bare-name miss is absence, with no note.
+    let resolved = ok(show(&state, Some("Tool::new"), Some("src/tool.rs")));
+    assert_eq!(
+        resolved,
+        "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
+    );
+
+    let miss = ok(show(&state, Some("Absent"), None));
+    assert_eq!(miss, "no symbol named 'Absent'\n");
+
+    drop(state);
+    let _ = std::fs::remove_dir_all(&root);
+}

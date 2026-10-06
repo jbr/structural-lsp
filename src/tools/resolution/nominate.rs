@@ -77,7 +77,7 @@ fn discover(
     let mut merged = Partition::default();
     let mut unindexed: Vec<String> = Vec::new();
     for &index in selected {
-        let server = state.server(index)?;
+        let server = state.server_mut(index)?;
         // The capability is consulted before the request is sent anyway
         // (`LspServer::workspace_symbol` answers an unadvertised provider
         // with nothing); what is recorded here is that the answer was empty
@@ -91,6 +91,12 @@ fn discover(
             continue;
         }
         let infos = server.workspace_symbol(symbol)?;
+        // An index that yields is an answer even when every candidate is
+        // filtered out later: the server spoke, so a later miss is absence
+        // rather than a server that never became ready (docs/resolution.md).
+        if !infos.is_empty() {
+            server.mark_answered();
+        }
         merged.absorb(partition(symbol, server.name(), infos, root, scope));
     }
     // After merging, so a server that advertises the bare name settles it
