@@ -433,6 +433,20 @@ impl LspServer {
         )
     }
 
+    /// `textDocument/declaration` at a position, in the same shape as
+    /// [`LspServer::definition`]: a header language has two sites for one
+    /// entity, and a server that answers both distinguishes them
+    /// (docs/resolution.md).
+    pub fn declaration(&self, uri: &str, position: Position) -> Result<Value> {
+        self.handle().request(
+            "textDocument/declaration",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": position,
+            }),
+        )
+    }
+
     /// `textDocument/references` at a position (in this server's encoding),
     /// without the declaration; the raw result is normalized by
     /// [`crate::lsp::references::parse_references_result`].

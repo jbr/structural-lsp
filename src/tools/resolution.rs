@@ -11,7 +11,11 @@
 //! candidate is sent to `textDocument/definition`, and the results are
 //! deduplicated by target — hits that navigate to the same place are one
 //! thing; hits that navigate to different places are listed as ambiguous,
-//! with their kinds, paths and signatures, and nothing is picked. A
+//! with their kinds, paths and signatures, and nothing is picked. When the
+//! server also answers `textDocument/declaration`, agreement between the
+//! two keeps the answer at a candidate that is the definition, instead of
+//! following the hop to the declaration's bare signature
+//! ([`definition_site`]).
 //! qualified name (`Config::new`) filters the exact candidates by the
 //! container the server reported ([`qualify`]); an anchor skips the index
 //! and asks `definition` at the focus (the `anchored` module).
@@ -28,8 +32,8 @@
 
 use crate::discovery::evidence::Sources;
 use crate::lsp::definition::{
-    Candidate, DefinitionSet, DefinitionTarget, Identity, Origin, group_by_target, locate_name_at,
-    parse_definition_result, verify_name_at,
+    Candidate, DefinitionSet, DefinitionTarget, Identity, NavigationProvenance, Origin,
+    group_by_target, locate_name_at, parse_definition_result, verify_name_at,
 };
 use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
@@ -42,7 +46,7 @@ use crate::tools::listing::{
 use crate::tools::resolution::nominate::{Nominated, nominate};
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
-use lsp_types::SymbolKind;
+use lsp_types::{Position, SymbolKind};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -337,13 +341,64 @@ fn definition_of(
     // server answers against the text we read. Wait for no outstanding work
     // again: the sync may have started some.
     server.wait_ready()?;
-    let raw = server.definition(&synced.uri, at.position(range))?;
-    parse_definition_result(raw).with_context(|| {
+    let position = at.position(range);
+    let raw = server.definition(&synced.uri, position)?;
+    let set = parse_definition_result(raw).with_context(|| {
         format!(
             "{} returned an unrecognizable definition result",
             candidate.server
         )
-    })
+    })?;
+    // A header language answers `definition` with the other site, so the
+    // hop lands on a signature with no body. A server that also answers
+    // `declaration` distinguishes the sites; see `definition_site`.
+    if server.supports("declarationProvider")
+        && let Some(stayed) = definition_site(server, &synced.uri, position, candidate, &set)
+    {
+        return Ok(stayed);
+    }
+    Ok(set)
+}
+
+/// Stay at the candidate when it is the definition and the hop would leave
+/// it.
+///
+/// A header language has two sites for one entity, and `definition` answers
+/// each from the other, so answering the hop lands on the declaration — a
+/// signature with no body — while the index named the definition. When the
+/// server also answers `declaration`, the two requests agree with each
+/// other exactly when the candidate is the definition: both name the
+/// declaration, from opposite sides. Anything else — disagreement,
+/// emptiness, error — is not evidence, and the hop stands
+/// (docs/resolution.md).
+fn definition_site(
+    server: &LspServer,
+    uri: &str,
+    position: Position,
+    candidate: &Candidate,
+    set: &DefinitionSet,
+) -> Option<DefinitionSet> {
+    let declared = server.declaration(uri, position).ok()?;
+    let DefinitionSet::One(decl) = parse_definition_result(declared).ok()? else {
+        return None;
+    };
+    let DefinitionSet::One(def) = set else {
+        return None;
+    };
+    if decl.uri != def.uri || decl.selection_range != def.selection_range {
+        return None;
+    }
+    let uri: lsp_types::Uri = serde_json::from_value(Value::String(uri.to_owned())).ok()?;
+    let here = DefinitionTarget {
+        uri,
+        selection_range: candidate.info.location.range,
+        full_range: None,
+        provenance: NavigationProvenance::LocationRange,
+    };
+    if decl.uri == here.uri && decl.selection_range == here.selection_range {
+        return None;
+    }
+    Some(DefinitionSet::One(here))
 }
 
 /// Own the identity's target file and check that the name sits at the

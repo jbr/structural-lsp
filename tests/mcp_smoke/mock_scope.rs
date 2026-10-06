@@ -401,6 +401,72 @@ fn a_server_that_answers_nothing_is_named_on_the_miss() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The same mock with a toggling header language: the index names the
+/// definition in one file, and `definition` and `declaration` agree on the
+/// declaration in the other. Both scratch files share the text, so every
+/// range names its symbol either way.
+///
+/// Derived from [`empty_py`] the way it derives from [`MOCK_PY`]: the mock
+/// learns file URIs from `documentSymbol` params (warm teaches it
+/// `flat.rs`; a file-scoped query teaches it `tool.rs`), and the index
+/// answers the learned `tool.rs` URI for `new`.
+fn toggle_py() -> String {
+    let base = empty_py()
+        .replace(
+            "\"workspaceSymbolProvider\": True}",
+            "\"workspaceSymbolProvider\": True, \"declarationProvider\": True}",
+        )
+        .replace(
+            "def outline(uri):",
+            "URIS = []\n\
+             \n\
+             \n\
+             def other_site(uri):\n    \
+             # The definition of the name in one scratch file lives in the\n    \
+             # other; both files share the text, so the range names it\n    \
+             # either way.\n    \
+             base = uri.rsplit(\"/\", 1)[0]\n    \
+             other = \"flat.rs\" if uri.endswith(\"/src/tool.rs\") else \"tool.rs\"\n    \
+             return {\"uri\": base + \"/\" + other, \"range\": rng(6, 11, 6, 14)}\n\
+             \n\
+             \n\
+             def outline(uri):",
+        )
+        .replace(
+            "        elif method == \"textDocument/documentSymbol\":\n            \
+             reply(msg, outline(msg[\"params\"][\"textDocument\"][\"uri\"]))",
+            "        elif method == \"textDocument/documentSymbol\":\n            \
+             uri = msg[\"params\"][\"textDocument\"][\"uri\"]\n            \
+             if uri not in URIS:\n                \
+             URIS.append(uri)\n            \
+             reply(msg, outline(uri))",
+        )
+        .replace(
+            "            reply(msg, [])",
+            "            query = msg[\"params\"][\"query\"]\n            \
+             if query == \"new\" and URIS:\n                \
+             tool = next((u for u in URIS if u.endswith(\"/src/tool.rs\")), URIS[0])\n                \
+             reply(msg, [{\"name\": \"new\", \"kind\": 12, \"location\": \
+             {\"uri\": tool, \"range\": rng(6, 11, 6, 14)}}])\n            \
+             else:\n                \
+             reply(msg, [])",
+        )
+        .replace(
+            "        elif method == \"textDocument/definition\":\n            \
+             uri = msg[\"params\"][\"textDocument\"][\"uri\"]\n            \
+             reply(msg, {\"uri\": uri, \"range\": rng(6, 11, 6, 14)})",
+            "        elif method == \"textDocument/definition\":\n            \
+             reply(msg, other_site(msg[\"params\"][\"textDocument\"][\"uri\"]))\n        \
+             elif method == \"textDocument/declaration\":\n            \
+             reply(msg, other_site(msg[\"params\"][\"textDocument\"][\"uri\"]))",
+        );
+    assert!(base.contains("\"declarationProvider\": True}"));
+    assert!(base.contains("def other_site(uri):"));
+    assert!(base.contains("other_site(msg[\"params\"][\"textDocument\"][\"uri\"])"));
+    assert!(base.contains("\"workspace/symbol\""));
+    base
+}
+
 #[test]
 fn a_server_that_answered_once_is_not_named() {
     let root = scratch_root("answered");
@@ -418,6 +484,35 @@ fn a_server_that_answered_once_is_not_named() {
 
     let miss = ok(show(&state, Some("Absent"), None));
     assert_eq!(miss, "no symbol named 'Absent'\n");
+
+    drop(state);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_bare_name_answers_the_definition_site() {
+    let root = scratch_root("toggle");
+    std::fs::write(root.join("mock.py"), toggle_py()).unwrap();
+    let state = structural::session::Session::new(root.clone());
+    let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
+
+    // File-scoped first: the outline resolves, and the mock learns
+    // `tool.rs`'s URI for the index to answer later.
+    let scoped = ok(show(&state, Some("Tool::new"), Some("src/tool.rs")));
+    assert_eq!(
+        scoped,
+        "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
+    );
+
+    // Bare `new`: the index names `tool.rs`, while `definition` and
+    // `declaration` agree on `flat.rs` — so the answer stays at the
+    // definition with its body instead of following the hop to the
+    // declaration's bare signature.
+    let bare = ok(show(&state, Some("new"), None));
+    assert_eq!(
+        bare,
+        "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
+    );
 
     drop(state);
     let _ = std::fs::remove_dir_all(&root);

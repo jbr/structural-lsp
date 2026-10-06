@@ -20,6 +20,14 @@ one. Implemented in `src/tools/resolution.rs` (+ `resolution/nominate.rs`,
    bare name ([Decorated names](#decorated-names)).
 4. **Navigate** — every exact candidate's file is synced, its range checked
    against the text just read, and `textDocument/definition` asked at it.
+   When the server also answers `textDocument/declaration`, that is asked
+   too: a header language has two sites for one entity, and `definition`
+   answers each from the other, so answering the hop lands on the
+   declaration — a signature with no body — while the index named the
+   definition. If the two requests agree with each other somewhere other
+   than the candidate, the candidate is the definition and is answered
+   directly; anything else keeps the hop. One hop, never a chase: the two
+   sites answer with each other and following them does not converge.
 5. **Group by target.** Candidates that navigate to the same place are one
    identity; candidates that navigate to different places are ambiguous and
    are listed with kinds, paths and signatures. Nothing is picked.
