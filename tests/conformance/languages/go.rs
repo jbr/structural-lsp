@@ -27,6 +27,7 @@ pub const GO: Language = Language {
              return c.Limit * 2\n\
          }\n",
     )],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

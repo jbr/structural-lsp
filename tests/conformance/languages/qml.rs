@@ -24,6 +24,7 @@ pub const QML: Language = Language {
     // its extension has to be spelled out here rather than looked up.
     extensions: &["qml"],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

@@ -27,6 +27,7 @@ pub const GLEAM: Language = Language {
     fixture: "gleam",
     extensions: &["gleam"],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

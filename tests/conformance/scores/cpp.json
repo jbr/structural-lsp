@@ -1,5 +1,5 @@
 {
-  "date": 1789872286,
+  "date": 1791320915,
   "fixture_revision": "8d13f1b1",
   "language": "cpp",
   "machine": "quad-3.local",
@@ -33,9 +33,7 @@
           "probe_answered": true
         },
         {
-          "detail": "function choose · helper.hpp:10 · no references",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "probe_answered": true
@@ -89,5 +87,5 @@
       "version": "Homebrew ccls version <unknown>"
     }
   ],
-  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
+  "structural_revision": "eb17ceb72a05e6dccf163eb9c987d68b33a91a21-dirty"
 }

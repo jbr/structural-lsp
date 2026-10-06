@@ -12,6 +12,7 @@ pub const RUBY: Language = Language {
     fixture: "ruby",
     extensions: &[],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

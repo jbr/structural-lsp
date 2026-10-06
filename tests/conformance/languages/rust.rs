@@ -26,6 +26,7 @@ pub const RUST: Language = Language {
              println!(\"{}\", choose(Mode::Fast));\n\
          }\n",
     )],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

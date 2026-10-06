@@ -15,6 +15,7 @@ pub const TYPESCRIPT: Language = Language {
     fixture: "typescript",
     extensions: &[],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

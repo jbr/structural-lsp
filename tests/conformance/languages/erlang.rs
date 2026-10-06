@@ -44,6 +44,7 @@ pub const ERLANG: Language = Language {
     // not among them, so they are spelled out here.
     extensions: &["erl", "hrl"],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

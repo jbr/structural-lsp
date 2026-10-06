@@ -55,6 +55,7 @@ pub const R: Language = Language {
     fixture: "r",
     extensions: &["r", "R"],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

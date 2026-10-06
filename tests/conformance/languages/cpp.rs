@@ -12,15 +12,31 @@
 
 use crate::probe::{Candidate, Language, Probe, rename_preview, show, uses};
 use crate::report::Outcome;
+use std::path::Path;
 
 pub const CPP: Language = Language {
     name: "cpp",
     fixture: "cpp",
     extensions: &[],
     extra_files: &[],
+    generated_files: &[("compile_commands.json", compile_commands)],
     candidates: CANDIDATES,
     probes: PROBES,
 };
+
+/// A compilation database for the scratch tree, rendered per run: the
+/// entries name absolute paths, which a checked-in fixture cannot hold.
+/// One entry per translation unit with the fixture's flags; headers
+/// compile through the units that include them.
+fn compile_commands(root: &Path) -> String {
+    let entry = |file: &str| {
+        format!(
+            "{{\n    \"directory\": \"{root}\",\n    \"command\": \"clang++ -std=c++17 -I{root} -c {root}/{file}\",\n    \"file\": \"{root}/{file}\"\n}}",
+            root = root.display(),
+        )
+    };
+    format!("[\n{},\n{}\n]\n", entry("helper.cpp"), entry("main.cpp"))
+}
 
 const CANDIDATES: &[Candidate] = &[
     Candidate {

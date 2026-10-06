@@ -10,6 +10,7 @@ pub const PYTHON: Language = Language {
     fixture: "python",
     extensions: &[],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

@@ -24,6 +24,7 @@ pub const BASH: Language = Language {
     // "bash" is not one of the eleven language ids `src/config.rs` knows.
     extensions: &["sh", "bash"],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

@@ -32,6 +32,7 @@ pub const SWIFT: Language = Language {
     // so the extension table has to be spelled out here.
     extensions: &["swift"],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

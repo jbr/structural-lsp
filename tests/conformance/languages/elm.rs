@@ -23,6 +23,7 @@ pub const ELM: Language = Language {
     fixture: "elm",
     extensions: &["elm"],
     extra_files: &[],
+    generated_files: &[],
     candidates: CANDIDATES,
     probes: PROBES,
 };

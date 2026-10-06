@@ -174,6 +174,17 @@ fn scratch_root(language: &Language, candidate: &Candidate) -> PathBuf {
         }
         std::fs::write(target, text).unwrap();
     }
+    // Absolute paths cannot be checked in: generated files render against
+    // the canonical root, which is what the session is opened on, so a
+    // compilation database names the tree the server actually sees.
+    let root = std::fs::canonicalize(&root).unwrap();
+    for (path, render) in language.generated_files {
+        let target = root.join(path);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(target, render(&root)).unwrap();
+    }
 
     let command = candidate
         .argv
@@ -218,7 +229,7 @@ fn scratch_root(language: &Language, candidate: &Candidate) -> PathBuf {
         }
     }
     std::fs::write(root.join("structural.toml"), toml).unwrap();
-    std::fs::canonicalize(root).unwrap()
+    root
 }
 
 /// Ask every installed candidate of one language every probe, and print the

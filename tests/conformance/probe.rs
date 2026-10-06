@@ -6,6 +6,7 @@
 //! does not move.
 
 use crate::report::Outcome;
+use std::path::Path;
 
 /// A server worth asking, with the argv the dataset recorded for it.
 ///
@@ -49,6 +50,10 @@ pub struct Probe {
     pub run: fn(&structural::session::Session) -> Outcome,
 }
 
+/// A file computed from the materialized scratch root: where it goes,
+/// relative to the root, and how to render it once the root is known.
+pub type GeneratedFile = (&'static str, fn(&Path) -> String);
+
 /// A language's candidates, tree and questions.
 pub struct Language {
     /// The name the scorecard prints and `structural.toml` configures.
@@ -73,6 +78,12 @@ pub struct Language {
     /// four other tests measure. `rename.rs` writes its doc-link site the
     /// same way.
     pub extra_files: &'static [(&'static str, &'static str)],
+    /// Files computed from the materialized root, as `(path, render)`.
+    ///
+    /// A compilation database names absolute paths, which a checked-in
+    /// tree cannot hold: the fixture carries the template's facts and the
+    /// probe renders them against the scratch root it measured.
+    pub generated_files: &'static [GeneratedFile],
     pub candidates: &'static [Candidate],
     pub probes: &'static [Probe],
 }
