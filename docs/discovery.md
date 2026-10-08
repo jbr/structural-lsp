@@ -26,8 +26,10 @@ score in the catalogue cannot exist without the run that produced it.
 
 The layout is not final. The workspace's own watcher re-runs this walk
 when the tree changes ([`observation.md`](observation.md)): a tree that
-grows a language gets its slot without a restart, and a re-layout warms
-nothing — the new server starts when a query calls for it. This is
+grows a language gets its slot without a restart, and what warms is the
+signal policy — a query starts the server it needs, and an interested
+workspace warms a language the tree newly calls for, while an
+observed-only workspace lays out the slot and starts nothing. This is
 evidence maintenance, not freshness: a watcher reporting is not a claim
 that any server's index is current.
 

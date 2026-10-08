@@ -1,8 +1,8 @@
 # Observation: the event source a workspace watches itself with
 
-Parent: [README.md](README.md). The parts of the unit not yet built — the
-strong/weak signal policy, activation for interested workspaces, and server
-residency separated from agent interest — are
+Parent: [README.md](README.md). The part of the unit not yet built — server
+residency separated from agent interest: idle eviction, reacquisition, and
+eviction that cannot break an in-flight launch — is
 [`backlog/discovery/observation.md`](../backlog/discovery/observation.md).
 
 Every workspace gets an event source when it is created
@@ -30,17 +30,49 @@ answer.
 
 - Access, `Any`, and `Other` events are dropped at the source: a file
   being looked at is not the tree changing, and filesystem activity must
-  not act as a keepalive (`../backlog/discovery/README.md`'s interest
-  rules).
+  not act as a keepalive (the signal policy, below).
 - A backend error the reduction cannot interpret, and a platform "events
   were dropped" notice (`Event::need_rescan`), arrive as `Overflow` —
   which reduces to the same rescan, so "lost" and "received" cannot be
   told apart and never need to be.
 - A refresh appends only. A language whose evidence dropped keeps its
   slot, which serving then stops matching; eviction is later work. And a
-  refresh warms nothing: a new slot starts when a query demands it.
-  Whether an interested workspace's new language warms without a query is
-  the signal policy, not this reduction.
+  refresh itself warms nothing — it returns the languages that are new
+  with their slot indices, and whether they warm is the signal policy
+  (below), decided after the refresh returns.
+
+## Signals: strong start, weak refresh
+
+A signal is strong or weak by what it may start.
+
+**Strong** — an agent binding to the workspace, and any tool query.
+Binding warms every planned slot; a query starts exactly the servers its
+scope routes to and waits for readiness. A query is strong whether or not
+an agent is attached: a later call reacquires what it needs. Both run
+through the entry's copy of the slot list, so they never wait on the
+workspace lock to route.
+
+**Weak** — a filesystem batch. It always refreshes evidence and grows the
+slot list; it starts a server only for a language the tree newly calls
+for, and only while the workspace has an attached agent. An observed-only
+workspace — released, still held by a session — updates evidence and
+launches nothing. And plain activity never relaunches anything: a batch
+that changes nothing, or an edit in a language the workspace already
+serves, does not resurrect a stopped or failed server. Filesystem
+activity is not an unconditional keepalive — build output and background
+generators must not keep a process alive or bring one back
+(`../backlog/discovery/README.md`, the signal table it was agreed from).
+The reactivation-after-eviction row of that table is residency work: a
+workspace has nothing stopped to reactivate yet.
+
+The wiring that makes this reachable: the observer holds the workspace
+lock only for the refresh itself and grows the entry's slot copy
+(`Entry::sync_slots`) in the same critical section — so the indices
+`refresh` returns name the slots the demand path reads without the lock,
+and a language the tree gains is answerable by a query immediately, not
+just by the next bind. The interest check happens after the refresh: an
+agent binding between refresh and warm is covered anyway, because its
+bind warms the whole (grown) list.
 
 ## The thread holds the workspace loosely
 

@@ -100,9 +100,10 @@ impl Workspace {
         let evidence = Evidence::gather(&workspace.root);
         let selection = select(&evidence, &Catalogue::built_in(), &layout.overrides);
         for ladder in ladders(&selection, &layout) {
-            workspace
-                .slots
-                .push(Arc::new(ServerSlot::new(ladder, Arc::clone(&workspace.stopped))));
+            workspace.slots.push(Arc::new(ServerSlot::new(
+                ladder,
+                Arc::clone(&workspace.stopped),
+            )));
             workspace.servers.push(None);
         }
         workspace.selection = Some(selection);
@@ -122,11 +123,15 @@ impl Workspace {
     ///
     /// Existing slots are never removed here — eviction is the observation
     /// unit's later part, and a language whose evidence dropped keeps its
-    /// slot, which serving simply stops matching. Nothing is warmed: a slot
-    /// starts when a query demands it, or — for an interested workspace —
-    /// when activation policy says so. Returns the languages that are new,
-    /// for whoever decides whether to warm.
-    pub(crate) fn refresh(&mut self) -> Vec<String> {
+    /// slot, which serving simply stops matching. Nothing is warmed here: a
+    /// slot starts when a query demands it, or — for an interested
+    /// workspace — when the signal policy warms a language that is new
+    /// (`docs/observation.md`). Returns the languages that are new,
+    /// each paired with the index of the slot laid out for it; the pair is
+    /// meaningful only while the caller still holds this lock, and it is
+    /// the caller — which decides whether to warm — that maps it onto its
+    /// own copy of the slot list.
+    pub(crate) fn refresh(&mut self) -> Vec<(String, usize)> {
         let Some(layout) = &self.layout else {
             return Vec::new();
         };
@@ -163,7 +168,7 @@ impl Workspace {
             self.slots
                 .push(Arc::new(ServerSlot::new(ladder, Arc::clone(&self.stopped))));
             self.servers.push(None);
-            new_languages.push(plan.language.clone());
+            new_languages.push((plan.language.clone(), self.slots.len() - 1));
         }
         self.selection = Some(selection);
         new_languages

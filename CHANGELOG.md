@@ -11,6 +11,7 @@ change, see [`journal/`](journal/); for what is left, see
 
 ### Added
 - **Workspaces re-run discovery on filesystem events** (docs/observation.md): every workspace watches its own root, and a batch — including an overflow — reduces to a full evidence re-gather and re-select, so a tree that grows a language gets its server slot without a restart. Append-only, warms nothing; not a freshness claim.
+- **Signal policy over the watcher** (docs/observation.md): binding and queries are strong signals that start servers; filesystem batches are weak — they refresh evidence and warm only a newly appeared language's server, and only while an agent is attached, so build output and background churn launch nothing. A new slot is reachable by demand in the same breath: the refresh grows the entry's slot copy under the workspace lock.
 
 ### Fixed
 - **A name a server decorated still resolves** (docs/resolution.md): when nothing matches the queried name, a candidate whose advertised name mentions it exactly once as a whole token nominates under the identifier — `choose/1` from both Erlang servers, `int choose(bool flag)` from ccls — with every range check made against the identifier, and no language-specific parsing. Erlang goes 1/8 to 3/8 on both servers, vtsls 5/8 to 8/8.

@@ -94,7 +94,14 @@ pub(crate) struct Entry {
     root: PathBuf,
     workspace: Mutex<Workspace>,
     interested: Mutex<BTreeSet<AgentId>>,
-    slots: Vec<Arc<ServerSlot>>,
+    /// The workspace's slots, copied so the launch and demand paths read
+    /// and move lifecycle state without the workspace lock. The
+    /// workspace's own list grows when `refresh` lays out new slots, and
+    /// [`Entry::sync_slots`] copies the growth here — in the same
+    /// workspace-lock critical section that produced it, so an index into
+    /// one is an index into the other and a new slot is reachable by
+    /// demand, not by the workspace lock alone.
+    slots: Mutex<Vec<Arc<ServerSlot>>>,
     /// Shared with the host and every other entry: the shutdown manager, and
     /// the flag that stops launches.
     lifetime: Lifetime,
@@ -103,7 +110,7 @@ pub(crate) struct Entry {
 impl Entry {
     pub(crate) fn new(workspace: Workspace, lifetime: Lifetime) -> Self {
         let root = workspace.root().to_path_buf();
-        let slots = workspace.slots().to_vec();
+        let slots = Mutex::new(workspace.slots().to_vec());
         Self {
             root,
             workspace: Mutex::new(workspace),
@@ -154,6 +161,35 @@ impl Entry {
         self.interested
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Grow this entry's copy of the workspace's slots to match. Called by
+    /// the observer in the same workspace-lock critical section as the
+    /// `refresh` that appended, so every index `refresh` returned names
+    /// the same slot here — the copy the demand path reads without the
+    /// workspace lock, and that a later bind's warm walks in full.
+    pub(crate) fn sync_slots(&self, slots: &[Arc<ServerSlot>]) {
+        *self.slots.lock().unwrap_or_else(PoisonError::into_inner) = slots.to_vec();
+    }
+
+    /// The entry's slots, copied out: enough for a `serving` routing
+    /// decision, which reads names and languages and holds nothing.
+    pub(crate) fn slots_snapshot(&self) -> Vec<Arc<ServerSlot>> {
+        self.slots
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// The slot at `index`. `None` only for an index invented rather than
+    /// obtained from `serving` or from a `refresh` this entry was synced
+    /// with.
+    pub(crate) fn slot(&self, index: usize) -> Option<Arc<ServerSlot>> {
+        self.slots
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(index)
+            .cloned()
     }
 }
 

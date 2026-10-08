@@ -14,11 +14,13 @@
 //! corrupt what was never trusted. The batch's paths are carried for the
 //! day something selective is worth proving, not used today.
 //!
-//! Nothing here launches, reports, or claims freshness. A refresh lays out
-//! slots for languages the tree newly calls for and starts none of them;
-//! whether a new language warms is the interested-workspace policy, and a
-//! watcher existing says nothing about a server's index
-//! (`backlog/discovery/synchronization.md`).
+//! Nothing here claims freshness. A refresh lays out slots for languages
+//! the tree newly calls for and grows the entry's copy of the slot list;
+//! whether a new language's server warms is the signal policy — a
+//! filesystem change is a weak signal, so it warms only for a workspace
+//! with an attached agent, and an observed-only workspace updates evidence
+//! and launches nothing (`docs/observation.md`). A watcher existing says
+//! nothing about a server's index (`backlog/discovery/synchronization.md`).
 
 use crate::host::Entry;
 use anyhow::bail;
@@ -26,8 +28,8 @@ use notify::Watcher;
 #[cfg(test)]
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::sync::Weak;
+use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 #[cfg(test)]
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -288,7 +290,9 @@ impl Source for Synthetic {
     }
 }
 
-/// The observation thread's body: watch, reduce, refresh.
+/// The observation thread's body: watch, reduce, refresh, and — when an
+/// agent is attached — warm the servers of languages the tree newly calls
+/// for (`docs/observation.md`).
 ///
 /// The thread holds only a [`Weak`] to the entry, and holds it never across
 /// a wait — a released workspace is not kept alive by its own watcher. The
@@ -331,10 +335,27 @@ pub(crate) fn observe(weak: &Weak<Entry>, mut source: Box<dyn Source>) {
         let Some(entry) = weak.upgrade() else {
             return;
         };
-        // The languages that are new are returned for whoever decides
-        // whether to warm; today the answer is nobody — activation for an
-        // interested workspace is that policy's to add
-        // (`backlog/discovery/observation.md`).
-        let _new_languages = entry.lock().refresh();
+        // The batch reduces to a refresh, and the refresh's new slots are synced
+        // onto the entry in the same critical section, so the indices it
+        // returns name the slots the demand path reads without this lock
+        // (`Entry::sync_slots`). Taking `interested` while holding the
+        // workspace lock cannot deadlock: nothing takes `interested` and
+        // then waits for the workspace.
+        let new_languages = {
+            let mut workspace = entry.lock();
+            let new = workspace.refresh();
+            entry.sync_slots(workspace.slots());
+            new
+        };
+        // A filesystem change is a weak signal: it warms a server only when
+        // a language is new *and* an agent is attached. An observed-only
+        // workspace updates evidence and launches nothing, and plain
+        // activity never relaunches anything — filesystem activity is not
+        // an unconditional keepalive (`docs/observation.md`, the signal
+        // policy).
+
+        if !new_languages.is_empty() && !entry.interested().is_empty() {
+            entry.warm_indices(new_languages.iter().map(|&(_, index)| index).collect());
+        }
     }
 }

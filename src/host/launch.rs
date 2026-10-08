@@ -39,7 +39,9 @@ impl Entry {
         // for: one server's `initialize` would still be a delay to the next.
         let _waiting = crate::progress::waiting_on("starting language servers");
         for index in self.warm(scope) {
-            let _ = self.slots[index].wait_for_launch();
+            if let Some(slot) = self.slot(index) {
+                let _ = slot.wait_for_launch();
+            }
         }
     }
 
@@ -53,7 +55,19 @@ impl Entry {
     /// (`../docs/servers.md`) in front of the front end's first byte — long
     /// enough on a cold index for an MCP client to give up on the handshake.
     pub(crate) fn warm(self: &Arc<Self>, scope: Option<&Path>) -> Vec<usize> {
-        let wanted = crate::workspace::serving(&self.slots, scope);
+        let snapshot = self.slots_snapshot();
+        self.warm_indices(crate::workspace::serving(&snapshot, scope))
+    }
+
+    /// Start exactly these slots — indices into the entry's own slot list —
+    /// without waiting for any of them, and say which were wanted.
+    ///
+    /// This is the shape both strong signals reduce to: a bind warms what a
+    /// scope's routing selects, and observation warms the slots a refresh
+    /// laid out for languages the tree newly calls for — the latter only
+    /// when the workspace has an attached agent, which the caller checks
+    /// (`docs/observation.md`).
+    pub(crate) fn warm_indices(self: &Arc<Self>, wanted: Vec<usize>) -> Vec<usize> {
         for &index in &wanted {
             // Best effort: a server that will not start is recorded on its
             // own slot, and the call goes on to ask for what is available.
@@ -70,8 +84,13 @@ impl Entry {
     /// than beginning a second one, which is what makes concurrent demand
     /// produce exactly one process.
     fn start(self: &Arc<Self>, index: usize) -> Result<()> {
+        let Some(slot) = self.slot(index) else {
+            // Unreachable from warm or activate: both obtain indices from
+            // the entry's own slot list.
+            bail!("no slot {index} on this workspace");
+        };
         let guard = self.lifetime.admit()?;
-        match self.slots[index].demand() {
+        match slot.demand() {
             // Already running, or someone else's launch is under way; either
             // way the wait in `activate` covers it.
             Demand::Ready | Demand::Join => Ok(()),
