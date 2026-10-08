@@ -12,8 +12,10 @@
 //! each other: the map lock below is taken only to find or create a
 //! workspace, never to run a query.
 
+use crate::clock::{Clock, SystemClock};
+use crate::lsp::server::LspServer;
 use crate::session::Session;
-use crate::workspace::{ServerSlot, Workspace, canonical_root};
+use crate::workspace::{ServerSlot, SlotState, Workspace, canonical_root};
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -105,11 +107,26 @@ pub(crate) struct Entry {
     /// Shared with the host and every other entry: the shutdown manager, and
     /// the flag that stops launches.
     lifetime: Lifetime,
+    /// The same clock the workspace's slots start their idle clocks on, and
+    /// what the sweep reads (`docs/observation.md`).
+    clock: Arc<dyn Clock>,
+    /// How long a slot may sit without a strong signal before the sweep
+    /// stops it: the workspace's `idle_eviction_secs`, or the default.
+    /// Held here so the sweep's park arithmetic never needs the workspace
+    /// lock.
+    idle_eviction: Duration,
+    /// Closes the workspace's observation source. The observer thread ends
+    /// when its source ends, so this is eager teardown at release: a
+    /// released workspace stops watching its tree at once rather than at
+    /// its next event (`docs/observation.md`). `None` when no observer was
+    /// spawned — the `Session::new` construction path has none.
+    observer_stop: Mutex<Option<Arc<dyn observation::Stop>>>,
 }
 
 impl Entry {
-    pub(crate) fn new(workspace: Workspace, lifetime: Lifetime) -> Self {
+    pub(crate) fn new(workspace: Workspace, lifetime: Lifetime, clock: Arc<dyn Clock>) -> Self {
         let root = workspace.root().to_path_buf();
+        let idle_eviction = workspace.idle_eviction();
         let slots = Mutex::new(workspace.slots().to_vec());
         Self {
             root,
@@ -117,6 +134,9 @@ impl Entry {
             interested: Mutex::new(BTreeSet::new()),
             slots,
             lifetime,
+            clock,
+            idle_eviction,
+            observer_stop: Mutex::new(None),
         }
     }
 
@@ -191,11 +211,70 @@ impl Entry {
             .get(index)
             .cloned()
     }
+
+    /// How long the observer may park before the sweep runs again, or
+    /// `None` when nothing can expire — the next wake is a batch, however
+    /// far off. Computed without the workspace lock: the interval rides on
+    /// this entry and a slot's state and clock sit behind their own locks,
+    /// so a long query never delays the park arithmetic.
+    pub(crate) fn sweep_park(&self) -> Option<Duration> {
+        let snapshot = self.slots_snapshot();
+        let now = self.clock.now();
+        let earliest = snapshot
+            .iter()
+            .filter(|slot| !matches!(slot.state(), SlotState::Cold))
+            .filter_map(|slot| slot.last_use().checked_add(self.idle_eviction))
+            .min()?;
+        Some(earliest.saturating_duration_since(now))
+    }
+
+    /// Stop what the idle sweep has expired, and hand the stopped servers
+    /// back so the caller drops them outside the workspace lock. The expiry
+    /// pre-check runs without the workspace lock — a long query never
+    /// delays the decision to look — and the stop itself takes the lock
+    /// once, as any workspace mutation does.
+    pub(crate) fn sweep_due(&self) -> Vec<LspServer> {
+        let snapshot = self.slots_snapshot();
+        let now = self.clock.now();
+        let due = snapshot.iter().any(|slot| {
+            !matches!(slot.state(), SlotState::Cold)
+                && now.saturating_duration_since(slot.last_use()) >= self.idle_eviction
+        });
+        if !due {
+            return Vec::new();
+        }
+        let mut workspace = self.lock();
+        workspace.evict_idle(now)
+    }
+
+    /// Close this workspace's observation source; the observer thread ends
+    /// when its source ends. Idempotent — the handle is taken on first use.
+    pub(crate) fn stop_observation(&self) {
+        if let Some(stop) = self
+            .observer_stop
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+        {
+            stop.stop();
+        }
+    }
 }
 
 /// Electing a launcher, walking a plan's ladder, and publishing what
 /// initializes — the rest of [`Entry`]'s behaviour.
 mod launch;
+
+impl Drop for Entry {
+    /// A workspace that no registry and no session holds is gone: close its
+    /// observation source, so its watcher and its thread end now rather
+    /// than at the tree's next event (`docs/observation.md`). The servers
+    /// die with the workspace itself — dropping them is what reaps their
+    /// children.
+    fn drop(&mut self) {
+        self.stop_observation();
+    }
+}
 
 /// The process's workspaces, keyed by canonical root.
 ///
@@ -214,11 +293,14 @@ pub struct Host {
     completion: Mutex<()>,
     /// The host's own lifetime, cloned into every entry it hands out.
     lifetime: Lifetime,
+    /// The clock residency runs on: cloned into every entry, so the whole
+    /// host advances together in tests (`crate::clock`).
+    clock: Arc<dyn Clock>,
     /// Where each workspace's events come from. A factory, not a source:
     /// every workspace gets its own. The default is the platform watcher;
     /// tests install a synthetic source and drive it
     /// (`docs/observation.md`).
-    source_factory: Mutex<Box<dyn Fn() -> Box<dyn observation::Source> + Send>>,
+    source_factory: Mutex<observation::SourceFactory>,
 }
 
 impl Default for Host {
@@ -241,8 +323,13 @@ impl Host {
             released: Mutex::new(Vec::new()),
             completion: Mutex::new(()),
             lifetime: Lifetime::with_publish_bound(publish_bound),
+            clock: Arc::new(SystemClock),
             source_factory: Mutex::new(Box::new(|| {
-                Box::new(observation::Notify::new()) as Box<dyn observation::Source>
+                let (source, stop) = observation::Notify::new();
+                (
+                    Box::new(source) as Box<dyn observation::Source>,
+                    Arc::new(stop) as Arc<dyn observation::Stop>,
+                )
             })),
         }
     }
@@ -253,10 +340,12 @@ impl Host {
     /// its own (`src/host/tests/observation.rs`).
     #[cfg(test)]
     pub(crate) fn with_observation(
-        factory: Box<dyn Fn() -> Box<dyn observation::Source> + Send>,
+        factory: observation::SourceFactory,
+        clock: Arc<dyn Clock>,
     ) -> Self {
         let mut host = Self::with_publish_bound(DEFAULT_PUBLISH_BOUND);
         host.source_factory = Mutex::new(factory);
+        host.clock = clock;
         host
     }
 
@@ -279,16 +368,23 @@ impl Host {
             Some(entry) => Arc::clone(entry),
             None => {
                 let entry = Arc::new(Entry::new(
-                    Workspace::new(key.clone(), self.lifetime.flag()),
+                    Workspace::new(key.clone(), self.lifetime.flag(), Arc::clone(&self.clock)),
                     self.lifetime.clone(),
+                    Arc::clone(&self.clock),
                 ));
                 workspaces.insert(key, Arc::clone(&entry));
                 // The workspace watches its own tree: an event batch re-runs
-                // evidence and selection. The thread holds only a Weak, so
-                // a released workspace is not kept alive by its watcher
-                // (`docs/observation.md`).
+                // evidence and selection, and the same thread's park runs
+                // the idle sweep. The thread holds only a Weak, so a
+                // released workspace is not kept alive by its watcher
+                // (`docs/observation.md`); the stop handle lets a release
+                // end the watching at once instead of at the next event.
                 let weak = Arc::downgrade(&entry);
-                let source = (self.source_factory.lock().unwrap())();
+                let (source, stop) = (self.source_factory.lock().unwrap())();
+                *entry
+                    .observer_stop
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner) = Some(stop);
                 let _ = std::thread::Builder::new()
                     .name("structural-observation".to_string())
                     .spawn(move || observation::observe(&weak, source));
@@ -333,6 +429,12 @@ impl Host {
         detached.retain(|weak| weak.strong_count() > 0);
         for (key, entry) in released {
             workspaces.remove(&key);
+            // A released workspace keeps observing — evidence maintenance
+            // and the idle sweep both — until its last session drops; a
+            // session holding it may still query, and a query still
+            // demand-starts what it needs (`docs/observation.md`). When the
+            // entry itself dies, `Entry`'s drop closes the watcher at once
+            // instead of at the tree's next event.
             // Weak on purpose: the session that still holds this keeps it
             // alive, and shutdown can still reach it without the registry
             // extending its life.

@@ -236,8 +236,8 @@ of advancing it, because the next candidate would meet the same wall.
 
 `mark_cold` resets the ladder along with the state, so a later demand
 walks it from the top: a candidate that failed once is not excluded
-forever, which would be a residency policy, and residency is
-`backlog/discovery/observation.md`'s.
+forever — clearing a failure on the clock is the idle sweep's
+([`observation.md`](observation.md)).
 
 Two plans naming the same server become one slot — one server is one
 process however many languages it was planned for — and that slot's ladder

@@ -21,8 +21,9 @@
 
 use crate::lsp::adapter::Adapter;
 use anyhow::{Result, bail};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::time::Instant;
 
 /// Where a slot is in its life. Only [`SlotState::Running`] answers queries.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,9 +37,9 @@ pub enum SlotState {
     Running,
     /// Every candidate on the ladder failed, with this reason — which names
     /// each one that was tried and what it said. A demand reports that
-    /// rather than starting another attempt: clearing it belongs to the
-    /// unit that can re-acquire an expired server, on the clock that
-    /// expires one.
+    /// rather than starting another attempt; the idle sweep clears it on
+    /// the same clock that expires a server, so a later demand walks the
+    /// ladder again (`docs/observation.md`).
     Failed(String),
 }
 
@@ -114,6 +115,19 @@ pub struct ServerSlot {
     /// the preferred one. Read without a lock, because the candidate list
     /// is immutable and this is only an index into it.
     active: AtomicUsize,
+    /// The last strong signal addressed to this slot: the moment it was
+    /// laid out, refreshed by a bind (which addresses every slot) and by
+    /// every query that routes to it, and never by a filesystem batch —
+    /// activity is not a keepalive (`docs/observation.md`). The sweep
+    /// expires a slot when this plus the idle interval has passed.
+    last_use: Mutex<Instant>,
+    /// Bumped by every stop (`mark_cold`). The identity a launch is elected
+    /// under: a launch that finishes after a stop sees a different
+    /// generation and must not publish over the slot — the publish-path
+    /// guarantee residency owes (`docs/observation.md`). Bumps happen under
+    /// the workspace lock, and the comparison at publish reads it there
+    /// too, so the two cannot interleave.
+    generation: AtomicU64,
     /// The candidates already tried and rejected in this launch, retained
     /// whether the walk went on to succeed or ran out.
     attempts: Mutex<Vec<Attempt>>,
@@ -129,12 +143,14 @@ pub struct ServerSlot {
 }
 
 impl ServerSlot {
-    /// A slot for one plan's ladder, preferred candidate first.
+    /// A slot for one plan's ladder, preferred candidate first, standing at
+    /// `now`: the moment the tree called for this plan, which is where its
+    /// idle clock starts.
     ///
     /// Panics on an empty ladder: a plan is built from a non-empty
     /// candidate list, and a slot standing for no server could answer no
     /// routing question at all.
-    pub fn new(candidates: Vec<Arc<dyn Adapter>>, stopped: Arc<AtomicBool>) -> Self {
+    pub fn new(candidates: Vec<Arc<dyn Adapter>>, stopped: Arc<AtomicBool>, now: Instant) -> Self {
         assert!(
             !candidates.is_empty(),
             "a slot is laid out for a plan, and a plan has at least one candidate"
@@ -142,6 +158,8 @@ impl ServerSlot {
         Self {
             candidates,
             active: AtomicUsize::new(0),
+            last_use: Mutex::new(now),
+            generation: AtomicU64::new(0),
             attempts: Mutex::new(Vec::new()),
             stopped,
             state: Mutex::new(SlotState::Cold),
@@ -214,6 +232,28 @@ impl ServerSlot {
         self.lock().clone()
     }
 
+    /// Refresh this slot's idle clock. Strong signals only: a bind touches
+    /// every slot, a query the ones its scope routes to, and a filesystem
+    /// batch nothing (`docs/observation.md`).
+    pub fn touch(&self, now: Instant) {
+        *self.lock_last_use() = now;
+    }
+
+    /// When this slot was last addressed by a strong signal.
+    pub fn last_use(&self) -> Instant {
+        *self.lock_last_use()
+    }
+
+    /// The generation this slot currently stands at: what a launch is
+    /// elected under, and what a stop bumps.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
+    }
+
+    fn lock_last_use(&self) -> MutexGuard<'_, Instant> {
+        self.last_use.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     /// Decide what this demand should do about the state, holding the lock
     /// across the decision so that becoming the launcher is atomic with
     /// leaving `Cold`.
@@ -226,10 +266,14 @@ impl ServerSlot {
             SlotState::Running => Demand::Ready,
             SlotState::Starting => Demand::Join,
             SlotState::Failed(reason) => Demand::Failed(reason.clone()),
+            // Election records the generation this launch is elected under:
+            // a stop that follows bumps the slot's, and the launch's
+            // publish compares then (`docs/observation.md`).
             SlotState::Cold => {
                 *state = SlotState::Starting;
                 Demand::Lead(Launch {
                     slot: Arc::clone(self),
+                    generation: self.generation(),
                     finished: false,
                 })
             }
@@ -250,7 +294,16 @@ impl ServerSlot {
         match &*state {
             SlotState::Running => Ok(()),
             SlotState::Failed(reason) => bail!("{reason}"),
-            other => bail!("the launch ended as {}", other.label()),
+            // The only way out of `Starting` besides the launch's own
+            // endings is a stop (`mark_cold`): the launch this demand
+            // elected or joined was taken from under it, and the next
+            // query starts the server again.
+            SlotState::Cold => bail!(
+                "the server was stopped while it was starting; the next query starts it again"
+            ),
+            // Unreachable: the loop above exits only when the state has
+            // left `Starting`. Here for exhaustiveness of the enum.
+            SlotState::Starting => bail!("the launch is still under way"),
         }
     }
 
@@ -264,11 +317,17 @@ impl ServerSlot {
     ///
     /// The ladder resets with it: a later demand walks it from the top, and
     /// the attempts it clears described a launch that is over. A candidate
-    /// that failed once is not thereby excluded forever — that would be a
-    /// residency policy, and residency is observation's
-    /// (`backlog/discovery/observation.md`).
+    /// that failed once is not thereby excluded forever — clearing a
+    /// failure on the clock is the residency policy
+    /// (`docs/observation.md`).
+    ///
+    /// The generation bump is what an in-flight launch notices: its
+    /// election carried the previous generation, so a later publish
+    /// compares and refuses — a launch never publishes over a slot a stop
+    /// has taken from under it (`docs/observation.md`).
     pub fn mark_cold(&self) {
         self.active.store(0, Ordering::SeqCst);
+        self.generation.fetch_add(1, Ordering::SeqCst);
         self.attempts().clear();
         self.mark(SlotState::Cold);
     }
@@ -292,6 +351,13 @@ impl ServerSlot {
 /// failure, and unwind alike.
 pub struct Launch {
     slot: Arc<ServerSlot>,
+    /// The slot generation this launch was elected under. A stop bumps the
+    /// slot's generation; a launch finishing after such a stop sees the
+    /// mismatch and must not touch the slot — not publish over it, and not
+    /// mark it failed either, because the state it would clobber belongs to
+    /// whatever stopped it or to a launch elected after
+    /// (`docs/observation.md`).
+    generation: u64,
     finished: bool,
 }
 
@@ -331,19 +397,32 @@ impl Launch {
         self.slot.mark(SlotState::Running);
     }
 
-    /// The launch failed: record why, and wake the waiters.
+    /// The launch failed: record why, and wake the waiters. A launch
+    /// superseded by a stop stays silent — the slot it would mark is no
+    /// longer its slot.
     pub fn failed(mut self, reason: impl Into<String>) {
         self.finished = true;
+        if self.superseded() {
+            return;
+        }
         self.slot.mark(SlotState::Failed(reason.into()));
+    }
+
+    /// A stop took the slot from under this launch: the slot's generation
+    /// moved past the one this launch was elected under. Publication
+    /// checks this under the workspace lock before it writes anything.
+    pub(crate) fn superseded(&self) -> bool {
+        self.generation != self.slot.generation()
     }
 }
 
 impl Drop for Launch {
     fn drop(&mut self) {
-        if !self.finished {
-            self.slot.mark(SlotState::Failed(
-                "the launcher stopped without publishing a server".to_string(),
-            ));
+        if self.finished || self.superseded() {
+            return;
         }
+        self.slot.mark(SlotState::Failed(
+            "the launcher stopped without publishing a server".to_string(),
+        ));
     }
 }

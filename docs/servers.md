@@ -102,6 +102,9 @@ unparsable: **nothing starts**, and every call reports the parse error —
 silently ignoring it would run the wrong servers. Unknown keys are rejected.
 
 ```toml
+idle_eviction_secs = 1800        # workspace-level: release a server no
+                                 # query or bind has addressed for this long
+
 [servers.rust-analyzer]          # a built-in's name: override it
 command = ["/opt/ra/rust-analyzer"]
 backstop_secs = 180

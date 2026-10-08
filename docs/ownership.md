@@ -32,11 +32,11 @@ says why.
 A slot per plan rather than per configured adapter is what keeps an
 irrelevant server out of the process table: a Python-only tree lays out no
 Rust slot, so no Rust server is warmed, demanded, or reported as down.
-Evidence is read **once**, when the workspace is built; a tree that grows a
-language afterwards keeps the slots it was laid out with, and a query for
-the new language is told which server was left out and why. Noticing the
-change while the workspace is live is observation's
-(`../backlog/discovery/observation.md`).
+Evidence is read when the workspace is built and re-read by its
+observation thread; a tree that grows a language afterwards gets its slot
+laid out without a restart, and a query for the new language is told
+which server was left out and why
+([`observation.md`](observation.md)).
 
 **`Session`** — a caller's binding to one `Entry`, and the working
 directory it was bound with (its **view**). A tool is handed a clone of the
@@ -90,9 +90,11 @@ reach the servers. Without that registry, a long-lived host could hold
 children that outlived every agent until the holding session happened to drop
 — which may be never.
 
-Servers stop when the last session holding the workspace drops, or at
-shutdown. There is no idle eviction and no expiry clock
-(`../backlog/discovery/observation.md`).
+Servers stop when the idle sweep releases them — no strong signal
+addressed to them for the interval, default 30 minutes, `idle_eviction_secs`
+in `structural.toml` — when the last session holding the workspace drops,
+or at shutdown. The next query reacquires what it needs, exactly as a
+fresh bind would ([`observation.md`](observation.md)).
 
 ## Slots: one server's lifecycle
 
@@ -118,9 +120,10 @@ Cold ──demand──▶ Starting ──published──▶ Running
   starting another.
 - **Running** — the workspace holds the server.
 - **Failed(reason)** — every candidate on the ladder failed, and `reason`
-  names each one. A demand reports that rather than retrying; clearing it
-  belongs to whatever can re-acquire an expired server, on the clock that
-  expires one — neither exists yet.
+  names each one. A demand reports that rather than retrying; the idle
+  sweep clears it on the same clock that expires a server, so the next
+  demand walks the ladder again
+  ([`observation.md`](observation.md)).
 
 The state sits behind the **slot's own** lock, not the workspace's, which is
 what lets a server start while the workspace is otherwise free.
@@ -130,8 +133,12 @@ atomic with leaving `Cold`, and returns one of: `Ready`, `Join`, `Failed`,
 as it was, so a demand after shutdown costs a load rather than a thread).
 
 `mark_cold` is the one way to say "nothing is running here and a later demand
-may start one again", used by shutdown and by any future eviction alike, so
-the two cannot disagree about what stopping means. It resets the ladder with
+may start one again", used by shutdown and by the idle sweep alike, so the
+two cannot disagree about what stopping means. Each stop also bumps the
+slot's generation: a launch elected before the stop cannot publish over
+the slot after it — publication compares generations under the workspace
+lock, and a superseded launch drops the child it started instead
+([`observation.md`](observation.md)). It resets the ladder with
 the state, so a later demand walks it from the top rather than inheriting a
 verdict on candidates that were tried in another launch. Every transition out of
 `Starting` notifies the slot's condvar, so a waiter is never blocked on a

@@ -1,6 +1,9 @@
 //! `structural.toml` at the workspace root: which language servers to run.
 //!
 //! ```toml
+//! idle_eviction_secs = 1800        # release a server no query has
+//!                                  # addressed for this long (default 1800)
+//!
 //! [servers.rust-analyzer]          # a built-in: override its command or backstop
 //! command = ["/opt/ra/rust-analyzer"]
 //! backstop_secs = 180
@@ -45,11 +48,34 @@ use std::time::Duration;
 
 pub const FILE_NAME: &str = "structural.toml";
 
+/// How long a server may sit without a strong signal — a bind or a query
+/// routing to it — before the idle sweep releases it, observation going on
+/// regardless (`docs/observation.md`). One interval for every server, by
+/// the operator's decision, not a table of them; `structural.toml`'
+/// `idle_eviction_secs` may override it, per workspace like the rest of
+/// this file's keys.
+pub const DEFAULT_IDLE_EVICTION: Duration = Duration::from_secs(30 * 60);
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
     pub servers: BTreeMap<String, ServerEntry>,
+    /// The workspace's idle-eviction interval, in seconds. Absent: the
+    /// default. This is a resource knob, not selection policy — it rides
+    /// on `Config` because this file is where every workspace-level key
+    /// lives, not because it changes what selection plans.
+    #[serde(default)]
+    pub idle_eviction_secs: Option<u64>,
+}
+
+impl Config {
+    /// The idle-eviction interval this file asks for, or the default.
+    pub fn idle_eviction(&self) -> Duration {
+        self.idle_eviction_secs
+            .map(Duration::from_secs)
+            .unwrap_or(DEFAULT_IDLE_EVICTION)
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]

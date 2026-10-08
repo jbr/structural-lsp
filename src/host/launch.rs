@@ -56,7 +56,17 @@ impl Entry {
     /// enough on a cold index for an MCP client to give up on the handshake.
     pub(crate) fn warm(self: &Arc<Self>, scope: Option<&Path>) -> Vec<usize> {
         let snapshot = self.slots_snapshot();
-        self.warm_indices(crate::workspace::serving(&snapshot, scope))
+        let wanted = crate::workspace::serving(&snapshot, scope);
+        // A strong signal refreshes the idle clock of every slot it
+        // addresses — a bind all of them, a query the ones its scope routes
+        // to. A filesystem batch never does: activity is not a keepalive
+        // (`docs/observation.md`). The observer warms through
+        // `warm_indices` directly and touches nothing.
+        let now = self.clock.now();
+        for &index in &wanted {
+            snapshot[index].touch(now);
+        }
+        self.warm_indices(wanted)
     }
 
     /// Start exactly these slots — indices into the entry's own slot list —
@@ -225,6 +235,19 @@ impl Entry {
             drop(workspace);
             drop(server);
             return launch.failed("the host shut down while this server was starting");
+        }
+        if launch.superseded() {
+            // The slot was stopped while this launch was in flight — the
+            // idle sweep is the first stop that is not a shutdown. This
+            // launch was elected under an older generation, so it must not
+            // publish over the slot: the state there belongs to whatever
+            // stopped it, or to a launch elected after
+            // (`docs/observation.md`). Dropping the server reaps the child
+            // it started; the `Launch` guard sees the supersession and
+            // exits without marking the slot.
+            drop(workspace);
+            drop(server);
+            return;
         }
         child.published();
         server.set_registration(child);

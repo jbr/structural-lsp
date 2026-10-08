@@ -42,6 +42,14 @@ of never returning a partial answer on a timer.
 What this rules out, permanently: settle sleeps, retry loops, "best result so
 far", and any bound on a query that is progressing.
 
+Two mechanisms carry clocks here, and they are different kinds. The
+inactivity backstop bounds a *query's* wait for a broken server. The idle
+sweep ([observation.md](observation.md)) is a **resource-expiry** timer: it
+releases a server process no strong signal has addressed for the
+interval, and nothing waits on it — no query's latency and no answer's
+content depends on when it fires. The rule above governs answers, and
+stands unchanged: no settle sleeps, no timer-based claims of readiness.
+
 ## Freshness comes from message ordering
 
 Every file structural has touched is *owned*: it was `didOpen`ed, and is

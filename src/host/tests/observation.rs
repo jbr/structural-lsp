@@ -10,9 +10,11 @@
 //! [`Workspace::refresh`](crate::workspace::Workspace::refresh).
 
 use super::bound;
-use super::fixtures::{selective_fixture, servers_launched};
-use crate::host::observation::{Batch, Driver, Event, Notify, Source, Synthetic, reduce};
+use super::fixtures::{ladder_fixture, selective_fixture, servers_launched};
+use crate::clock::TestClock;
+use crate::host::observation::{Batch, Driver, Event, Notify, Source, Stop, Synthetic, reduce};
 use crate::host::{AgentId, Host};
+use crate::workspace::SlotState;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -25,12 +27,38 @@ use std::time::{Duration, Instant};
 fn synthetic_host() -> (Host, Arc<Mutex<Vec<Driver>>>) {
     let drivers: Arc<Mutex<Vec<Driver>>> = Arc::new(Mutex::new(Vec::new()));
     let captured = Arc::clone(&drivers);
-    let host = Host::with_observation(Box::new(move || {
-        let (source, driver) = Synthetic::new();
-        captured.lock().unwrap().push(driver);
-        Box::new(source) as Box<dyn Source>
-    }));
+    let host = Host::with_observation(
+        Box::new(move || {
+            let (source, driver) = Synthetic::new();
+            captured.lock().unwrap().push(driver.clone());
+            (
+                Box::new(source) as Box<dyn Source>,
+                Arc::new(driver) as Arc<dyn Stop>,
+            )
+        }),
+        Arc::new(crate::clock::SystemClock),
+    );
     (host, drivers)
+}
+
+/// The same, with the shared test clock, so a test advances time instead of
+/// sleeping through the eviction interval.
+fn residency_host() -> (Host, Arc<Mutex<Vec<Driver>>>, Arc<TestClock>) {
+    let drivers: Arc<Mutex<Vec<Driver>>> = Arc::new(Mutex::new(Vec::new()));
+    let captured = Arc::clone(&drivers);
+    let clock = TestClock::shared();
+    let host = Host::with_observation(
+        Box::new(move || {
+            let (source, driver) = Synthetic::new();
+            captured.lock().unwrap().push(driver.clone());
+            (
+                Box::new(source) as Box<dyn Source>,
+                Arc::new(driver) as Arc<dyn Stop>,
+            )
+        }),
+        Arc::clone(&clock) as Arc<dyn crate::clock::Clock>,
+    );
+    (host, drivers, clock)
 }
 
 /// The first workspace's driver. Every test here binds one workspace.
@@ -120,11 +148,11 @@ fn the_synthetic_source_hands_out_what_is_pushed_and_ends_on_close() {
     // The debounce is the synthetic source's to ignore: what coalesces is
     // what the test pushed.
     let batch = source
-        .next_batch(Duration::from_secs(1))
+        .next_batch(Some(Duration::from_secs(1)))
         .expect("the batch pushed before the read");
     assert_eq!(batch.events, vec![Event::Overflow]);
     driver.close();
-    assert!(source.next_batch(Duration::from_secs(1)).is_none());
+    assert!(source.next_batch(Some(Duration::from_secs(1))).is_none());
     assert_eq!(driver.consumed(), 1, "one batch was handed out");
 }
 
@@ -395,7 +423,7 @@ fn a_batch_that_changes_nothing_lays_out_nothing() {
 }
 
 #[test]
-fn a_released_workspace_is_not_kept_alive_by_its_watcher() {
+fn a_released_workspace_stops_observing_at_once() {
     let Some(rust_only) = selective_fixture(
         "obs-weak",
         &[("Cargo.toml", ""), ("src/lib.rs", "pub fn a() {}\n")],
@@ -405,6 +433,15 @@ fn a_released_workspace_is_not_kept_alive_by_its_watcher() {
     };
     let (host, drivers) = synthetic_host();
     let session = bound(&host, "a", &rust_only.root);
+    let driver = first_driver(&drivers);
+    // The watcher is alive while the workspace is held: it hands out a batch.
+    driver.push(Batch {
+        events: vec![Event::Overflow],
+    });
+    assert!(
+        wait_until(|| driver.consumed() >= 1),
+        "the watcher was alive and handed out the batch"
+    );
     // The observer thread is parked on the synthetic source, holding — by
     // design — nothing but the Weak.
     let weak = {
@@ -417,14 +454,21 @@ fn a_released_workspace_is_not_kept_alive_by_its_watcher() {
         Arc::downgrade(&entry)
     };
     host.agent_ended(&AgentId::new("a"));
-    drop(session);
-    let driver = first_driver(&drivers);
+    // A released-but-held workspace keeps observing: the batch is drained,
+    // and the sweep keeps running under the holding session.
     driver.push(Batch {
         events: vec![Event::Overflow],
     });
     assert!(
-        wait_until(|| driver.consumed() >= 1),
-        "the watcher was alive and handed out the batch"
+        wait_until(|| driver.consumed() >= 2),
+        "release did not end observation while a session still holds the workspace"
+    );
+    drop(session);
+    // The last session has dropped: the watcher is closed at once, and the
+    // thread ends on it — not at the tree's next event.
+    assert!(
+        wait_until(|| driver.finished()),
+        "the entry's death closed the source and the observation thread ended"
     );
     assert!(
         weak.upgrade().is_none(),
@@ -439,7 +483,7 @@ fn a_released_workspace_is_not_kept_alive_by_its_watcher() {
 #[test]
 #[ignore = "a real backend: run with --ignored"]
 fn a_real_watcher_yields_a_batch() {
-    let mut source = Notify::new();
+    let (mut source, _stop) = Notify::new();
     let dir = std::env::temp_dir().join(format!("structural-notify-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -449,7 +493,7 @@ fn a_real_watcher_yields_a_batch() {
     std::fs::write(dir.join("a.txt"), "x\n").unwrap();
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let _ = sender.send(source.next_batch(Duration::from_millis(100)));
+        let _ = sender.send(source.next_batch(Some(Duration::from_millis(100))));
     });
     let batch = receiver
         .recv_timeout(Duration::from_secs(10))
@@ -457,4 +501,352 @@ fn a_real_watcher_yields_a_batch() {
         .expect("a batch, not a closed source");
     assert!(!batch.events.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_idle_server_is_stopped_and_the_next_query_reacquires_it() {
+    let Some(both) = selective_fixture(
+        "res-evict",
+        &[
+            ("Cargo.toml", ""),
+            ("src/lib.rs", "pub fn a() {}\n"),
+            ("src/helper.py", "def a():\n    pass\n"),
+        ],
+        "",
+    ) else {
+        return;
+    };
+    let (host, drivers, clock) = residency_host();
+    let session = bound(&host, "a", &both.root);
+    let driver = first_driver(&drivers);
+    let state_of = |name: &str| {
+        session
+            .workspace()
+            .slots()
+            .iter()
+            .find(|slot| slot.name() == name)
+            .expect("the fixture plans it")
+            .state()
+    };
+    // Binding warms everything, and both servers published.
+    assert_eq!(state_of("pyright"), SlotState::Running);
+    assert_eq!(state_of("rust-analyzer"), SlotState::Running);
+    // Thirty-one minutes pass with no strong signal addressed to either.
+    // Two wakes: the sweep runs inside the first, and the second's handout
+    // happens only after the first wake's iteration is done — the loop is
+    // serial, so this is a claim about completed work, not timing.
+    clock.advance(Duration::from_secs(31 * 60));
+    driver.push(Batch { events: Vec::new() });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 2), "both wakes drained");
+    assert_eq!(
+        state_of("pyright"),
+        SlotState::Cold,
+        "the idle sweep stopped a server no signal had addressed"
+    );
+    assert_eq!(
+        state_of("rust-analyzer"),
+        SlotState::Cold,
+        "every idle server goes, not only the last queried"
+    );
+    // The next query reacquires exactly what it is about to use.
+    let lib = both.source();
+    session.activate(Some(lib.as_path()));
+    assert_eq!(
+        state_of("rust-analyzer"),
+        SlotState::Running,
+        "the query demand-started the evicted server"
+    );
+    assert_eq!(
+        state_of("pyright"),
+        SlotState::Cold,
+        "the query for rust did not touch pyright"
+    );
+    let launched = servers_launched(&both);
+    assert_eq!(
+        launched.iter().filter(|s| **s == "rust-analyzer").count(),
+        2,
+        "the evicted server was launched a second time"
+    );
+    assert_eq!(
+        launched.iter().filter(|s| **s == "pyright").count(),
+        1,
+        "pyright stayed stopped"
+    );
+    host.shutdown();
+}
+
+#[test]
+fn idle_is_per_server() {
+    let Some(both) = selective_fixture(
+        "res-per-slot",
+        &[
+            ("Cargo.toml", ""),
+            ("src/lib.rs", "pub fn a() {}\n"),
+            ("src/helper.py", "def a():\n    pass\n"),
+        ],
+        "",
+    ) else {
+        return;
+    };
+    let (host, drivers, clock) = residency_host();
+    let session = bound(&host, "a", &both.root);
+    let driver = first_driver(&drivers);
+    let state_of = |name: &str| {
+        session
+            .workspace()
+            .slots()
+            .iter()
+            .find(|slot| slot.name() == name)
+            .expect("the fixture plans it")
+            .state()
+    };
+    // The bind addressed both servers; a query addresses only the ones its
+    // scope routes to. Twenty minutes pass, then the query refreshes
+    // Python's clock alone; ten more, and Rust's has run out from the bind
+    // while Python's is still young.
+    clock.advance(Duration::from_secs(20 * 60));
+    let helper = both.root.join("src/helper.py");
+    session.activate(Some(helper.as_path()));
+    clock.advance(Duration::from_secs(10 * 60));
+    driver.push(Batch { events: Vec::new() });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 2), "both wakes drained");
+    assert_eq!(
+        state_of("pyright"),
+        SlotState::Running,
+        "the query refreshed the clock of the server it addressed"
+    );
+    assert_eq!(
+        state_of("rust-analyzer"),
+        SlotState::Cold,
+        "the server no signal addressed since the bind expired"
+    );
+    host.shutdown();
+}
+
+#[test]
+fn filesystem_batches_do_not_keep_a_server_alive() {
+    let Some(both) = selective_fixture(
+        "res-keepalive",
+        &[
+            ("Cargo.toml", ""),
+            ("src/lib.rs", "pub fn a() {}\n"),
+            ("src/helper.py", "def a():\n    pass\n"),
+        ],
+        "",
+    ) else {
+        return;
+    };
+    let (host, drivers, clock) = residency_host();
+    let session = bound(&host, "a", &both.root);
+    let driver = first_driver(&drivers);
+    let state_of = |name: &str| {
+        session
+            .workspace()
+            .slots()
+            .iter()
+            .find(|slot| slot.name() == name)
+            .expect("the fixture plans it")
+            .state()
+    };
+    // A real batch: evidence maintenance runs, and touches nothing —
+    // filesystem activity is not a keepalive.
+    driver.push(Batch {
+        events: vec![Event::Created {
+            path: both.root.join("src/other.rs"),
+        }],
+    });
+    assert!(
+        wait_until(|| driver.consumed() >= 1),
+        "the batch was drained"
+    );
+    clock.advance(Duration::from_secs(31 * 60));
+    driver.push(Batch {
+        events: vec![Event::Created {
+            path: both.root.join("src/other.rs"),
+        }],
+    });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 3), "wakes drained");
+    assert_eq!(
+        state_of("pyright"),
+        SlotState::Cold,
+        "a batch that arrived inside the idle window did not extend it"
+    );
+    assert_eq!(state_of("rust-analyzer"), SlotState::Cold);
+    host.shutdown();
+}
+
+#[test]
+fn a_failed_slot_is_cleared_on_the_same_clock() {
+    let Some(ladder) = ladder_fixture("res-failed", "missing", "missing") else {
+        return;
+    };
+    let (host, drivers, clock) = residency_host();
+    let session = bound(&host, "a", &ladder.root);
+    let driver = first_driver(&drivers);
+    let slot = || {
+        session
+            .workspace()
+            .slots()
+            .first()
+            .expect("the rust plan's slot")
+            .clone()
+    };
+    // The bind's warm walked the ladder; both candidates are missing.
+    assert!(
+        matches!(slot().state(), SlotState::Failed(_)),
+        "the walk ended in a failure"
+    );
+    // The failure expires like a server does: the sweep clears it, so a
+    // later demand walks the ladder again rather than being refused
+    // forever — and not before, so a failure is never retried in a loop.
+    clock.advance(Duration::from_secs(31 * 60));
+    driver.push(Batch { events: Vec::new() });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 2), "both wakes drained");
+    assert_eq!(
+        slot().state(),
+        SlotState::Cold,
+        "the failure was cleared on the clock"
+    );
+    assert!(
+        slot().failed_attempts().is_empty(),
+        "the cleared attempts described a launch that is over"
+    );
+    // The next demand walks the ladder from the top, and fails again —
+    // freshly, with its own attempts recorded.
+    session.activate(None);
+    assert!(
+        matches!(slot().state(), SlotState::Failed(_)),
+        "the demand re-walked the ladder"
+    );
+    assert!(
+        !slot().failed_attempts().is_empty(),
+        "the second walk recorded its own attempts"
+    );
+    host.shutdown();
+}
+
+#[test]
+fn eviction_leaves_observation_intact() {
+    let Some(rust_only) = selective_fixture(
+        "res-intact",
+        &[("Cargo.toml", ""), ("src/lib.rs", "pub fn a() {}\n")],
+        "",
+    ) else {
+        return;
+    };
+    let (host, drivers, clock) = residency_host();
+    let session = bound(&host, "a", &rust_only.root);
+    let driver = first_driver(&drivers);
+    clock.advance(Duration::from_secs(31 * 60));
+    driver.push(Batch { events: Vec::new() });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 2), "both wakes drained");
+    let stopped = session
+        .workspace()
+        .slots()
+        .iter()
+        .all(|slot| slot.state() == SlotState::Cold);
+    assert!(stopped, "the sweep stopped what the bind had warmed");
+    // The tree gains Python. The batch still refreshes evidence and lays
+    // out the new language's slot, and the workspace still has an attached
+    // agent, so the weak signal still warms it — eviction took the
+    // servers, not the observation.
+    std::fs::write(rust_only.root.join("src/helper.py"), "def a():\n    pass\n").unwrap();
+    driver.push(Batch {
+        events: vec![Event::Created {
+            path: rust_only.root.join("src/helper.py"),
+        }],
+    });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 4), "wakes drained");
+    assert!(
+        wait_until(|| names_server(&session, "pyright")),
+        "observation still grows the slot list after eviction"
+    );
+    assert!(
+        wait_until(|| servers_launched(&rust_only).contains(&"pyright".to_string())),
+        "observation still warms a new language after eviction"
+    );
+    assert_eq!(
+        servers_launched(&rust_only)
+            .iter()
+            .filter(|s| **s == "rust-analyzer")
+            .count(),
+        1,
+        "the batch did not relaunch what the sweep had stopped"
+    );
+    host.shutdown();
+}
+
+#[test]
+fn a_watch_failure_degrades_to_a_ticker_and_recovers() {
+    let Some(rust_only) = selective_fixture(
+        "res-watch-lost",
+        &[("Cargo.toml", ""), ("src/lib.rs", "pub fn a() {}\n")],
+        "",
+    ) else {
+        return;
+    };
+    let (host, drivers, clock) = residency_host();
+    let session = bound(&host, "a", &rust_only.root);
+    let driver = first_driver(&drivers);
+    let state_of = || {
+        session
+            .workspace()
+            .slots()
+            .first()
+            .expect("the rust plan's slot")
+            .state()
+    };
+    // The watch is lost, and every re-establishment fails: no refreshes
+    // will happen, but the sweep keeps running, because it needs only a
+    // clock.
+    driver.lose();
+    driver.fail_watch(true);
+    driver.push(Batch { events: Vec::new() });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 2), "wakes drained");
+    clock.advance(Duration::from_secs(31 * 60));
+    driver.push(Batch { events: Vec::new() });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 4), "wakes drained");
+    assert_eq!(
+        state_of(),
+        SlotState::Cold,
+        "the idle sweep ran with the watch lost"
+    );
+    // The watch recovers: the sweep's retry succeeds, and a fresh watch is
+    // on the tree.
+    driver.fail_watch(false);
+    driver.push(Batch { events: Vec::new() });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 6), "wakes drained");
+    assert_eq!(
+        driver.watched().len(),
+        2,
+        "the recovered watch watched the root a second time"
+    );
+    // Evidence maintenance resumes: the tree gains Python, the batch
+    // refreshes, and the attached agent's weak signal warms it.
+    std::fs::write(rust_only.root.join("src/helper.py"), "def a():\n    pass\n").unwrap();
+    driver.push(Batch {
+        events: vec![Event::Created {
+            path: rust_only.root.join("src/helper.py"),
+        }],
+    });
+    driver.push(Batch { events: Vec::new() });
+    assert!(wait_until(|| driver.consumed() >= 8), "wakes drained");
+    assert!(
+        wait_until(|| names_server(&session, "pyright")),
+        "a recovered watch refreshes evidence again"
+    );
+    assert!(
+        wait_until(|| servers_launched(&rust_only).contains(&"pyright".to_string())),
+        "a recovered watch warms a new language again"
+    );
+    host.shutdown();
 }

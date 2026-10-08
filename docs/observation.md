@@ -1,9 +1,9 @@
 # Observation: the event source a workspace watches itself with
 
-Parent: [README.md](README.md). The part of the unit not yet built — server
-residency separated from agent interest: idle eviction, reacquisition, and
-eviction that cannot break an in-flight launch — is
-[`backlog/discovery/observation.md`](../backlog/discovery/observation.md).
+Parent: [README.md](README.md). What a query may claim about currency is
+synchronization's contract, not this one
+([`backlog/discovery/synchronization.md`](../backlog/discovery/synchronization.md),
+still to build).
 
 Every workspace gets an event source when it is created
 (`Host::agent_started`): a thread that watches the workspace root and, per
@@ -36,9 +36,10 @@ answer.
   which reduces to the same rescan, so "lost" and "received" cannot be
   told apart and never need to be.
 - A refresh appends only. A language whose evidence dropped keeps its
-  slot, which serving then stops matching; eviction is later work. And a
-  refresh itself warms nothing — it returns the languages that are new
-  with their slot indices, and whether they warm is the signal policy
+  slot, which serving keeps matching — removal is the idle sweep's, on
+  the clock that expires a server, not evidence-driven. And a refresh
+  itself warms nothing — it returns the languages that are new with
+  their slot indices, and whether they warm is the signal policy
   (below), decided after the refresh returns.
 
 ## Signals: strong start, weak refresh
@@ -62,8 +63,10 @@ serves, does not resurrect a stopped or failed server. Filesystem
 activity is not an unconditional keepalive — build output and background
 generators must not keep a process alive or bring one back
 (`../backlog/discovery/README.md`, the signal table it was agreed from).
-The reactivation-after-eviction row of that table is residency work: a
-workspace has nothing stopped to reactivate yet.
+Reactivation after eviction is the demand path itself: the next query
+acquires what it needs, exactly as it would on a cold slot (residency,
+below). An edit never does — the row's answer is that a strong signal
+reactivates and a weak one never.
 
 The wiring that makes this reachable: the observer holds the workspace
 lock only for the refresh itself and grows the entry's slot copy
@@ -74,19 +77,83 @@ just by the next bind. The interest check happens after the refresh: an
 agent binding between refresh and warm is covered anyway, because its
 bind warms the whole (grown) list.
 
+## Residency: the idle sweep
+
+Server residency is separated from agent interest: a server runs while
+strong signals keep arriving addressed to it, and stops when they stop,
+while observation goes on.
+
+- **The clock is per slot.** Each slot carries the moment it was laid
+  out, refreshed by every strong signal addressed to it — a bind
+  addresses all of a workspace's slots, a query the ones its scope
+  routes to, and a filesystem batch none. A Python-only stretch lets
+  `rust-analyzer` fall out of a polyglot workspace while `pyright`
+  stays. Filesystem activity is not a keepalive, and neither is mere
+  attachment: an agent that has addressed nothing for the interval
+  loses its servers, and its next query pays what any fresh bind
+  would.
+- **The interval is one, not a table.** Default 30 minutes
+  (`crate::config::DEFAULT_IDLE_EVICTION`), overridable per workspace
+  by `idle_eviction_secs` in `structural.toml` — the file every other
+  workspace-level key lives in, not per-server.
+- **The sweep runs on the observer thread.** The thread's park is
+  bounded by the next slot's expiry, computed without the workspace
+  lock from the entry's own slot copy; every wake — batch or park
+  spent — ends with a sweep of what has since expired. A spent park is
+  an empty batch: the reduction runs on real events only. Eviction
+  stops servers, never observation.
+- **The sweep stops `Running`, `Starting`, and `Failed` alike.** A
+  `Failed` slot's verdict expires on the same clock, so a failure is
+  never retried in a loop and is not permanent either: the next demand
+  walks the ladder from the top. A `Starting` slot whose launch
+  outlives the interval is the one case that makes an in-flight launch
+  stale — and the one case is answered below. Nothing removes slots:
+  eviction re-arms, it does not shrink.
+- **A launch superseded by a stop cannot publish over the slot.** Each
+  slot carries a generation, bumped by every stop (`mark_cold`); a
+  launch elected from `Cold` records the generation it was elected
+  under, and publication — under the workspace lock, where bumps also
+  happen — compares before it writes. A superseded launch drops the
+  child it started and exits without marking the slot: the state there
+  belongs to whatever stopped it, or to a launch elected after. Never
+  a bare `Starting` check — that is not identity across a
+  stop/restart.
+- **Reacquisition is the demand path.** `mark_cold` leaves the slot
+  cold; the next query's warm elects a launcher and waits for
+  readiness, which is also how a fresh bind behaves. A query that
+  races an eviction may see the slot stop under it and reports the
+  state; the next call reacquires.
+
+When the workspace is released — no agent interested — a session may
+still hold and query it: its servers still expire on the same clock,
+its evidence still refreshes, and nothing launches on a weak signal.
+When the last session drops, the entry dies, and with it the watcher,
+the thread, and any servers the workspace still holds.
+
 ## The thread holds the workspace loosely
 
 The observation thread holds only a `Weak` to the workspace's entry: no
 `Arc` survives a park, and the upgrade is re-checked before parking and
 after every batch. A released workspace is not kept alive by its own
-watcher; when its tree next makes a noise, the thread notices the release
-and exits. A workspace whose tree then goes quiet leaves the thread parked
-with a live watcher until that next event — eager teardown of released
-watchers is residency work, not this reduction's.
+watcher, and it keeps observing — evidence maintenance and the sweep
+both — until its last session drops, because a session holding it may
+still query and demand still starts what a query needs. When the entry
+itself dies, its `Drop` closes the source, and the thread ends at once
+rather than at the tree's next event.
 
-Watch errors end observation quietly: one stderr line, and the workspace
-behaves as it did before there was a watcher — evidence goes stale. A
-watcher existing is not a claim about anything: no batch, and no watcher
-at all, establishes that an answer is current
+Overlapping subscriptions route correctly by construction: every
+workspace watches its own root and reduces into its own evidence, so two
+entries over one tree — the release window — never share mutable state.
+Sharing one native watch across entries is an optimization, not owed
+here.
+
+A watch failure is not death. The source reports the loss, the thread
+survives it, and the sweep keeps running — eviction needs only a clock —
+while every sweep re-attempts the watch: a transient failure self-heals,
+and a persistent one costs one attempt per interval. The loss and the
+recovery are each logged once; the retries between stay quiet. Evidence
+stops improving, which is the behaviour the workspace had before there
+was a watcher. A watcher — present, lost, or absent — is not a claim
+about anything: no batch establishes that an answer is current
 ([`synchronization.md`](synchronization.md) is that contract, and it is
 not built).

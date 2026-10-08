@@ -26,7 +26,11 @@ fn workspace(name: &str, files: &[(&str, &str)], config: &str) -> Workspace {
     if !config.is_empty() {
         std::fs::write(root.join(crate::config::FILE_NAME), config).unwrap();
     }
-    Workspace::new(root, Arc::new(AtomicBool::new(false)))
+    Workspace::new(
+        root,
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(crate::clock::SystemClock),
+    )
 }
 
 fn slot_names(workspace: &Workspace) -> Vec<&str> {
@@ -187,5 +191,57 @@ fn one_server_planned_for_two_languages_is_one_slot() {
         ["poly"],
         "a fallback that served only one of the two would answer for less \
          than the slot was laid out for"
+    );
+}
+
+#[test]
+fn a_launch_superseded_by_a_stop_stays_silent() {
+    use crate::workspace::{Demand, ServerSlot, SlotState};
+    use std::sync::atomic::AtomicBool;
+    use std::time::Instant;
+    let builtin = crate::lsp::adapter::builtins()
+        .into_iter()
+        .next()
+        .expect("there is a built-in");
+    let slot = Arc::new(ServerSlot::new(
+        vec![builtin],
+        Arc::new(AtomicBool::new(false)),
+        Instant::now(),
+    ));
+    // A cold slot elects a launcher, recording the generation it stands at.
+    let Demand::Lead(launch) = slot.demand() else {
+        panic!("a cold slot elects a launcher")
+    };
+    assert_eq!(slot.state(), SlotState::Starting);
+    // A stop takes the slot from under the launch, bumping the generation.
+    slot.mark_cold();
+    assert_eq!(slot.generation(), 1);
+    // The superseded launch must not touch the slot: the state there
+    // belongs to whatever stopped it, or to a launch elected after.
+    launch.failed("whatever the launcher wanted to say");
+    assert_eq!(
+        slot.state(),
+        SlotState::Cold,
+        "a superseded launch cannot mark the slot failed"
+    );
+    // A fresh demand elects under the new generation and publishes
+    // normally.
+    let Demand::Lead(launch) = slot.demand() else {
+        panic!("a cold slot elects a launcher")
+    };
+    launch.published();
+    assert_eq!(slot.state(), SlotState::Running);
+    // And a superseded launch dropped unfinished — the panic path — stays
+    // silent too.
+    slot.mark_cold();
+    let Demand::Lead(launch) = slot.demand() else {
+        panic!("a cold slot elects a launcher")
+    };
+    slot.mark_cold();
+    drop(launch);
+    assert_eq!(
+        slot.state(),
+        SlotState::Cold,
+        "a superseded launch's unwind path stays silent as well"
     );
 }

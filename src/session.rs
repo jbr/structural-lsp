@@ -44,8 +44,13 @@ impl Session {
         let view = canonical_root(&cwd);
         let session = Self::bind(
             Arc::new(Entry::new(
-                Workspace::new(crate::host::workspace_key(&view), lifetime.flag()),
+                Workspace::new(
+                    crate::host::workspace_key(&view),
+                    lifetime.flag(),
+                    Arc::new(crate::clock::SystemClock),
+                ),
                 lifetime,
+                Arc::new(crate::clock::SystemClock),
             )),
             view,
         );

@@ -58,8 +58,8 @@ is silently picked. The full contract, and what each mechanism costs, is
 
 `src/host.rs` + `src/host/launch.rs` + `src/host/lifetime.rs` (workspaces,
 launching, admission, shutdown) ·
-`src/workspace.rs` + `src/workspace/slot.rs` (one root's servers and their
-lifecycle) · `src/session.rs` (a caller's binding) · `src/lsp/handle.rs`
+`src/workspace.rs` + `src/workspace/slot.rs` + `src/clock.rs` (one root's
+servers, their lifecycle, and the clock residency runs on) · `src/session.rs` (a caller's binding) · `src/lsp/handle.rs`
 (one server on three threads) · `src/lsp/server.rs` (documents and queries) ·
 `src/lsp/adapter/` (all server-specific strings) · `src/tools/` (the three
 tools and the shared resolution pipeline) · `src/main.rs` (the front end).

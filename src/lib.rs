@@ -2,6 +2,7 @@
 //! serves, without the binary's stdio and argv. Mirrors semantic-edit-mcp's
 //! `lib.rs` pattern.
 
+pub mod clock;
 pub mod config;
 pub mod discovery;
 pub mod fixtures;

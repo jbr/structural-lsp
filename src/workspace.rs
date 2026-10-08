@@ -18,6 +18,7 @@
 //! dispatcher — without serializing unrelated workspaces. Each server runs on
 //! its own threads behind its handle.
 
+use crate::clock::Clock;
 use crate::config::{self, Config, Layout};
 use crate::discovery::catalogue::Catalogue;
 use crate::discovery::evidence::Evidence;
@@ -29,6 +30,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
 
 mod slot;
 
@@ -65,6 +67,15 @@ pub struct Workspace {
     /// slots: set by shutdown before anything is stopped, re-checked under
     /// the workspace lock before publish (`src/host/lifetime.rs`).
     stopped: Arc<AtomicBool>,
+    /// Where "now" comes from for the idle clocks slots start on, and for
+    /// the sweep's expiry checks (`docs/observation.md`). Injectable so
+    /// tests advance time rather than sleeping through intervals.
+    clock: Arc<dyn Clock>,
+    /// How long a slot may sit without a strong signal before the idle
+    /// sweep releases it: this workspace's `idle_eviction_secs`, or the
+    /// default. Copied onto the host entry at acquisition, which is where
+    /// the sweep runs from.
+    idle_eviction: Duration,
 }
 
 impl Workspace {
@@ -75,7 +86,7 @@ impl Workspace {
     /// is canonicalized so every scope/candidate check compares real paths,
     /// not symlink spellings; if that fails (root missing) the raw root is
     /// kept for the error.
-    pub fn new(root: PathBuf, stopped: Arc<AtomicBool>) -> Self {
+    pub fn new(root: PathBuf, stopped: Arc<AtomicBool>, clock: Arc<dyn Clock>) -> Self {
         let root = canonical_root(&root);
         let mut workspace = Self {
             root,
@@ -85,8 +96,21 @@ impl Workspace {
             selection: None,
             layout: None,
             stopped,
+            clock,
+            idle_eviction: config::DEFAULT_IDLE_EVICTION,
         };
-        let layout = match Config::load(&workspace.root).and_then(Config::layout) {
+        // Loaded separately from its layout so the interval this file asks
+        // for is read even when a server entry fails to parse — though a
+        // file in error lays out no slots for the interval to govern.
+        let config = match Config::load(&workspace.root) {
+            Ok(config) => config,
+            Err(error) => {
+                workspace.config_error = Some(format!("{error:#}"));
+                return workspace;
+            }
+        };
+        workspace.idle_eviction = config.idle_eviction();
+        let layout = match config.layout() {
             Ok(layout) => layout,
             Err(error) => {
                 workspace.config_error = Some(format!("{error:#}"));
@@ -103,6 +127,7 @@ impl Workspace {
             workspace.slots.push(Arc::new(ServerSlot::new(
                 ladder,
                 Arc::clone(&workspace.stopped),
+                workspace.clock.now(),
             )));
             workspace.servers.push(None);
         }
@@ -121,9 +146,10 @@ impl Workspace {
     /// [`FILE_BUDGET`](crate::discovery::evidence::FILE_BUDGET), and it
     /// holds the workspace lock only for the walk and the re-select.
     ///
-    /// Existing slots are never removed here — eviction is the observation
-    /// unit's later part, and a language whose evidence dropped keeps its
-    /// slot, which serving simply stops matching. Nothing is warmed here: a
+    /// Existing slots are never removed here — removal is the idle sweep's,
+    /// on the clock that expires a server (`docs/observation.md`), and a
+    /// language whose evidence dropped keeps its slot, which serving simply
+    /// stops matching. Nothing is warmed here: a
     /// slot starts when a query demands it, or — for an interested
     /// workspace — when the signal policy warms a language that is new
     /// (`docs/observation.md`). Returns the languages that are new,
@@ -165,8 +191,11 @@ impl Workspace {
                 continue;
             }
             let ladder = ladder_for(&selection, layout, &plan.language);
-            self.slots
-                .push(Arc::new(ServerSlot::new(ladder, Arc::clone(&self.stopped))));
+            self.slots.push(Arc::new(ServerSlot::new(
+                ladder,
+                Arc::clone(&self.stopped),
+                self.clock.now(),
+            )));
             self.servers.push(None);
             new_languages.push((plan.language.clone(), self.slots.len() - 1));
         }
@@ -180,6 +209,13 @@ impl Workspace {
 
     pub fn slots(&self) -> &[Arc<ServerSlot>] {
         &self.slots
+    }
+
+    /// How long a slot may sit without a strong signal before the idle
+    /// sweep releases it. The entry copies this at acquisition, so the
+    /// sweep's park arithmetic never needs this workspace's lock.
+    pub(crate) fn idle_eviction(&self) -> Duration {
+        self.idle_eviction
     }
 
     pub fn config_error(&self) -> Option<&str> {
@@ -317,6 +353,31 @@ impl Workspace {
     /// shutdown hold it for as long as the teardown takes.
     pub fn take_all(&mut self) -> Vec<LspServer> {
         (0..self.slots.len())
+            .filter_map(|index| self.stop(index))
+            .collect()
+    }
+
+    /// Stop every slot the idle sweep has expired: `Running`, `Starting`,
+    /// and `Failed` slots alike, each on its own clock — the last strong
+    /// signal addressed to it plus the interval. A `Starting` slot whose
+    /// launch outlives the interval is the one case that makes an in-flight
+    /// launch stale, and the generation the launch was elected under is
+    /// what its publish then checks (`docs/observation.md`). `Cold` slots
+    /// have nothing to stop. Returns the servers so the caller can drop
+    /// them outside this workspace's lock, as `take_all` does.
+    pub(crate) fn evict_idle(&mut self, now: Instant) -> Vec<LspServer> {
+        let idle = self.idle_eviction;
+        let expired = |slot: &ServerSlot| {
+            now.checked_duration_since(slot.last_use())
+                .is_some_and(|held| held >= idle)
+        };
+        let expired_indices: Vec<usize> = (0..self.slots.len())
+            .filter(|&index| {
+                !matches!(self.slots[index].state(), SlotState::Cold) && expired(&self.slots[index])
+            })
+            .collect();
+        expired_indices
+            .into_iter()
             .filter_map(|index| self.stop(index))
             .collect()
     }
