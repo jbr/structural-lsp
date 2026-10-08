@@ -1,8 +1,11 @@
-//! Ruby: three candidates — `solargraph`, `ruby-lsp`, and `typeprof --lsp`.
-//! The last is a type-inference tool with an LSP interface rather than a
-//! general-purpose language server. It is expected to answer few of these
-//! probes; a `no` here is the tool's own catalogue fact, not a fixture
-//! defect, so the fixture is not contorted to avoid one.
+//! Ruby: five candidates — `solargraph`, `ruby-lsp`, `typeprof --lsp`,
+//! `rubocop --lsp`, and `steep langserver`. `typeprof` is a type-inference
+//! tool with an LSP interface rather than a general-purpose language server,
+//! and `steep` is likewise a type checker; both are expected to answer few
+//! of these probes. `rubocop` is a linter's server — diagnostics and
+//! formatting rather than navigation. A `no` from any of them is the tool's
+//! own catalogue fact, not a fixture defect, so the fixture is not
+//! contorted to avoid one.
 
 use crate::probe::{Candidate, Language, Probe, rename_preview, show, uses};
 use crate::report::Outcome;
@@ -38,6 +41,23 @@ const CANDIDATES: &[Candidate] = &[
         name: "typeprof",
         argv: &["typeprof", "--lsp", "--stdio"],
         version_argv: &["typeprof", "--version"],
+        builtin: false,
+        settings: "",
+        extra_config: "",
+    },
+    // A linter's server: diagnostics and formatting rather than navigation.
+    Candidate {
+        name: "rubocop",
+        argv: &["rubocop", "--lsp"],
+        version_argv: &["rubocop", "--version"],
+        builtin: false,
+        settings: "",
+        extra_config: "",
+    },
+    Candidate {
+        name: "steep",
+        argv: &["steep", "langserver"],
+        version_argv: &["steep", "--version"],
         builtin: false,
         settings: "",
         extra_config: "",

@@ -16,9 +16,11 @@ pub const PYTHON: Language = Language {
 };
 
 /// The Python candidates that are installed often enough to be worth the
-/// harness. `ruff server` is deliberately absent: lsp-mode marks it an
-/// add-on, and it serves diagnostics and formatting rather than the
-/// navigation `show`/`uses`/`action` are built on.
+/// harness. `ruff server` is lsp-mode's add-on, and its own catalogue entry
+/// says diagnostics and formatting rather than the navigation
+/// `show`/`uses`/`action` are built on; it is measured here anyway, so that
+/// judgement becomes an observation on this machine rather than a claim
+/// carried from an editor's list.
 const CANDIDATES: &[Candidate] = &[
     Candidate {
         name: "pyright",
@@ -69,6 +71,42 @@ const CANDIDATES: &[Candidate] = &[
         name: "pyrefly",
         argv: &["pyrefly", "lsp"],
         version_argv: &["pyrefly", "--version"],
+        builtin: false,
+        settings: "",
+        extra_config: "",
+    },
+    // lsp-mode's add-on: diagnostics and formatting rather than navigation.
+    Candidate {
+        name: "ruff",
+        argv: &["ruff", "server"],
+        version_argv: &["ruff", "--version"],
+        builtin: false,
+        settings: "",
+        extra_config: "",
+    },
+    // Deprecated upstream in favour of ruff's built-in server, and on this
+    // machine its install is broken by an lsprotocol mismatch — the row
+    // records that rather than a probe answer.
+    Candidate {
+        name: "ruff-lsp",
+        argv: &["ruff-lsp"],
+        version_argv: &["ruff-lsp", "--version"],
+        builtin: false,
+        settings: "",
+        extra_config: "",
+    },
+    Candidate {
+        name: "zuban",
+        argv: &["zuban", "server"],
+        version_argv: &["zuban", "--version"],
+        builtin: false,
+        settings: "",
+        extra_config: "",
+    },
+    Candidate {
+        name: "pylyzer",
+        argv: &["pylyzer", "--server"],
+        version_argv: &["pylyzer", "--version"],
         builtin: false,
         settings: "",
         extra_config: "",

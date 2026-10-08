@@ -5,7 +5,10 @@
 //! recorded by the dataset for `.ts` — typescript-language-server by twelve
 //! sources, the most of any server in it — so this is the first language
 //! here where two servers are genuinely alternatives. `vtsls` is a third
-//! such wrapper, added for the measured order.
+//! such wrapper, added for the measured order. `biome lsp-proxy` and
+//! `vscode-eslint-language-server` are linters' servers — diagnostics and
+//! formatting rather than navigation — measured so that judgement is an
+//! observation on this machine, not a claim carried from an editor's list.
 
 use crate::probe::{Candidate, Language, Probe, rename_preview, show, uses};
 use crate::report::Outcome;
@@ -46,6 +49,23 @@ const CANDIDATES: &[Candidate] = &[
         name: "vtsls",
         argv: &["vtsls", "--stdio"],
         version_argv: &["vtsls", "--version"],
+        builtin: false,
+        settings: "",
+        extra_config: "",
+    },
+    // A linter's server: diagnostics and formatting rather than navigation.
+    Candidate {
+        name: "biome",
+        argv: &["biome", "lsp-proxy"],
+        version_argv: &["biome", "--version"],
+        builtin: false,
+        settings: "",
+        extra_config: "",
+    },
+    Candidate {
+        name: "vscode-eslint-language-server",
+        argv: &["vscode-eslint-language-server", "--stdio"],
+        version_argv: &["vscode-eslint-language-server", "--version"],
         builtin: false,
         settings: "",
         extra_config: "",
