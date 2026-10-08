@@ -25,6 +25,7 @@ use crate::discovery::selection::{Selection, select};
 use crate::lsp::adapter::{Adapter, language_for};
 use crate::lsp::server::LspServer;
 use anyhow::{Context, Result, bail};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -55,6 +56,15 @@ pub struct Workspace {
     /// What selection proposed for this tree, kept so a call can say why a
     /// server it expected is not here.
     selection: Option<Selection>,
+    /// The layout the initial selection was made under: the config file's
+    /// adapters and overrides. Loaded once — a `structural.toml` change
+    /// still asks for a restart — but kept, so a refresh re-selects under
+    /// the same policy the first selection used.
+    layout: Option<Layout>,
+    /// The stopped flag every slot takes, and a refresh re-takes for new
+    /// slots: set by shutdown before anything is stopped, re-checked under
+    /// the workspace lock before publish (`src/host/lifetime.rs`).
+    stopped: Arc<AtomicBool>,
 }
 
 impl Workspace {
@@ -73,6 +83,8 @@ impl Workspace {
             servers: Vec::new(),
             config_error: None,
             selection: None,
+            layout: None,
+            stopped,
         };
         let layout = match Config::load(&workspace.root).and_then(Config::layout) {
             Ok(layout) => layout,
@@ -81,21 +93,80 @@ impl Workspace {
                 return workspace;
             }
         };
-        // Evidence is read once, here, and never again for this workspace:
-        // a tree that grows a language after the workspace is built keeps
-        // the slots it was laid out with until something re-reads it.
-        // Noticing that change is observation's, not this unit's
-        // (`backlog/discovery/observation.md`).
+        // Evidence is read here for the first layout. Reading it again is
+        // `refresh`, driven by the workspace's observation thread: a tree
+        // that grows a language is re-selected rather than stale
+        // (`docs/observation.md`).
         let evidence = Evidence::gather(&workspace.root);
         let selection = select(&evidence, &Catalogue::built_in(), &layout.overrides);
         for ladder in ladders(&selection, &layout) {
             workspace
                 .slots
-                .push(Arc::new(ServerSlot::new(ladder, Arc::clone(&stopped))));
+                .push(Arc::new(ServerSlot::new(ladder, Arc::clone(&workspace.stopped))));
             workspace.servers.push(None);
         }
         workspace.selection = Some(selection);
+        workspace.layout = Some(layout);
         workspace
+    }
+
+    /// Re-read the tree, re-run selection, and lay out slots for languages
+    /// the tree newly calls for.
+    ///
+    /// This is the whole reduction an event batch maps to — every batch,
+    /// including an overflow, ends here — so a lost event is reconciled by
+    /// the full rescan rather than trusted: nothing from the batch survives
+    /// the reduction (`docs/observation.md`). The walk is bounded by
+    /// [`FILE_BUDGET`](crate::discovery::evidence::FILE_BUDGET), and it
+    /// holds the workspace lock only for the walk and the re-select.
+    ///
+    /// Existing slots are never removed here — eviction is the observation
+    /// unit's later part, and a language whose evidence dropped keeps its
+    /// slot, which serving simply stops matching. Nothing is warmed: a slot
+    /// starts when a query demands it, or — for an interested workspace —
+    /// when activation policy says so. Returns the languages that are new,
+    /// for whoever decides whether to warm.
+    pub(crate) fn refresh(&mut self) -> Vec<String> {
+        let Some(layout) = &self.layout else {
+            return Vec::new();
+        };
+        let old_languages: BTreeSet<&str> = self
+            .selection
+            .as_ref()
+            .map(|selection| {
+                selection
+                    .plans
+                    .iter()
+                    .map(|plan| plan.language.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let evidence = Evidence::gather(&self.root);
+        let selection = select(&evidence, &Catalogue::built_in(), &layout.overrides);
+        let mut new_languages = Vec::new();
+        for plan in &selection.plans {
+            if old_languages.contains(plan.language.as_str()) {
+                continue;
+            }
+            // A slot that already names this plan's winner answers it — a
+            // multi-language server slotted for its other language. Slotted
+            // once is the initial layout's merge rule (`ladders`); this is
+            // that rule applied incrementally.
+            if self
+                .slots
+                .iter()
+                .any(|slot| slot.candidate_names().contains(&plan.server()))
+            {
+                continue;
+            }
+            let ladder = ladder_for(&selection, layout, &plan.language);
+            self.slots
+                .push(Arc::new(ServerSlot::new(ladder, Arc::clone(&self.stopped))));
+            self.servers.push(None);
+            new_languages.push(plan.language.clone());
+        }
+        self.selection = Some(selection);
+        new_languages
     }
 
     pub fn root(&self) -> &Path {
@@ -356,15 +427,7 @@ impl Workspace {
 fn ladders(selection: &Selection, layout: &Layout) -> Vec<Vec<Arc<dyn Adapter>>> {
     let mut ladders: Vec<Vec<Arc<dyn Adapter>>> = Vec::new();
     for plan in &selection.plans {
-        let ladder: Vec<Arc<dyn Adapter>> = plan
-            .candidates
-            .iter()
-            .map(|entry| {
-                layout
-                    .adapter(&entry.name)
-                    .unwrap_or_else(|| config::adapter_for(entry))
-            })
-            .collect();
+        let ladder = ladder_for(selection, layout, &plan.language);
         match ladders
             .iter_mut()
             .find(|existing| existing[0].name() == ladder[0].name())
@@ -377,6 +440,31 @@ fn ladders(selection: &Selection, layout: &Layout) -> Vec<Vec<Arc<dyn Adapter>>>
         }
     }
     ladders
+}
+
+/// The ladder one language calls for, in the plan's candidate order: the
+/// layout's adapter where the configuration defines or overrides one, the
+/// catalogue entry's own command elsewhere.
+///
+/// Its own function because `refresh` needs one language's ladder without
+/// merging (`Workspace::refresh`), while the initial layout merges across
+/// languages (`ladders`).
+fn ladder_for(selection: &Selection, layout: &Layout, language: &str) -> Vec<Arc<dyn Adapter>> {
+    selection
+        .plans
+        .iter()
+        .find(|plan| plan.language == language)
+        .map(|plan| {
+            plan.candidates
+                .iter()
+                .map(|entry| {
+                    layout
+                        .adapter(&entry.name)
+                        .unwrap_or_else(|| config::adapter_for(entry))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// The candidates a slot tried and rejected, indented under it. Empty for a

@@ -24,6 +24,13 @@ over rather than ending the matter. The catalogue itself is generated:
 evidence into the shipped entries ([`catalogue.md`](catalogue.md)), so a
 score in the catalogue cannot exist without the run that produced it.
 
+The layout is not final. The workspace's own watcher re-runs this walk
+when the tree changes ([`observation.md`](observation.md)): a tree that
+grows a language gets its slot without a restart, and a re-layout warms
+nothing — the new server starts when a query calls for it. This is
+evidence maintenance, not freshness: a watcher reporting is not a claim
+that any server's index is current.
+
 ## The root is the key, and only the key
 
 `Workspace::root` is one path doing three unrelated jobs, and discovery

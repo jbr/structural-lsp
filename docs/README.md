@@ -86,6 +86,7 @@ Every other invariant here is a consequence, and they are stated in full in
 | Resolution — a name or an anchor to one identity, or a listing that says why not | [resolution.md](resolution.md) | `src/tools/resolution.rs` (+ `src/tools/resolution/`), `src/lsp/definition.rs`, `src/lsp/anchor.rs`, `src/lsp/shape.rs` |
 | The three tools — `definition`, `references`, `rename`, their views, and how answers render | [tools.md](tools.md) | `src/tools.rs`, `src/tools/definition.rs`, `src/tools/references.rs`, `src/tools/rename.rs`, `src/tools/listing.rs`, `src/tools/hits.rs` |
 | Discovery — where a project begins, what a tree is, and which servers it calls for | [discovery.md](discovery.md) | `src/discovery.rs` (+ `src/discovery/`) |
+| The workspace's event source — what a batch means, and the thread that turns one into a refresh | [observation.md](observation.md) | `src/host/observation.rs` |
 | The catalogue's measured set, order, and cuts — which server per language, and what was left out | [catalogue.md](catalogue.md) | `src/discovery/catalogue.rs` (+ `generated.rs`), `src/bin/catalogue.rs`, `tests/conformance/` |
 | The raw-LSP spike — the dev instrument that dumps unrendered server answers | [spike.md](spike.md) | `src/bin/spike/` |
 

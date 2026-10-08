@@ -85,6 +85,8 @@ impl std::fmt::Display for AgentId {
 mod lifetime;
 pub(crate) use lifetime::{Lifetime, Registration};
 
+mod observation;
+
 /// Maximum publication lock wait; this is not a shutdown grace timer.
 pub const DEFAULT_PUBLISH_BOUND: Duration = Duration::from_secs(30);
 
@@ -176,6 +178,11 @@ pub struct Host {
     completion: Mutex<()>,
     /// The host's own lifetime, cloned into every entry it hands out.
     lifetime: Lifetime,
+    /// Where each workspace's events come from. A factory, not a source:
+    /// every workspace gets its own. The default is the platform watcher;
+    /// tests install a synthetic source and drive it
+    /// (`docs/observation.md`).
+    source_factory: Mutex<Box<dyn Fn() -> Box<dyn observation::Source> + Send>>,
 }
 
 impl Default for Host {
@@ -198,7 +205,23 @@ impl Host {
             released: Mutex::new(Vec::new()),
             completion: Mutex::new(()),
             lifetime: Lifetime::with_publish_bound(publish_bound),
+            source_factory: Mutex::new(Box::new(|| {
+                Box::new(observation::Notify::new()) as Box<dyn observation::Source>
+            })),
         }
+    }
+
+    /// A host whose workspaces are observed through `factory` instead of
+    /// the platform watcher. For tests: a synthetic source the test drives
+    /// exercises the same path a kernel watcher would, with no timing of
+    /// its own (`src/host/tests/observation.rs`).
+    #[cfg(test)]
+    pub(crate) fn with_observation(
+        factory: Box<dyn Fn() -> Box<dyn observation::Source> + Send>,
+    ) -> Self {
+        let mut host = Self::with_publish_bound(DEFAULT_PUBLISH_BOUND);
+        host.source_factory = Mutex::new(factory);
+        host
     }
 
     /// Bind `agent` to the workspace at `cwd`, creating it on first use.
@@ -224,6 +247,15 @@ impl Host {
                     self.lifetime.clone(),
                 ));
                 workspaces.insert(key, Arc::clone(&entry));
+                // The workspace watches its own tree: an event batch re-runs
+                // evidence and selection. The thread holds only a Weak, so
+                // a released workspace is not kept alive by its watcher
+                // (`docs/observation.md`).
+                let weak = Arc::downgrade(&entry);
+                let source = (self.source_factory.lock().unwrap())();
+                let _ = std::thread::Builder::new()
+                    .name("structural-observation".to_string())
+                    .spawn(move || observation::observe(&weak, source));
                 entry
             }
         };
