@@ -6,9 +6,9 @@
 //!
 //! The catalogues are fixtures rather than the shipped one, deliberately.
 //! The shipped catalogue has one entry per language and no scores until
-//! `catalogue-synthesis.md` produces them, so ordering and fallback could
-//! not be exercised against it — and that is what the plan means when it
-//! says the mechanism is what is under test.
+//! the A2 generator emits the measured set (`docs/catalogue.md`), so
+//! ordering and fallback could not be exercised against it — and that is
+//! what the plan means when it says the mechanism is what is under test.
 
 use super::*;
 use crate::discovery::catalogue::{Measurement, Provenance, Score, Serves};

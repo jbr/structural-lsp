@@ -131,7 +131,7 @@ impl Scorecard {
         }
     }
 
-    /// The checked-in artifact `catalogue-synthesis.md` requires: per-probe
+    /// The checked-in artifact `docs/catalogue.md` requires: per-probe
     /// outcomes (not just the total), with provenance on every row. A flat
     /// count out of eight weighs a verified rename the same as a hit line's
     /// container; storing the vector means a weighting can be introduced

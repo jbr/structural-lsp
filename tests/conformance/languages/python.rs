@@ -18,9 +18,9 @@ pub const PYTHON: Language = Language {
 /// The Python candidates that are installed often enough to be worth the
 /// harness. `ruff server` is lsp-mode's add-on, and its own catalogue entry
 /// says diagnostics and formatting rather than the navigation
-/// `show`/`uses`/`action` are built on; it is measured here anyway, so that
-/// judgement becomes an observation on this machine rather than a claim
-/// carried from an editor's list.
+/// `definition`/`references`/`rename` are built on; it is measured here
+/// anyway, so that judgement becomes an observation on this machine rather
+/// than a claim carried from an editor's list.
 const CANDIDATES: &[Candidate] = &[
     Candidate {
         name: "pyright",

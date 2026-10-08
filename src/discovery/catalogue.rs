@@ -9,25 +9,24 @@
 //! ## Preference is measured, not inherited
 //!
 //! The order among candidates for one language is a **score**: what the
-//! server answered when asked the questions `show`, `uses` and `action`
-//! ask, through structural's own tool layer
-//! (`tests/conformance/`). Prioritizing by how many editors ship a server
+//! server answered when asked the questions `definition`, `references`
+//! and `rename` ask, through structural's own tool layer
+//! (`tests/conformance/`).
 //! answers a different question — pylsp advertises more capabilities than
 //! pyright and is worse on this path
 //! (`journal/2026-09-17-conformance-probe-findings.md`).
 //!
 //! Editor consensus still earns one job: breaking a tie between servers
 //! that answered equally well, where it stands in for
-//! maintained-and-preferred. The full ordering rule, and the two
-//! tiebreakers considered and declined, are in
-//! `backlog/discovery/catalogue-synthesis.md`.
+//! maintained-and-preferred. The full ordering rule, the two tiebreakers
+//! considered and declined, and the measured set per language are in
+//! `docs/catalogue.md`.
 //!
-//! **There is no admission threshold.** A bar would fire on exactly the
-//! case `backlog/generic-baseline/answering-is-availability.md` examined
-//! and rejected — a server that initializes and serves nothing — whose two
-//! causes are a bug of ours and a project the operator never set up.
-//! Neither is improved by removing the only candidate for a language. A
-//! zero score is a message to the caller, not an exclusion.
+//! **There is no admission threshold.** A bar would fire on a server that
+//! initializes and serves nothing, whose two causes are a bug of ours and
+//! a project the operator never set up. Neither is improved by removing
+//! the only candidate for a language. A zero score is a message to the
+//! caller, not an exclusion.
 //!
 //! ## Provenance is not decoration
 //!
@@ -225,9 +224,9 @@ pub fn extensions_for_language(language: &str) -> Option<&'static [&'static str]
 /// The servers shipped with structural today.
 ///
 /// Deliberately the two that exist as built-in adapters, and **no score**:
-/// the measured order is `backlog/discovery/catalogue-synthesis.md`'s to
-/// produce, and a number invented here would be exactly the unverified
-/// import the plan refuses. Broadening this is that unit's output, not a
+/// the measured set and its order are `docs/catalogue.md`'s, and a number
+/// invented here would be exactly the unverified import the plan refuses.
+/// Emitting them is `backlog/discovery/selection.md`'s A2 generator, not a
 /// table to grow by hand.
 fn built_in_entries() -> Vec<Entry> {
     let adapter = |name: &str, command: &[&str], language: &str| Entry {

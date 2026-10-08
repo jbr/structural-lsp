@@ -116,9 +116,11 @@ fn a_score_cannot_be_stated_without_the_run_that_produced_it() {
 
 #[test]
 fn the_shipped_catalogue_claims_no_scores() {
-    // The measured order is `catalogue-synthesis.md`'s to produce. A
-    // number invented here would be the unverified import the plan
-    // refuses, so this fails the moment one appears without that work.
+    // The measured order is `docs/catalogue.md`'s; the generator that
+    // emits it is `backlog/discovery/selection.md`'s A2. A number invented
+    // here would be the unverified import the plan refuses, so this fails
+    // the moment one appears without that work.
+
     for entry in Catalogue::built_in().ranked() {
         assert!(
             entry.score.is_none(),

@@ -139,8 +139,9 @@ four of the defects the first conformance run surfaced were structural's,
 and one server went from two of seven to five of seven when this client
 stopped misreading a legal range.
 
-The shipped catalogue carries no scores. Producing them, and the modest
-verified set they rank, is `backlog/discovery/catalogue-synthesis.md`.
+The shipped catalogue carries no scores until the generator emits them; the
+measured set, its order, and the cuts behind it are
+[`catalogue.md`](catalogue.md).
 
 ## Selection is a function, not a side effect
 
@@ -196,11 +197,11 @@ Three properties are deliberate:
 - **Availability is successful initialization**, not an executable on
   `PATH`. A server that spawns and then fails its handshake is
   unavailable, and that is the case the ladder exists for. It is not
-  "answers the questions the tools ask" — a server that initializes and
+    "answers the questions the tools ask" — a server that initializes and
   serves nothing is a real state, but every observed case is a bug of ours
   or a project that was never set up, so stepping over it would route
-  around the thing worth fixing
-  (`backlog/generic-baseline/answering-is-availability.md`).
+  around the thing worth fixing; it stays a candidate and scores what it
+  answers ([`catalogue.md`](catalogue.md)).
 - **The walk is bounded by the list.** Every candidate is tried at most
   once, and the list ends. Nothing retries and no timer decides anything.
 - **Failures are retained, never swallowed.** Each rejected candidate is
