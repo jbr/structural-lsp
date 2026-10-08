@@ -1,5 +1,5 @@
 {
-  "date": 1789872301,
+  "date": 1791422948,
   "fixture_revision": "4119e30e",
   "language": "typescript",
   "machine": "quad-3.local",
@@ -110,7 +110,101 @@
         }
       ],
       "version": "0.3.0"
+    },
+    {
+      "argv": "biome lsp-proxy",
+      "candidate": "biome",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'identity'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "Method not found (code -32601)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "Version: 2.1.1"
+    },
+    {
+      "argv": "vscode-eslint-language-server --stdio",
+      "candidate": "vscode-eslint-language-server",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'identity'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "Unhandled method textDocument/definition (code -32601)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": null
     }
   ],
-  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
+  "structural_revision": "2e72de70323fdf173f19eaa4f59110d17a67a307-dirty"
 }

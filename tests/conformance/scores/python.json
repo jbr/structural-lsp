@@ -1,5 +1,5 @@
 {
-  "date": 1789872309,
+  "date": 1791422839,
   "fixture_revision": "196fedea",
   "language": "python",
   "machine": "quad-3.local",
@@ -169,13 +169,17 @@
           "probe_answered": true
         },
         {
-          "probe_answered": true
+          "detail": "function choose · helper.py:28 · no references",
+          "kind": "unmet",
+          "probe_answered": false
         },
         {
           "probe_answered": true
         },
         {
-          "probe_answered": true
+          "detail": "function choose · helper.py:28",
+          "kind": "unmet",
+          "probe_answered": false
         },
         {
           "probe_answered": true
@@ -215,7 +219,177 @@
         }
       ],
       "version": "pyrefly 1.3.1"
+    },
+    {
+      "argv": "ruff server",
+      "candidate": "ruff",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'identity'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "Unknown request: textDocument/definition (code -32601)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "ruff 0.16.10"
+    },
+    {
+      "argv": "ruff-lsp",
+      "candidate": "ruff-lsp",
+      "outcomes": [
+        {
+          "detail": "no language server is running.",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "  ruff-lsp: failed: 2 candidates were tried and none started:",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "no language server is running.",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "  ruff-lsp: failed: 2 candidates were tried and none started:",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "no language server is running.",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "  ruff-lsp: failed: 2 candidates were tried and none started:",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "no language server is running.",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "no language server is running.",
+          "kind": "failed",
+          "probe_answered": false
+        }
+      ],
+      "version": "Traceback (most recent call last):"
+    },
+    {
+      "argv": "zuban server",
+      "candidate": "zuban",
+      "outcomes": [
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        }
+      ],
+      "version": "zuban 0.10.0"
+    },
+    {
+      "argv": "pylyzer --server",
+      "candidate": "pylyzer",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "pylyzer 0.0.82"
     }
   ],
-  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
+  "structural_revision": "2e72de70323fdf173f19eaa4f59110d17a67a307-dirty"
 }

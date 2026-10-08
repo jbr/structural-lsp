@@ -1,5 +1,5 @@
 {
-  "date": 1789867629,
+  "date": 1791422938,
   "fixture_revision": "8bbb9eea",
   "language": "ruby",
   "machine": "quad-3.local",
@@ -19,7 +19,19 @@
       "candidate": "solargraph",
       "outcomes": [
         {
-          "detail": "no exact match for 'choose'; similar:",
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "method choose · helper.rb:21 · no references",
           "kind": "unmet",
           "probe_answered": false
         },
@@ -27,30 +39,12 @@
           "probe_answered": true
         },
         {
-          "detail": "no exact match for 'Config::doubled'; similar:",
+          "detail": "method choose · helper.rb:21",
           "kind": "unmet",
           "probe_answered": false
         },
         {
           "probe_answered": true
-        },
-        {
-          "detail": "no exact match for 'choose'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
-          "probe_answered": true
-        },
-        {
-          "detail": "no exact match for 'choose'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
-          "detail": "no exact match for 'choose'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
         }
       ],
       "version": "0.60.4"
@@ -146,7 +140,101 @@
         }
       ],
       "version": null
+    },
+    {
+      "argv": "rubocop --lsp",
+      "candidate": "rubocop",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'identity'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "Unsupported Method: textDocument/definition (code -32601)",
+          "kind": "failed",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "1.91.0"
+    },
+    {
+      "argv": "steep langserver",
+      "candidate": "steep",
+      "outcomes": [
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'identity'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'Config::doubled'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no definition at `doubled` (main.rb:5)",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        },
+        {
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
+          "probe_answered": false
+        }
+      ],
+      "version": "2.1.0"
     }
   ],
-  "structural_revision": "1ce943a9cb40f8ddbbff31ace6fea9b92ced71bd"
+  "structural_revision": "2e72de70323fdf173f19eaa4f59110d17a67a307-dirty"
 }
