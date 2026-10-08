@@ -1,6 +1,6 @@
 //! Plans on constructed trees with constructed catalogues.
 //!
-//! Every case here is one of `backlog/discovery/selection.md`'s Done-when
+//! Every case here is one of `docs/discovery.md`'s Done-when
 //! clauses made able to fail. Nothing starts a process: the assertion is
 //! the returned value, which is the point of the layer.
 //!

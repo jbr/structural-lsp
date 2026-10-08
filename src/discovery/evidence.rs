@@ -1,7 +1,7 @@
 //! What a tree says about itself: the markers above it and the sources
 //! inside it.
 //!
-//! The first layer of `backlog/discovery/selection.md`. Like
+//! The first layer of `docs/discovery.md`. Like
 //! [`super::roots`], a pure function over the filesystem returning a value
 //! with its reasons — nothing is spawned, nothing is cached, and no lock is
 //! taken, so every case is a test on a constructed tree.
@@ -156,7 +156,7 @@ fn extension_of(name: &str) -> Option<String> {
 /// The scan starts at the **root**, not at the working directory, because
 /// the root is what a server will be told and what the workspace is keyed
 /// by; sources found only in a sibling member are still this project's
-/// (`backlog/discovery/selection.md`).
+/// (`docs/discovery.md`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Evidence {
     pub ancestry: Ancestry,

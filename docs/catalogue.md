@@ -7,8 +7,9 @@ made through [`../tests/conformance/`](../process/testing.md): the questions
 dataset records and this machine can start. Candidate argv comes from the
 dataset (`../reference/servers-list/`), not from us. The ordering rule that
 turns a score into an order is [`discovery.md`](discovery.md)'s; the
-generator that emits these rows as shipped catalogue entries is
-`backlog/discovery/selection.md`'s A2.
+shipped entries are generated from this evidence by
+`src/bin/catalogue.rs`, and a test in `src/discovery/catalogue/tests.rs`
+fails when the shipped order and the stated one drift apart.
 
 A row is one observation on one machine at one revision. The full per-probe
 evidence, with server version, structural revision, fixture revision, and
@@ -16,12 +17,13 @@ date on every run, is checked in beside it —
 `../tests/conformance/scores/<language>.json` — and a re-run overwrites the
 same path, so a change to the evidence is a reviewable diff.
 
-Consensus is the dataset's per-server source count
-(`../reference/servers-list/scripts/reduce.py`; mason-registry excluded as
-an installer index, and nvim-lspconfig and the Zed extension registry partly
-mirror each other). Where a binary's name differs from the dataset's id —
-the binary `erlang_ls` is the dataset's `erlang-ls` — the count follows the
-dataset id.
+Consensus is the dataset's per-server source count, read from
+`../reference/servers-list/by_executable.json`: every source recording the
+executable, for any language, minus `mason-registry` — an installer index,
+not a selector. Sources partly mirror each other (nvim-lspconfig and the
+Zed extension registry among them), so the count is agreement, not
+independence; it follows the binary name the dataset keys by, which for the
+erlang server is `erlang_ls`.
 
 ## The rule, applied
 
@@ -41,15 +43,15 @@ evidence `scores/python.json` · 10 candidates
 
 | order | server | argv | answered | consensus | version |
 | --- | --- | --- | --- | --- | --- |
-| 1 | pyright | `pyright-langserver --stdio` | 8/8 | 8 | 1.1.403 |
-| 2 | basedpyright | `basedpyright-langserver --stdio` | 8/8 | 5 | 1.39.5 |
+| 1 | pyright | `pyright-langserver --stdio` | 8/8 | 9 | 1.1.403 |
+| 2 | basedpyright | `basedpyright-langserver --stdio` | 8/8 | 6 | 1.39.5 |
 | 3 | jedi | `jedi-language-server` | 7/8 | 6 | 0.47.0 |
-| 4 | pyrefly | `pyrefly lsp` | 7/8 | 4 | 1.3.1 |
+| 4 | pyrefly | `pyrefly lsp` | 7/8 | 5 | 1.3.1 |
 | 5 | zuban | `zuban server` | 7/8 | 4 | 0.10.0 |
-| 6 | ty | `ty server` | 5/8 | 7 | 0.0.81 |
+| 6 | ty | `ty server` | 5/8 | 9 | 0.0.81 |
 | 7 | pylsp | `pylsp` | 3/8 | 10 | 1.15.0 |
-| 8 | pylyzer | `pylyzer --server` | 2/8 | 2 | 0.0.82 |
-| 9 | ruff | `ruff server` | 0/8 | 7 | 0.16.10 |
+| 8 | pylyzer | `pylyzer --server` | 2/8 | 3 | 0.0.82 |
+| 9 | ruff | `ruff server` | 0/8 | 8 | 0.16.10 |
 | 10 | ruff-lsp | `ruff-lsp` | 0/8, errored | 3 | install broken |
 
 ### TypeScript
@@ -58,11 +60,11 @@ evidence `scores/typescript.json` · 5 candidates
 
 | order | server | argv | answered | consensus | version |
 | --- | --- | --- | --- | --- | --- |
-| 1 | vtsls | `vtsls --stdio` | 8/8 | 3 | 0.3.0 |
-| 2 | typescript-language-server | `typescript-language-server --stdio` | 7/8 | 8 | 4.3.3 |
-| 3 | deno | `deno lsp` | 7/8 | 6 | 2.9.6 |
-| 4 | biome | `biome lsp-proxy` | 0/8 | 4 | 2.1.1 |
-| 5 | vscode-eslint-language-server | `vscode-eslint-language-server --stdio` | 0/8 | 2 | unread |
+| 1 | vtsls | `vtsls --stdio` | 8/8 | 5 | 0.3.0 |
+| 2 | typescript-language-server | `typescript-language-server --stdio` | 7/8 | 9 | 4.3.3 |
+| 3 | deno | `deno lsp` | 7/8 | 8 | 2.9.6 |
+| 4 | biome | `biome lsp-proxy` | 0/8 | 6 | 2.1.1 |
+| 5 | vscode-eslint-language-server | `vscode-eslint-language-server --stdio` | 0/8 | 4 | unread |
 
 ### Ruby
 
@@ -191,9 +193,13 @@ not relitigate them:
 
 ```sh
 cargo test --test conformance -- --ignored --nocapture <language>_servers
+cargo run --bin catalogue
 ```
 
-overwrites that language's score JSON. Installing a further candidate is an
-entry in `tests/conformance/languages/<language>.rs` with the argv the
-dataset records; the probe measures it on the next run. A version that
-cannot be read is recorded blank, never guessed.
+The first overwrites that language's score JSON; the second regenerates
+`src/discovery/catalogue/generated.rs` from every score file and the
+dataset, and the drift test in `src/discovery/catalogue/tests.rs` fails if
+the shipped order and this document's stated order part ways. Installing a
+further candidate is an entry in `tests/conformance/languages/<language>.rs`
+with the argv the dataset records; the probe measures it on the next run. A
+version that cannot be read is recorded blank, never guessed.

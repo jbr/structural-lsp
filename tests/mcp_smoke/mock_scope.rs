@@ -196,9 +196,31 @@ fn scratch_root(name: &str) -> PathBuf {
     std::fs::write(
         root.join("structural.toml"),
         format!(
-            "[servers.rust-analyzer]\ncommand = [\"/nonexistent/rust-analyzer\"]\n\n\
-             [servers.pyright]\ncommand = [\"/nonexistent/pyright\"]\n\n\
-             [servers.mock]\ncommand = [\"{}\", \"{}\"]\nlanguages = [\"rust\"]\n",
+            concat!(
+                "[servers.rust-analyzer]\ncommand = [\"/nonexistent/rust-analyzer\"]\n\n",
+                "[servers.pyright]\ncommand = [\"/nonexistent/pyright\"]\n\n",
+                // The machine's other measured python and typescript servers
+                // are out of consideration: this fixture is about the miss
+                // messages, and the servers it does have are the two above.
+                // Without these, zero-configuration discovery would select
+                // and start whatever the machine has installed
+                // (docs/catalogue.md).
+                "[servers.basedpyright]\ndisabled = true\n\n",
+                "[servers.jedi]\ndisabled = true\n\n",
+                "[servers.pyrefly]\ndisabled = true\n\n",
+                "[servers.zuban]\ndisabled = true\n\n",
+                "[servers.ty]\ndisabled = true\n\n",
+                "[servers.pylsp]\ndisabled = true\n\n",
+                "[servers.pylyzer]\ndisabled = true\n\n",
+                "[servers.ruff]\ndisabled = true\n\n",
+                "[servers.ruff-lsp]\ndisabled = true\n\n",
+                "[servers.typescript-language-server]\ndisabled = true\n\n",
+                "[servers.vtsls]\ndisabled = true\n\n",
+                "[servers.deno]\ndisabled = true\n\n",
+                "[servers.biome]\ndisabled = true\n\n",
+                "[servers.vscode-eslint-language-server]\ndisabled = true\n\n",
+                "[servers.mock]\ncommand = [\"{}\", \"{}\"]\nlanguages = [\"rust\"]\n"
+            ),
             python(),
             quoted(&mock)
         ),

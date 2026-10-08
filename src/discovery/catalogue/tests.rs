@@ -115,18 +115,92 @@ fn a_score_cannot_be_stated_without_the_run_that_produced_it() {
 }
 
 #[test]
-fn the_shipped_catalogue_claims_no_scores() {
-    // The measured order is `docs/catalogue.md`'s; the generator that
-    // emits it is `backlog/discovery/selection.md`'s A2. A number invented
-    // here would be the unverified import the plan refuses, so this fails
-    // the moment one appears without that work.
+fn shipped_entries_prove_their_scores() {
+    // The generator emits a score only from checked-in evidence whose
+    // per-probe vector it re-derives (`src/bin/catalogue.rs`), so a score
+    // cannot appear here by typing one. This assert exists so the
+    // *absence* of a measurement is loud, not silent.
 
     for entry in Catalogue::built_in().ranked() {
+        let score = entry
+            .score
+            .as_ref()
+            .expect("{} carries no score; regenerate from the evidence");
+        // The server version is allowed to be blank — a version the run
+        // could not read is blank rather than guessed
+        // (`docs/catalogue.md`) — so it is not asserted here.
         assert!(
-            entry.score.is_none(),
-            "{} carries a score with no synthesis behind it",
+            !score.measurement.structural_revision.is_empty(),
+            "{} states no structural revision",
             entry.name
         );
+        assert!(
+            !score.measurement.fixture_revision.is_empty(),
+            "{} states no fixture revision",
+            entry.name
+        );
+        assert!(
+            !score.measurement.date.is_empty(),
+            "{} states no date",
+            entry.name
+        );
+        assert!(entry.consensus > 0, "{} has no consensus", entry.name);
+        assert!(
+            !entry.provenance.source.is_empty(),
+            "{} has no provenance",
+            entry.name
+        );
+    }
+}
+
+#[test]
+fn shipped_order_matches_the_stated_order() {
+    // `docs/catalogue.md` states the orders and names the arbitration;
+    // the generated table is its emission. This fails the moment they
+    // drift, either because the evidence changed without the doc (or the
+    // generator) being re-run, or because the doc changed without a run.
+
+    let stated_orders: &[(&str, &[&str])] = &[
+        (
+            "python",
+            &[
+                "pyright",
+                "basedpyright",
+                "jedi",
+                "pyrefly",
+                "zuban",
+                "ty",
+                "pylsp",
+                "pylyzer",
+                "ruff",
+                "ruff-lsp",
+            ],
+        ),
+        (
+            "typescript",
+            &[
+                "vtsls",
+                "typescript-language-server",
+                "deno",
+                "biome",
+                "vscode-eslint-language-server",
+            ],
+        ),
+        (
+            "ruby",
+            &["solargraph", "ruby-lsp", "rubocop", "steep", "typeprof"],
+        ),
+        ("cpp", &["clangd", "ccls"]),
+        ("erlang", &["elp", "erlang_ls"]),
+    ];
+    for (language, stated) in stated_orders {
+        let shipped: Vec<String> = Catalogue::built_in()
+            .candidates_for(language)
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect();
+        let stated: Vec<String> = stated.iter().map(|name| name.to_string()).collect();
+        assert_eq!(shipped, stated, "{language}'s order drifted from the doc");
     }
 }
 

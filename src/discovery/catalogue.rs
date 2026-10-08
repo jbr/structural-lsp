@@ -1,7 +1,7 @@
 //! What a server is, what it can serve, and how it compares to the
 //! alternatives.
 //!
-//! The second layer of `backlog/discovery/selection.md`. A catalogue is
+//! The second layer of `docs/discovery.md`. A catalogue is
 //! **data**: adding a server is an entry, not a build. `Adapter`
 //! (`src/lsp/adapter/`) stays what it is — protocol behaviour that differs
 //! — and most entries need none.
@@ -43,7 +43,7 @@ use std::collections::BTreeMap;
 /// Owned rather than `&'static str` throughout this module: a catalogue is
 /// data, and entries arrive from a generated table and from
 /// `structural.toml` alike. A borrowed entry could not express the second
-/// (`backlog/discovery/selection.md`).
+/// (`docs/discovery.md`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Serves {
     pub language: String,
@@ -199,15 +199,22 @@ impl Entry {
 /// `config::default_extensions` reads it, so a language spelled here needs
 /// no `extensions` in `structural.toml`.
 pub const LANGUAGES: &[(&str, &[&str])] = &[
+    ("bash", &["sh"]),
     ("c", &["c", "h"]),
     ("cpp", &["cpp", "cc", "cxx", "hpp", "hh"]),
+    ("elm", &["elm"]),
+    ("erlang", &["erl", "hrl"]),
+    ("gleam", &["gleam"]),
     ("go", &["go"]),
     ("java", &["java"]),
     ("javascript", &["js", "jsx", "mjs", "cjs"]),
     ("kotlin", &["kt", "kts"]),
     ("python", &["py", "pyi"]),
+    ("qml", &["qml"]),
+    ("r", &["r"]),
     ("ruby", &["rb"]),
     ("rust", &["rs"]),
+    ("swift", &["swift"]),
     ("typescript", &["ts", "tsx", "mts", "cts"]),
     ("zig", &["zig"]),
 ];
@@ -221,29 +228,14 @@ pub fn extensions_for_language(language: &str) -> Option<&'static [&'static str]
         .map(|(_, extensions)| *extensions)
 }
 
-/// The servers shipped with structural today.
-///
-/// Deliberately the two that exist as built-in adapters, and **no score**:
-/// the measured set and its order are `docs/catalogue.md`'s, and a number
-/// invented here would be exactly the unverified import the plan refuses.
-/// Emitting them is `backlog/discovery/selection.md`'s A2 generator, not a
-/// table to grow by hand.
+/// The servers shipped with structural today: every measured server of
+/// every language the harness covers, generated from the checked-in
+/// evidence by `src/bin/catalogue.rs`. A number invented here would be
+/// exactly the unverified import the plan refuses; regenerating from the
+/// evidence is how the table grows
+/// ([`generated.rs`](generated.rs), `docs/catalogue.md`).
 fn built_in_entries() -> Vec<Entry> {
-    let adapter = |name: &str, command: &[&str], language: &str| Entry {
-        name: name.to_string(),
-        command: command.iter().map(|c| c.to_string()).collect(),
-        serves: vec![Serves::known(language).expect("built-in language is in LANGUAGES")],
-        score: None,
-        consensus: 0,
-        provenance: Provenance {
-            source: "structural built-in adapter".to_string(),
-            extensions: Confidence::Exact,
-        },
-    };
-    vec![
-        adapter("rust-analyzer", &["rust-analyzer"], "rust"),
-        adapter("pyright", &["pyright-langserver", "--stdio"], "python"),
-    ]
+    generated::entries()
 }
 
 /// A set of entries, indexed by name.
@@ -252,7 +244,7 @@ fn built_in_entries() -> Vec<Entry> {
 /// same type: the tests that assert ordering and fallback run against
 /// catalogues they construct, which is what lets them exercise cases the
 /// shipped catalogue does not yet contain
-/// (`backlog/discovery/selection.md`).
+/// (`docs/discovery.md`).
 #[derive(Debug, Clone, Default)]
 pub struct Catalogue {
     entries: BTreeMap<String, Entry>,
@@ -316,6 +308,8 @@ impl Catalogue {
         languages
     }
 }
+
+mod generated;
 
 #[cfg(test)]
 mod tests;

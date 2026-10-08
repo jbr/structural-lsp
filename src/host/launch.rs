@@ -117,7 +117,7 @@ impl Entry {
     /// The walk is **bounded by the ladder** — every candidate is tried at
     /// most once, in the plan's rank order, and the list ends. Nothing here
     /// retries, and no timer decides anything
-    /// (`backlog/discovery/selection.md`).
+    /// (`docs/discovery.md`).
     ///
     /// Two kinds of failure are kept apart, because only one of them is a
     /// statement about the server. [`Unstarted::Unavailable`] — the command

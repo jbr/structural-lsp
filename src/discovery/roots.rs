@@ -3,7 +3,7 @@
 //! A pure function over the filesystem: it reads directory entries and
 //! returns a value. Nothing is started, nothing is cached, and the result
 //! carries the reasons it reached its answer
-//! (`backlog/discovery/selection.md`).
+//! (`docs/discovery.md`).
 //!
 //! The rule, and why each part of it:
 //!
@@ -50,7 +50,7 @@ const VCS_DIRECTORIES: &[(&str, &str)] = &[
 ///
 /// Provisional and deliberately modest: this is the shape a catalogue entry
 /// will carry as data with provenance, not a table meant to grow here
-/// (`backlog/discovery/selection.md`). A marker earns a row only when it
+/// (`docs/discovery.md`). A marker earns a row only when it
 /// names a project boundary — `tsconfig.json` does, a linter's dotfile does
 /// not.
 pub const PROJECT_MARKERS: &[(&str, &[&str])] = &[
@@ -225,7 +225,7 @@ impl Ancestry {
     /// Every language the markers above `cwd` imply, outermost first and
     /// deduplicated. Evidence, not proof: a `package.json` says a project
     /// boundary is here, not that any particular server applies
-    /// (`backlog/discovery/selection.md`).
+    /// (`docs/discovery.md`).
     pub fn languages(&self) -> Vec<&'static str> {
         let mut languages: Vec<&'static str> = Vec::new();
         for marker in &self.markers {

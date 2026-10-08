@@ -251,7 +251,7 @@ pub(super) fn selective_fixture(
 ///
 /// The shipped catalogue holds one server per language, so a fallback can
 /// only be exercised against candidates supplied from outside it
-/// (`backlog/discovery/selection.md`). `structural.toml` is that outside:
+/// (`docs/discovery.md`). `structural.toml` is that outside:
 /// two entries declaring the same language are two candidates, and with
 /// neither measured the rank falls through to name ascending — which is why
 /// these are named so that `a-preferred` comes first and `b-alternative`

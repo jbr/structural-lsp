@@ -4,7 +4,7 @@
 //! test that no process exists for it. The distinction is the point of the
 //! milestone — "irrelevant servers do not start" is a claim about pids,
 //! and it is only checkable because the mock records every launch
-//! (`backlog/discovery/selection.md`).
+//! (`docs/discovery.md`).
 
 use super::bound;
 use super::fixtures::{ladder_fixture, launch_order, selective_fixture, servers_launched};
@@ -19,7 +19,7 @@ fn a_server_no_evidence_calls_for_is_never_launched() {
     // This is the process-table assertion the plan asked for: not that the
     // plan value omits pyright, which `discovery::selection` already
     // tests, but that no pyright process exists
-    // (`backlog/discovery/selection.md`).
+    // (`docs/discovery.md`).
     let Some(rust_only) = selective_fixture(
         "rust-only",
         &[("Cargo.toml", ""), ("src/lib.rs", "pub fn a() {}\n")],
@@ -225,7 +225,7 @@ fn a_candidate_that_fails_its_handshake_is_stepped_over_in_order() {
     );
 
     // Retained, never swallowed: a fallback that hides the reason it fell
-    // back is worse than no fallback (`backlog/discovery/selection.md`).
+    // back is worse than no fallback (`docs/discovery.md`).
     let attempts = slot.failed_attempts();
     assert_eq!(attempts.len(), 1, "{attempts:?}");
     assert_eq!(attempts[0].server, "a-preferred");

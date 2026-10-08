@@ -30,7 +30,7 @@ pub struct Candidate {
     /// measured with the configuration, since the column is about what the
     /// server answers rather than about what a bare entry gets. What the
     /// setting has to be is itself a catalogue fact
-    /// (`backlog/discovery/selection.md`).
+    /// (`docs/discovery.md`).
     pub settings: &'static str,
     /// Extra lines for this candidate's `[servers.<name>]` table, as TOML
     /// written verbatim.

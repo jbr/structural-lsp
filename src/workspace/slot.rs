@@ -178,7 +178,7 @@ impl ServerSlot {
     /// Retain a candidate that did not initialize, and move on. Retained on
     /// success as well as on exhaustion: a fallback that hides the reason
     /// it fell back is worse than no fallback
-    /// (`backlog/discovery/selection.md`).
+    /// (`docs/discovery.md`).
     pub fn attempted(&self, adapter: &dyn Adapter, reason: impl Into<String>) {
         self.attempts().push(Attempt {
             server: adapter.name().to_string(),

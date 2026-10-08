@@ -88,7 +88,7 @@ pub struct ServerEntry {
 /// them out. Anything else needs `extensions`.
 ///
 /// The table itself lives in the catalogue
-/// (`backlog/discovery/selection.md`), which is where a server's languages
+/// (`docs/discovery.md`), which is where a server's languages
 /// are data rather than a branch in a parser.
 fn default_extensions(language: &str) -> Option<&'static [&'static str]> {
     crate::discovery::catalogue::extensions_for_language(language)

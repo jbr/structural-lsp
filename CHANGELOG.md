@@ -38,6 +38,7 @@ change, see [`journal/`](journal/); for what is left, see
 
 - **Qualified-name scope note** (docs/resolution.md): a qualified name that missed the symbol index says that naming the declaring file in `path` resolves the qualifier from that file's outline — the index carries at most one `containerName` per symbol and several servers report none, where `documentSymbol` nests.
 
+- **The generated catalogue** (docs/discovery.md): `src/bin/catalogue.rs` emits every measured server from the checked-in evidence into shipped entries — 13 languages, 32 servers, score provenance and consensus carried, a drift test against the stated order — and an override now configures a known server in place (its measurement retained) instead of demoting it, so a named server outranks the catalogue as the precedence table says.
 - **Paired probe columns** (process/testing.md): `qualified name, in file` alongside `qualified name`, so a failing cell localizes to the index or the outline rather than being ambiguous between the server and this code.
 
 - **Conformance probe** (process/testing.md): `tests/conformance/` asks every installed server of a language the questions `definition`, `references` and `rename` need, and prints a scorecard with each server's version — what it answered, not what it advertises.

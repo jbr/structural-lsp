@@ -203,10 +203,12 @@ Language ids with known extensions: `rust`, `python`, `typescript`,
 `javascript`, `go`, `c`, `cpp`, `ruby`, `java`, `kotlin`, `zig`. Anything
 else must supply `extensions`, and the error says so with the syntax.
 
-Selection today is exactly this: every built-in plus every configured entry,
-started eagerly for the workspace whether or not the tree contains that
-language. Evidence-based discovery, a catalogue, and fallbacks are planned
-and not built (`../backlog/discovery/selection.md`).
+Selection is not this: plans come from evidence, the catalogue and
+overrides — one `ServerSlot` per plan, so a language the tree gives no
+evidence for is never laid out, let alone started
+([`discovery.md`](discovery.md)). The shipped catalogue is generated from
+the measured evidence ([`catalogue.md`](catalogue.md)), and a configured
+server keeps whatever measurement it carries.
 
 ## `LspServer`: one running server of any kind
 

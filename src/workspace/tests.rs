@@ -170,12 +170,16 @@ fn one_server_planned_for_two_languages_is_one_slot() {
     // One server is one process however many languages it was planned
     // for, so two plans naming it become one slot. The ladder is then the
     // intersection of the two plans': falling back to a candidate serving
-    // only one of the languages would quietly drop the other, and here
-    // rust-analyzer and pyright each serve one, so neither survives.
+    // only one of the languages would quietly drop the other. The
+    // measured built-ins outrank an unscored polyglot per language, so the
+    // project that wants the polyglot takes them out of consideration —
+    // the way configuration always states a preference (`docs/discovery.md`).
     let poly = workspace(
         "polyglot-server",
         &[("Cargo.toml", ""), ("src/lib.rs", ""), ("app.py", "")],
-        "[servers.poly]\ncommand = [\"poly\"]\nlanguages = [\"rust\", \"python\"]\n",
+        "[servers.rust-analyzer]\ndisabled = true\n\n\
+         [servers.pyright]\ndisabled = true\n\n\
+         [servers.poly]\ncommand = [\"poly\"]\nlanguages = [\"rust\", \"python\"]\n",
     );
     assert_eq!(slot_names(&poly), ["poly"]);
     assert_eq!(

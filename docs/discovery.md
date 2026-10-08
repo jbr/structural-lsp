@@ -19,8 +19,10 @@ no evidence calls for is never warmed and never appears in a message;
 rather than on the working directory it was handed, so two agents in
 sibling members of one cargo workspace share one server; and a slot holds
 its plan's whole ladder, so a candidate that will not start is stepped
-over rather than ending the matter. What remains of
-`backlog/discovery/selection.md` is the generated catalogue.
+over rather than ending the matter. The catalogue itself is generated:
+`src/bin/catalogue.rs` emits every measured server from the checked-in
+evidence into the shipped entries ([`catalogue.md`](catalogue.md)), so a
+score in the catalogue cannot exist without the run that produced it.
 
 ## The root is the key, and only the key
 
@@ -139,9 +141,16 @@ four of the defects the first conformance run surfaced were structural's,
 and one server went from two of seven to five of seven when this client
 stopped misreading a legal range.
 
-The shipped catalogue carries no scores until the generator emits them; the
-measured set, its order, and the cuts behind it are
-[`catalogue.md`](catalogue.md).
+The shipped catalogue is generated: `src/bin/catalogue.rs` reads the
+checked-in evidence (`tests/conformance/scores/`) and the dataset, and
+emits every measured server as an entry carrying its score's provenance —
+the measured set, its order, and the cuts behind it are
+[`catalogue.md`](catalogue.md). A drift test fails when the shipped order
+and the stated one part ways. Selection itself is unchanged by where the
+entries come from: precedence is still explicit and ordered, an **override**
+beats the **catalogue**, which beats a guess from evidence — a server named
+in `structural.toml` is configured, keeping whatever measurement it carries,
+while a name the catalogue does not know is added unscored.
 
 ## Selection is a function, not a side effect
 

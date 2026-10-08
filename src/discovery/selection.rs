@@ -1,6 +1,6 @@
 //! Evidence + catalogue + overrides → plans, with the reasons for each.
 //!
-//! The third layer of `backlog/discovery/selection.md`, and the seam that
+//! The third layer of `docs/discovery.md`, and the seam that
 //! matters: **selection is a function, not a side effect.** It starts no
 //! process, watches no filesystem and takes no lock. It returns a value,
 //! and the value is what the tests assert — which is what lets every
@@ -75,12 +75,25 @@ impl Overrides {
         self.disabled.contains(name)
     }
 
-    /// The catalogue with this layer applied: additions replace entries of
-    /// the same name, and disabled entries are gone.
+    /// The catalogue with this layer applied.
+    ///
+    /// Naming a server configures it, it does not demote it: a name the
+    /// catalogue knows keeps its measured score and consensus — those are
+    /// facts about the server — while its command and languages come from
+    /// the configuration (`docs/discovery.md`). The override is visible to
+    /// a plan as [`Reason::Configured`]. A name the catalogue does not know
+    /// is added configured and unscored; disabled entries are gone.
     fn applied(&self, catalogue: &Catalogue) -> Catalogue {
         let mut merged = catalogue.clone();
         for entry in self.added.values() {
-            merged.insert(entry.clone());
+            match merged.get(&entry.name).cloned() {
+                Some(known) => merged.insert(Entry {
+                    command: entry.command.clone(),
+                    serves: entry.serves.clone(),
+                    ..known
+                }),
+                None => merged.insert(entry.clone()),
+            }
         }
         for name in &self.disabled {
             merged.remove(name);
@@ -109,7 +122,10 @@ pub enum Reason {
     /// walking the ladder, and reported as an `Attempt` on the slot
     /// (`docs/discovery.md`).
     OnlyCandidate,
-    /// Chosen without a measured score, so its rank is the floor.
+    /// Chosen without a measured score — because the configuration named
+    /// it, or because it was the only candidate. Among catalogued entries
+    /// an unmeasured one ranks last; the configuration names outrank the
+    /// catalogue regardless of measurement.
     Unmeasured,
     /// `structural.toml` named it.
     Configured,
@@ -314,7 +330,16 @@ pub fn select(evidence: &Evidence, catalogue: &Catalogue, overrides: &Overrides)
     let mut outranked: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     for (language, mut reasons) in evidence_for {
-        let candidates = catalogue.candidates_for(&language);
+        // An override beats the catalogue (`docs/discovery.md`): entries
+        // named in the configuration come before catalogued ones, whatever
+        // either measured. Within each tier the rank order stands — the
+        // catalogue's measured order among catalogued entries, and the
+        // stated order among several named ones.
+        let (named, catalogued): (Vec<&Entry>, Vec<&Entry>) = catalogue
+            .candidates_for(&language)
+            .into_iter()
+            .partition(|entry| overrides.added.contains_key(&entry.name));
+        let candidates: Vec<&Entry> = named.into_iter().chain(catalogued).collect();
         let Some((winner, rest)) = candidates.split_first() else {
             // Evidence for a language no entry serves. Not a decline —
             // there is no server to decline — and not silently dropped

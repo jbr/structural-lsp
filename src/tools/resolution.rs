@@ -14,8 +14,8 @@
 //! with their kinds, paths and signatures, and nothing is picked. When the
 //! server also answers `textDocument/declaration`, agreement between the
 //! two keeps the answer at a candidate that is the definition, instead of
-//! following the hop to the declaration's bare signature
-//! ([`definition_site`]).
+//! following the hop to the declaration's bare signature (the
+//! `definition_site` rule, below).
 //! qualified name (`Config::new`) filters the exact candidates by the
 //! container the server reported ([`qualify`]); an anchor skips the index
 //! and asks `definition` at the focus (the `anchored` module).
