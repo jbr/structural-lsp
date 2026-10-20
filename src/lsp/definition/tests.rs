@@ -556,3 +556,32 @@ fn distinct_targets_stay_distinct_and_none_is_listed_not_dropped() {
     );
     assert_eq!(identities[2].name(), "Server");
 }
+
+#[test]
+fn a_candidate_in_a_vanished_file_is_counted_not_kept() {
+    let root = std::env::temp_dir().join(format!("structural-missing-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let root = std::fs::canonicalize(root).unwrap();
+    let kept = root.join("kept.rs");
+    std::fs::write(&kept, "fn make() {}\n").unwrap();
+    let mut merged = partition(
+        "make",
+        "rust-analyzer",
+        vec![
+            symbol_info("make", kept.to_str().unwrap(), 0),
+            symbol_info("make", root.join("gone.rs").to_str().unwrap(), 0),
+        ],
+        &root,
+        None,
+    );
+    merged.drop_missing();
+    let candidates = merged.into_candidates();
+    assert_eq!(candidates.missing, 1);
+    match candidates.resolution {
+        Resolution::ExactOne(candidate) => {
+            assert_eq!(candidate.canonical_path.as_deref(), Some(kept.as_path()))
+        }
+        other => panic!("expected the file on disk alone, got {other:?}"),
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}

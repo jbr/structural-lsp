@@ -67,6 +67,10 @@ pub struct Candidates {
     /// Candidates inside the root but outside the requested scope (when one
     /// was given); listed in the result as excluded, not silently dropped.
     pub out_of_scope: usize,
+    /// Candidates in a file that is no longer on disk: the index has not
+    /// caught up with a deletion. Listed as excluded, not silently dropped,
+    /// and never navigated (docs/correctness.md).
+    pub missing: usize,
 }
 
 /// One server's candidates, partitioned but not yet judged: several servers'
@@ -77,6 +81,7 @@ pub struct Partition {
     fuzzy: Vec<Candidate>,
     pub out_of_root: usize,
     pub out_of_scope: usize,
+    pub missing: usize,
 }
 
 impl Partition {
@@ -85,6 +90,7 @@ impl Partition {
         self.fuzzy.extend(other.fuzzy);
         self.out_of_root += other.out_of_root;
         self.out_of_scope += other.out_of_scope;
+        self.missing += other.missing;
     }
 
     /// Promote fuzzy candidates whose advertised name **decorates**
@@ -123,12 +129,33 @@ impl Partition {
         self.fuzzy = rest;
     }
 
+    /// Set aside candidates whose file is no longer on disk, counting them.
+    ///
+    /// Such a candidate is the index answering from before a deletion it
+    /// has been told of and not yet applied — rust-analyzer applies a
+    /// deleted file on its loader thread, after the query that follows the
+    /// notice. It cannot be navigated, and it is not a definition that
+    /// exists (docs/correctness.md).
+    pub fn drop_missing(&mut self) {
+        let before = self.exact.len() + self.fuzzy.len();
+        let on_disk = |candidate: &Candidate| {
+            candidate
+                .canonical_path
+                .as_ref()
+                .is_some_and(|path| path.is_file())
+        };
+        self.exact.retain(on_disk);
+        self.fuzzy.retain(on_disk);
+        self.missing += before - (self.exact.len() + self.fuzzy.len());
+    }
+
     pub fn into_candidates(self) -> Candidates {
         let Partition {
             mut exact,
             fuzzy,
             out_of_root,
             out_of_scope,
+            missing,
         } = self;
         let resolution = match exact.len() {
             0 if fuzzy.is_empty() => Resolution::NotFound,
@@ -140,6 +167,7 @@ impl Partition {
             resolution,
             out_of_root,
             out_of_scope,
+            missing,
         }
     }
 }
@@ -186,6 +214,7 @@ pub fn partition(
                 continue;
             }
         }
+
         // Exact by the name's **last segment**, not by the whole string. A
         // server may spell the container into the name it advertises —
         // gopls says `Config.Doubled` in the index and `(Config).Doubled`

@@ -72,7 +72,13 @@ every file of its languages, walked as the evidence scan walks
 re-taken at every boundary. A file created or written since the last
 census is pushed with the text just read, exactly as a file-scoped query
 pushes its file, and is owned from then on. A file gone from the census
-is closed if owned and told to the server as deleted. Taking the first
+is closed if owned and told to the server as deleted. There is no content
+to push for a deletion, so whether the server's index has applied it by
+the time it answers is the server's: rust-analyzer applies a deleted file
+on its loader thread, after the query that follows the notice, and can
+still nominate a symbol from it. A candidate whose file is not on disk is
+therefore never navigated: it is excluded and counted, with a note that
+the index has not yet applied the deletion. Taking the first
 census before the process exists means nothing falls between the two:
 what was written before it is on disk for the server's own first read,
 and what was written after it is pushed.

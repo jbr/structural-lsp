@@ -305,6 +305,7 @@ pub fn exclusion_notes(exclusions: Exclusions) -> String {
     let Exclusions {
         out_of_root,
         out_of_scope,
+        missing,
     } = exclusions;
     let mut note = String::new();
     if out_of_root > 0 {
@@ -315,6 +316,11 @@ pub fn exclusion_notes(exclusions: Exclusions) -> String {
     if out_of_scope > 0 {
         note.push_str(&format!(
             "note: {out_of_scope} candidate(s) outside the `path` scope were excluded\n"
+        ));
+    }
+    if missing > 0 {
+        note.push_str(&format!(
+            "note: {missing} candidate(s) in files no longer on disk were excluded; the index has not yet applied their deletion\n"
         ));
     }
     note

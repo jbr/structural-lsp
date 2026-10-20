@@ -102,11 +102,13 @@ fn discover(
     // After merging, so a server that advertises the bare name settles it
     // for every server: a decorated name is a fallback, never a second
     // exact match beside a plain one (`docs/resolution.md`).
+    merged.drop_missing();
     merged.promote_decorated(symbol);
     let candidates = merged.into_candidates();
     let exclusions = Exclusions {
         out_of_root: candidates.out_of_root,
         out_of_scope: candidates.out_of_scope,
+        missing: candidates.missing,
     };
     let (exact, fuzzy) = match candidates.resolution {
         Resolution::NotFound => (Vec::new(), Vec::new()),

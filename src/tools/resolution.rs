@@ -61,6 +61,7 @@ pub mod qualify;
 pub struct Exclusions {
     pub out_of_root: usize,
     pub out_of_scope: usize,
+    pub missing: usize,
 }
 
 /// What a tool was asked to resolve, as the user gave it, plus the view
