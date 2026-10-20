@@ -46,22 +46,35 @@ impl Fixture {
     /// Write a `structural.toml` in `dir` pointing both built-ins at the
     /// mock.
     pub(super) fn write_config(&self, dir: &std::path::Path) {
-        let command = |label: &str| {
-            format!(
-                "command = [\"{}\", \"{}\", \"{}\", \"{}\"]",
-                self.python,
-                self.script.display(),
-                self.log.display(),
-                label
-            )
+        self.write_config_with_modes(dir, None, None);
+    }
+
+    /// As [`Fixture::write_config`], launching either server in a mock mode
+    /// (`HOST_MOCK_PY`'s fourth argument).
+    pub(super) fn write_config_with_modes(
+        &self,
+        dir: &std::path::Path,
+        rust: Option<&str>,
+        pyright: Option<&str>,
+    ) {
+        let command = |label: &str, mode: Option<&str>| {
+            let mut argv = vec![
+                self.python.clone(),
+                self.script.display().to_string(),
+                self.log.display().to_string(),
+                label.to_string(),
+            ];
+            argv.extend(mode.map(str::to_string));
+            let quoted: Vec<String> = argv.iter().map(|arg| format!("\"{arg}\"")).collect();
+            format!("command = [{}]", quoted.join(", "))
         };
         std::fs::create_dir_all(dir).unwrap();
         std::fs::write(
             dir.join(crate::config::FILE_NAME),
             format!(
                 "[servers.rust-analyzer]\n{}\n\n[servers.pyright]\n{}\n",
-                command("rust-analyzer"),
-                command("pyright")
+                command("rust-analyzer", rust),
+                command("pyright", pyright)
             ),
         )
         .unwrap();
@@ -349,6 +362,25 @@ pub(super) fn wait_for_launches(fixture: &Fixture, n: usize) -> Vec<u32> {
         let launches = fixture.launches();
         if launches.len() >= n || std::time::Instant::now() > deadline {
             return launches;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// Wait for `condition` to hold, up to a bound, and say whether it did.
+///
+/// For a state another thread produces — a line in the mock's log, a map
+/// a shutdown has emptied — and never for a claim that something has
+/// finished. The bound is generous because the machine is shared: it is
+/// there so a failure reports rather than hangs, not to measure anything.
+pub(super) fn wait_until(mut condition: impl FnMut() -> bool) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        if condition() {
+            return true;
+        }
+        if std::time::Instant::now() > deadline {
+            return false;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }

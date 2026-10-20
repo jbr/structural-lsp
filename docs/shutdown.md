@@ -21,7 +21,10 @@ block on a workspace lock, protocol I/O, or completion — otherwise escalation
 could not be issued while a soft shutdown is waiting, which is the whole
 point of splitting them. Force is idempotent and monotonic: repeated requests
 share one shutdown state, and a force during a wait escalates that same
-shutdown rather than starting a second.
+shutdown rather than starting a second. Concurrent waits share it too:
+`wait_shutdown` holds one completion lock from the admission wait through
+the sweep, so a second caller — which finds the map already emptied —
+returns only after the first caller's sweep has reaped every child.
 
 Force means *force the servers*, not kill structural's own thread. The
 process stays alive to unwind calls, reap children, and report results. A
@@ -66,6 +69,16 @@ launcher inside the same workspace-lock hold that publishes: a launcher
 publishing after the sweep would have had to see a clear flag that no longer
 existed. The completion guards carry the *return* condition, not this
 invariant.
+
+"Stopped by the launcher" is a drop, not a call. From spawn until
+`initialize` answers, the child's handle is owned by a `Spawning`
+(`src/lsp/server.rs`), and the handle's `Drop` stops and reaps the child
+before it returns. A launch that is refused registration drops the
+`Spawning`; a rung whose handshake fails — before anything is sent, after
+the server has answered, or after it died — gets an `Err` that has
+already dropped it; a launch that may not publish drops the server. Each
+path reaps on the spot, and a new error path inherits that without a
+cleanup step to remember.
 
 Two consequences that look like details and are not. The shutdown wait is
 what makes the sweep's `Cold` final — a launch returns its guard only after

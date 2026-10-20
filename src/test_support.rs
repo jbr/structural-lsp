@@ -26,12 +26,35 @@ pub(crate) fn python() -> Option<String> {
         .map(str::to_string)
 }
 
+/// Assert that `pid`, a direct child of this process, has been reaped —
+/// not merely killed, and not left a zombie.
+///
+/// `waitpid` with `WNOHANG` tells the three apart: `0` for a live child,
+/// the pid for a zombie (which this call then reaps, too late for the
+/// assertion), and `ECHILD` once nothing is left to collect. Grandchildren
+/// belong to init (or an external subreaper) and can remain zombies until
+/// that owner reaps, so this is only for direct children.
+#[cfg(unix)]
+pub(crate) fn reaped(pid: i32) {
+    let mut status = 0;
+    assert_eq!(
+        unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) },
+        -1,
+        "child {pid} is still live or unreaped"
+    );
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ECHILD)
+    );
+}
+
 /// A language server that records every launch and then idles.
 ///
 /// The path in `sys.argv[1]` is where each launch appends its pid, which is
 /// how the host tests tell one launch from two and check that shutdown left
 /// no child behind. It speaks just enough framing for `LspServer::start`:
-/// `initialize` is answered with empty capabilities, `exit` ends the process.
+/// `initialize` is answered with empty capabilities unless a mode below
+/// says otherwise, `exit` ends the process.
 ///
 /// `sys.argv[3]` is either a stall in seconds or the word `die`, which
 /// records its launch and then exits without answering `initialize`. That
@@ -40,6 +63,15 @@ pub(crate) fn python() -> Option<String> {
 /// initialization rather than an executable on `PATH`
 /// (`docs/discovery.md`), and it is only observable in the log because the
 /// pid is written before the exit.
+///
+/// Two further modes serve the lifecycle tests. `utf-32` answers
+/// `initialize` with a position encoding the client does not convert, so
+/// the handshake fails with the child alive and answering. `indexes`
+/// advertises the symbol providers, so a launch warms its index
+/// (`docs/servers.md`), and records `SYMBOLS` when the warm's
+/// `textDocument/documentSymbol` arrives — the last message a launch
+/// exchanges with its server before it takes the workspace lock to
+/// publish.
 pub(crate) const HOST_MOCK_PY: &str = r#"
 import json, os, sys, time
 
@@ -49,9 +81,18 @@ log = sys.argv[1] if len(sys.argv) > 1 else None
 label = sys.argv[2] if len(sys.argv) > 2 else "?"
 # A fourth argument makes `initialize` take that many seconds to answer, so a
 # test can see one launch overlapping another — or, spelled `die`, makes this
-# launch record itself and exit without ever answering one.
+# launch record itself and exit without ever answering one. `utf-32` and
+# `indexes` change what `initialize` answers.
 mode = sys.argv[3] if len(sys.argv) > 3 else ""
-stall = float(mode) if mode and mode != "die" else 0.0
+try:
+    stall = float(mode)
+except ValueError:
+    stall = 0.0
+capabilities = {}
+if mode == "utf-32":
+    capabilities = {"positionEncoding": "utf-32"}
+elif mode == "indexes":
+    capabilities = {"workspaceSymbolProvider": True, "documentSymbolProvider": True}
 
 def note(what):
     if log:
@@ -98,7 +139,10 @@ while True:
             if stall:
                 time.sleep(stall)
             note("READY")
-            reply(msg, {"capabilities": {}})
+            reply(msg, {"capabilities": capabilities})
+        elif msg["method"] == "textDocument/documentSymbol":
+            note("SYMBOLS")
+            reply(msg, None)
         else:
             reply(msg, None)
     elif "method" in msg:

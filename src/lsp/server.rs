@@ -47,6 +47,10 @@ pub struct Synced {
 /// project — and a host has to be able to stop the process while it is inside
 /// it, which it cannot do through a handle it does not hold yet. That is what
 /// [`Spawning::stopper`] is for.
+///
+/// It owns the child's handle, so dropping it — or an `Err` from
+/// [`Spawning::initialize`] — stops and reaps the child before returning.
+/// A launch has no other cleanup on its failure paths (docs/shutdown.md).
 pub struct Spawning {
     adapter: Arc<dyn Adapter>,
     root: PathBuf,

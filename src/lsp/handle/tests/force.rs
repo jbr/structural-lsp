@@ -2,6 +2,7 @@
 #![cfg(unix)]
 
 use super::*;
+use crate::test_support::reaped;
 use std::io::Read;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
@@ -48,21 +49,6 @@ fn closed(stream: &mut UnixStream) {
         stream.read(&mut [0]).unwrap(),
         0,
         "peer still has an open descriptor"
-    );
-}
-
-fn reaped(pid: i32) {
-    let mut status = 0;
-    // This process owns the direct child; after owner completion it must
-    // have been reaped, not merely killed. Grandchildren belong to init (or
-    // an external subreaper) and can remain zombies until that owner reaps.
-    assert_eq!(
-        unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) },
-        -1
-    );
-    assert_eq!(
-        std::io::Error::last_os_error().raw_os_error(),
-        Some(libc::ECHILD)
     );
 }
 

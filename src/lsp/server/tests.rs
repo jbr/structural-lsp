@@ -2,6 +2,9 @@ use super::*;
 use crate::lsp::adapter::rust_analyzer::RustAnalyzer;
 use serde_json::json;
 
+#[cfg(unix)]
+mod spawning;
+
 #[test]
 fn path_uri_requires_an_absolute_path() {
     assert!(path_uri(Path::new("/tmp/x/lib.rs")).is_ok());
