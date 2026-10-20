@@ -100,6 +100,7 @@ pub fn show(
         anchor: anchor.map(|(text, _)| text.to_string()),
         focus: anchor.map(|(_, focus)| focus.to_string()),
         view: None,
+        page: None,
     }
     .run(state)
 }

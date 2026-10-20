@@ -34,7 +34,7 @@ silent.
 | view | what it is |
 | --- | --- |
 | `definition` (default) | the decorated source |
-| `outline` | the target's children, or a whole file's symbols with only `path` |
+| `outline` | the target's children; with only `path`, a file's symbols, or a directory's files with their top-level items (below) |
 | `implementations` | `textDocument/implementation`, rendered as `references` renders hits, with results at one line folded into one row |
 | `incoming-calls` / `outgoing-calls` | the call hierarchy, one line per caller/callee with its call sites under it |
 | `type` | `textDocument/hover` reduced to its code blocks. With an anchor, rust-analyzer answers with the type of the expression the focus spans (`hoverRange`); other servers answer at its start. |
@@ -54,7 +54,61 @@ about which result was which.
 An unavailable view gets one of three distinct answers: the view name is
 unknown (and the known ones are listed), no running server supports it, or it
 does not apply to this target. Listings cap at 200 lines with the remainder
-reported as a count.
+reported as a count — except `outline`, which pages.
+
+### `outline`
+
+In `src/tools/definition/views/outline.rs` and the directory beside it. One
+line per symbol, `kind name · line[ · detail]`, indented by nesting depth,
+under a header that counts what is listed. Three shapes:
+
+- **a target** (`symbol` or `anchor`): its children, from the outline node
+  at the target, under the target's header line;
+- **a file** (`path` alone): the file's whole tree;
+- **a directory** (`path` alone, naming one): every file under it that a
+  running server serves, in path order — `definition.rs` before
+  `definition/render.rs`, a module file before its children's directory —
+  each as a line of its path followed by its top-level items only. The walk
+  is the evidence scan's: skipped and hidden directories are not descended,
+  symlinked ones are not followed, and it stops at the scan's file budget.
+  A file is routed by its extension alone — a file with no extension is no
+  language's, rather than every server's as a file scope treats it. Page 1
+  ends with what was left out: the files no server here serves, counted by
+  extension; the files whose servers are not running, with the servers'
+  states; and a walk that stopped at the budget. A file whose server has no
+  `documentSymbol`, or whose outline is empty, is one line saying so.
+
+**A function's locals are not outline material.** pyright lists a
+function's parameters and local variables as `Variable` (or, for an
+upper-case name, `Constant`) children of the `def`; vtsls does the same
+inside a TypeScript function, method or constructor, and under a `Variable`
+that binds an arrow function; rust-analyzer lists a `const` or `static`
+declared in a function body as a `Constant` under the `Function`; gopls and
+rust-analyzer list no `let` or `:=` bindings. Seen on two servers in two
+languages, it is a class, so the rule is generic (`views/outline/locals.rs`)
+rather than an adapter's: a `Variable` or `Constant` whose parent is a
+`Function`, `Method`, `Constructor`, `Variable` or `Constant` is a local, and
+it leaves the listing with its subtree. A nested function, class or struct
+stays — it is an item. Module-level variables and class or instance
+attributes stay — their parent is the file or the class. The header says how
+many symbols left (`app.py · 11 symbols · 10 locals not shown`), and a
+target's own direct children are exempt: `outline` of a function lists its
+locals, which is where they are reached.
+
+**Pages.** An outline is flattened to lines and cut into pages of 200,
+counted from 1 by the `page` argument (refused on every other view). A page
+that is not the last ends ``note: 100 more symbol(s); `page: 2` continues``;
+a page after the first says `· page 2 of 2` in its header and starts with the
+ancestors of its first line — the `impl` or class an earlier page opened —
+so its indentation still reads as nesting; those context lines are not
+counted against the page. A page past the end is an argument error naming
+the last page. A directory outline outlines its files only as far as the
+page asked for, so it cannot count its symbols ahead: its header counts
+files, `page N of M` appears once every file has been read, and the
+continuation counts the files not yet fully shown. Every page re-reads what
+it lists from disk; a page is never served from an earlier call's outline,
+so pages of a tree being edited between calls can disagree with each other,
+and each is true of the disk when it was asked.
 
 ## `references`
 

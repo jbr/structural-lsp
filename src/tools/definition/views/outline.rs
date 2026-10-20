@@ -1,7 +1,9 @@
-//! `view = "outline"`: a file's symbol tree, or a target's own children,
-//! one line per symbol, bodies omitted.
+//! `view = "outline"`: a file's symbol tree, a target's own children, or a
+//! directory's files with their top-level items — one line per symbol,
+//! bodies omitted, a function's locals left out, paged past 200 lines
+//! (docs/tools.md).
 
-use super::{MAX_LINES, unsupported};
+use super::unsupported;
 use crate::lsp::outline::{self, Node};
 use crate::lsp::server::LspServer;
 use crate::tools::listing::relative_display;
@@ -10,9 +12,24 @@ use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
-pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>) -> Result<String> {
+mod directory;
+mod locals;
+mod page;
+#[cfg(test)]
+mod tests;
+
+use page::Line;
+
+pub(super) fn run(
+    state: &mut Workspace,
+    root: &Path,
+    target: Target<'_>,
+    page: Option<usize>,
+) -> Result<String> {
+    let number = page.unwrap_or(1);
+    page::start_of(number)?;
     if target.symbol.is_none() && target.anchor.is_none() {
-        return file_outline(state, root, target.path);
+        return path_outline(state, root, target.path, number);
     }
     let found = match resolve_target(state, target)? {
         Resolved::Listed(listing) => return Ok(listing),
@@ -32,104 +49,138 @@ pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>) -> Res
                 server.name()
             )
         })?;
-    let children = node.map(|node| node.children).unwrap_or_default();
+    let mut children = node.map(|node| node.children).unwrap_or_default();
     if children.is_empty() {
         return Ok(format!("{header}\nno children in the outline\n"));
     }
-    let mut text = format!("{header} · {} children\n", children.len());
-    render_nodes(&mut text, server, &children, 1, &mut MAX_LINES.clone());
+    // The target's own children were asked for by name, so a function's
+    // locals are listed; the locals of anything below them are not.
+    let omitted = locals::strip_below(&mut children);
+    // Indented under the header line, which names the target.
+    let mut lines = Vec::new();
+    push_lines(&mut lines, server, &children, 1);
+    let page = page::page(&lines, number, false)?;
+    let mut text = format!(
+        "{header} · {} children{}{}\n",
+        children.len(),
+        locals_note(omitted),
+        page.label(Some(page::count(lines.len())))
+    );
+    page.render(&mut text);
+    text.push_str(&page.continuation(&format!(
+        "{} more line(s)",
+        lines.len() - (page::start_of(number)? + page.lines.len())
+    )));
     Ok(text)
 }
 
-/// The whole outline of the file `path` names.
-fn file_outline(state: &mut Workspace, root: &Path, path: Option<&str>) -> Result<String> {
+/// The outline `path` names: a file's whole tree, or a directory's files.
+fn path_outline(
+    state: &mut Workspace,
+    root: &Path,
+    path: Option<&str>,
+    number: usize,
+) -> Result<String> {
     let Some(path) = path else {
-        bail!("`outline` needs `path` naming a file, or a `symbol`/`anchor` target");
+        bail!("`outline` needs `path` naming a file or directory, or a `symbol`/`anchor` target");
     };
-    let file = root
+    let named = root
         .join(path)
         .canonicalize()
         .with_context(|| format!("`{path}` does not exist under the workspace root"))?;
-    if !file.starts_with(root) {
+    if !named.starts_with(root) {
         bail!("`{path}` escapes the workspace root");
     }
-    if !file.is_file() {
-        bail!("`outline` needs `path` to name a file; `{path}` is not one");
+    if named.is_dir() {
+        return directory::outline(state, root, &named, number);
     }
-    let index = state.select(Some(&file))?[0];
+    file_outline(state, root, &named, number)
+}
+
+/// The whole outline of `file`, locals left out, one page of it.
+fn file_outline(state: &mut Workspace, root: &Path, file: &Path, number: usize) -> Result<String> {
+    let index = state.select(Some(file))?[0];
     let server = state.server_mut(index)?;
     server.sync_owned()?;
     server.wait_ready()?;
-    let synced = server.sync(&file)?;
-    let Some(result) = server.document_symbol(&synced.uri)? else {
+    let display = relative_display(root, file);
+    let Some(mut nodes) = file_nodes(server, file)? else {
         return Ok(unsupported("outline", server.name()));
     };
-    let nodes = outline::tree(&result).with_context(|| {
+    let omitted = locals::strip(&mut nodes, None);
+    if nodes.is_empty() {
+        return Ok(format!("{display} · empty outline{}\n", locals_note(omitted)));
+    }
+    let mut lines = Vec::new();
+    push_lines(&mut lines, server, &nodes, 0);
+    let page = page::page(&lines, number, false)?;
+    let count = lines.len();
+    let mut text = format!(
+        "{display} · {count} symbol{}{}{}\n",
+        if count == 1 { "" } else { "s" },
+        locals_note(omitted),
+        page.label(Some(page::count(count)))
+    );
+    page.render(&mut text);
+    let shown = page::start_of(number)? + page.lines.len();
+    text.push_str(&page.continuation(&format!("{} more symbol(s)", count - shown)));
+    Ok(text)
+}
+
+/// `file`'s outline from `server`, after syncing it from disk: `None` when
+/// the server has no `documentSymbol`.
+fn file_nodes(server: &mut LspServer, file: &Path) -> Result<Option<Vec<Node>>> {
+    let synced = server.sync(file)?;
+    let Some(result) = server.document_symbol(&synced.uri)? else {
+        return Ok(None);
+    };
+    outline::tree(&result).map(Some).with_context(|| {
         format!(
             "{} returned an unusable documentSymbol result",
             server.name()
         )
-    })?;
-    let display = relative_display(root, &file);
-    if nodes.is_empty() {
-        return Ok(format!("{display} · empty outline\n"));
-    }
-    let count = count(&nodes);
-    let mut text = format!(
-        "{display} · {count} symbol{}\n",
-        if count == 1 { "" } else { "s" }
-    );
-    let mut budget = MAX_LINES;
-    render_nodes(&mut text, server, &nodes, 0, &mut budget);
-    if budget == 0 {
-        let omitted = count.saturating_sub(MAX_LINES);
-        if omitted > 0 {
-            text.push_str(&format!(
-                "note: {omitted} more symbol(s) not shown (listing cap {MAX_LINES})\n"
-            ));
-        }
-    }
-    Ok(text)
+    })
 }
 
-fn count(nodes: &[Node]) -> usize {
-    nodes.iter().map(|node| 1 + count(&node.children)).sum()
+/// ` · N locals not shown`, or nothing when no local was left out.
+fn locals_note(omitted: usize) -> String {
+    match omitted {
+        0 => String::new(),
+        1 => " · 1 local not shown".to_string(),
+        n => format!(" · {n} locals not shown"),
+    }
 }
 
-/// `kind name · line[ · detail]`, indented by depth; stops when the budget
-/// is spent.
-fn render_nodes(
-    text: &mut String,
-    server: &LspServer,
-    nodes: &[Node],
-    depth: usize,
-    budget: &mut usize,
-) {
+/// One line per node, depth-first: `kind name · line[ · detail]`.
+fn push_lines(lines: &mut Vec<Line>, server: &LspServer, nodes: &[Node], depth: usize) {
     for node in nodes {
-        if *budget == 0 {
-            return;
-        }
-        *budget -= 1;
-        let extent = &node.extent;
-        let line = extent
-            .selection_range
-            .map_or(extent.range.start.line, |range| range.start.line)
-            + 1;
-        text.push_str(&"  ".repeat(depth));
-        text.push_str(&crate::tools::listing::header(
-            Some(server.adapter().kind_label(extent.kind)),
-            &extent.name,
-            &line.to_string(),
-        ));
-        if let Some(detail) = extent
-            .detail
-            .as_deref()
-            .map(str::trim)
-            .filter(|detail| !detail.is_empty())
-        {
-            text.push_str(&format!(" · {detail}"));
-        }
-        text.push('\n');
-        render_nodes(text, server, &node.children, depth + 1, budget);
+        lines.push(Line {
+            depth,
+            text: symbol_line(server, node),
+        });
+        push_lines(lines, server, &node.children, depth + 1);
     }
+}
+
+/// `kind name · line[ · detail]` for one symbol, without indentation.
+fn symbol_line(server: &LspServer, node: &Node) -> String {
+    let extent = &node.extent;
+    let line = extent
+        .selection_range
+        .map_or(extent.range.start.line, |range| range.start.line)
+        + 1;
+    let mut text = crate::tools::listing::header(
+        Some(server.adapter().kind_label(extent.kind)),
+        &extent.name,
+        &line.to_string(),
+    );
+    if let Some(detail) = extent
+        .detail
+        .as_deref()
+        .map(str::trim)
+        .filter(|detail| !detail.is_empty())
+    {
+        text.push_str(&format!(" · {detail}"));
+    }
+    text
 }

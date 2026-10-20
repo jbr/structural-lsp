@@ -34,14 +34,23 @@ pub const STANDARD: [&str; 6] = [
     TYPE,
 ];
 
-/// Lines of a listing before the rest is a count.
+/// Lines of a listing before the rest is a count, and of an outline page.
 pub const MAX_LINES: usize = 200;
 
-/// Answer `view` for `target`. `definition` is not handled here.
-pub fn run(state: &mut Workspace, view: &str, target: Target<'_>) -> Result<String> {
+/// Answer `view` for `target`. `definition` is not handled here. `page`
+/// pages an outline, and is refused for every other view.
+pub fn run(
+    state: &mut Workspace,
+    view: &str,
+    target: Target<'_>,
+    page: Option<usize>,
+) -> Result<String> {
     let root = target.view.to_path_buf();
+    if page.is_some() && view != OUTLINE {
+        bail!("`page` pages an `outline`; view `{view}` has no pages");
+    }
     match view {
-        OUTLINE => outline::run(state, &root, target),
+        OUTLINE => outline::run(state, &root, target, page),
         IMPLEMENTATIONS => locations::implementations(state, &root, target),
         INCOMING_CALLS => calls::run(state, &root, target, true),
         OUTGOING_CALLS => calls::run(state, &root, target, false),

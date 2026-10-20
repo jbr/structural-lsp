@@ -9,6 +9,7 @@ mod doc_links;
 mod file_scope;
 mod identity;
 mod mock_scope;
+mod outline;
 mod rename;
 mod responsive;
 mod servers;
@@ -66,6 +67,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         anchor: None,
         focus: None,
         view: None,
+        page: None,
     }
     .run(&state)
     .expect("show choose succeeds");
@@ -95,6 +97,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         anchor: None,
         focus: None,
         view: None,
+        page: None,
     }
     .run(&state)
     .expect("scoped show succeeds");
@@ -109,6 +112,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         anchor: None,
         focus: None,
         view: None,
+        page: None,
     }
     .run(&state)
     .expect("show Config succeeds");
@@ -129,6 +133,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         anchor: None,
         focus: None,
         view: None,
+        page: None,
     }
     .run(&state)
     .unwrap();
@@ -144,6 +149,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         anchor: None,
         focus: None,
         view: None,
+        page: None,
     }
     .run(&state)
     .expect("show Config::new succeeds");
@@ -274,6 +280,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         anchor: None,
         focus: None,
         view: None,
+        page: None,
     }
     .run(&state);
     assert!(escaping.is_err(), "an out-of-root scope must be rejected");
@@ -588,6 +595,7 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
             anchor: None,
             focus: None,
             view: None,
+            page: None,
         }
         .run(state)
     };

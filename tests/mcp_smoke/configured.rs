@@ -48,6 +48,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         anchor: None,
         focus: None,
         view: None,
+        page: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("show Greet: {error:#}"));
@@ -92,6 +93,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         anchor: Some("return Greet(\"world\")".to_string()),
         focus: Some("Greet".to_string()),
         view: None,
+        page: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("anchored show Greet: {error:#}"));
@@ -107,6 +109,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         anchor: None,
         focus: None,
         view: Some("type".to_string()),
+        page: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("show type Greet: {error:#}"));

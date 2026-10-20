@@ -24,6 +24,7 @@ fn show(
         anchor: anchor.map(str::to_string),
         focus: focus.map(str::to_string),
         view: Some(view.to_string()),
+        page: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("show view={view} {symbol:?} {path:?} {anchor:?}: {error:#}"))

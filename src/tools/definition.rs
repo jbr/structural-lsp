@@ -43,8 +43,10 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// Prefer this over `read` when you need one item's body, and over `grep`
 /// when the name may be re-exported, shadowed, or implemented across files.
 /// The same target selects other IDE views through `view`: `outline` (the
-/// target's children, or a whole file's symbols with only `path`),
-/// `implementations`, `incoming-calls`, `outgoing-calls`, `type` (the hover
+/// target's children; with only `path`, a file's symbols, or for a
+/// directory every file under it with its top-level items; a function's
+/// parameters and locals only in that function's own outline; 200 lines a
+/// page, `page` for the next), `implementations`, `incoming-calls`, `outgoing-calls`, `type` (the hover
 /// signature; with an anchor, the type of the focused expression), and per
 /// server `expanded` (rust-analyzer macro expansion at the focus) and
 /// `related-tests` (rust-analyzer, with the cargo command for each).
@@ -75,7 +77,8 @@ pub struct Definition {
     /// A file or directory under the workspace root, relative to it. A file
     /// resolves `symbol` from that file's own outline (fresh, and it picks
     /// the language server); a directory narrows the workspace index. With
-    /// `anchor`, the file the quoted text is in.
+    /// `anchor`, the file the quoted text is in. With `view = "outline"` and
+    /// no `symbol` or `anchor`, the file or directory to outline.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub path: Option<String>,
@@ -102,6 +105,13 @@ pub struct Definition {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub view: Option<String>,
+
+    /// For `view = "outline"`: which page, counting from 1, of an outline
+    /// longer than 200 lines. A page that is not the last ends with the
+    /// `page` that continues it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub page: Option<usize>,
 }
 
 impl ToolMeta for Definition {
@@ -119,6 +129,7 @@ impl ToolMeta for Definition {
                     anchor: None,
                     focus: None,
                     view: None,
+                    page: None,
                 },
             },
             Example {
@@ -129,6 +140,7 @@ impl ToolMeta for Definition {
                     anchor: None,
                     focus: None,
                     view: None,
+                    page: None,
                 },
             },
             Example {
@@ -139,6 +151,7 @@ impl ToolMeta for Definition {
                     anchor: Some("const offset = choose(true);".to_string()),
                     focus: Some("choose".to_string()),
                     view: None,
+                    page: None,
                 },
             },
         ]
@@ -176,13 +189,16 @@ impl Definition {
             focus: self.focus.as_deref(),
         };
         match self.view.as_deref().map(str::trim) {
+            None | Some("") | Some(views::DEFINITION) if self.page.is_some() => {
+                anyhow::bail!("`page` pages an `outline`; a definition has no pages")
+            }
             None | Some("") | Some(views::DEFINITION) => {
                 match resolve_target(&mut state, target)? {
                     Resolved::Listed(listing) => Ok(listing),
                     Resolved::One(found) => render_definition(&mut state, &root, &found),
                 }
             }
-            Some(view) => views::run(&mut state, view, target),
+            Some(view) => views::run(&mut state, view, target, self.page),
         }
     }
 }

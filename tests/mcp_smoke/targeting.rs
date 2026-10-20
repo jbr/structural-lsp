@@ -30,6 +30,7 @@ fn show(
         anchor: anchor.map(str::to_string),
         focus: focus.map(str::to_string),
         view: None,
+        page: None,
     }
     .run(state)
 }

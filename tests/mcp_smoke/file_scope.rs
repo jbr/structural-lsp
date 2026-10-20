@@ -115,6 +115,7 @@ fn show(
         anchor: None,
         focus: None,
         view: None,
+        page: None,
     }
     .run(state)
 }
