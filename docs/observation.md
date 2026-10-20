@@ -18,7 +18,8 @@ A batch — whatever it carried, including an overflow — means exactly
 "re-read the tree": `Workspace::refresh` re-gathers evidence under
 [`FILE_BUDGET`](discovery.md), re-runs selection under the layout the
 first selection used, and appends slots for languages the tree newly calls
-for. Nothing from the batch survives the reduction; the paths are carried
+for. A language the new selection finds present and unserved is reported
+to the operator, once per workspace ([operator.md](operator.md)). Nothing from the batch survives the reduction; the paths are carried
 for the day something selective is worth proving, not used today. A lost
 event is therefore reconciled by construction rather than trusted: the
 rescan rebuilds what the event would have said.
@@ -110,7 +111,8 @@ while observation goes on.
   lock from the entry's own slot copy; every wake — batch or park
   spent — ends with a sweep of what has since expired. A spent park is
   an empty batch: the reduction runs on real events only. Eviction
-  stops servers, never observation.
+  stops servers, never observation, and each server it stops is
+  reported to the operator as `Released` ([operator.md](operator.md)).
 - **The sweep stops `Running`, `Starting`, and `Failed` alike.** A
   `Failed` slot's verdict expires on the same clock, so a failure is
   never retried in a loop and is not permanent either: the next demand
@@ -160,7 +162,9 @@ A watch failure is not death. The source reports the loss, the thread
 survives it, and the sweep keeps running — eviction needs only a clock —
 while every sweep re-attempts the watch: a transient failure self-heals,
 and a persistent one costs one attempt per interval. The loss and the
-recovery are each logged once; the retries between stay quiet. Evidence
+recovery are each reported to the operator once — `WatchLost` and
+`WatchRecovered` ([operator.md](operator.md)); the retries between stay
+quiet. Evidence
 stops improving, which is the behaviour the workspace had before there
 was a watcher. A watcher — present, lost, or absent — is not a claim
 about anything: no batch establishes that an answer is current. What a

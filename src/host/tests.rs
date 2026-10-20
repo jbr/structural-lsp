@@ -10,6 +10,7 @@ use fixtures::{alive, asymmetric_fixture, wait_for_launches};
 
 mod fixtures;
 mod observation;
+mod operator;
 mod selection;
 
 /// Bind an agent and wait for the launches that binding started, the way the

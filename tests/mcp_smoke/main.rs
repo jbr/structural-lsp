@@ -10,6 +10,7 @@ mod file_scope;
 mod identity;
 mod mock_scope;
 mod module_paths;
+mod operator;
 mod outline;
 mod rename;
 mod responsive;

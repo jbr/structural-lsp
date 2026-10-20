@@ -172,10 +172,25 @@ impl Entry {
                 // The candidate's own failure: retained, and the ladder
                 // moves on. Retained even when the next one succeeds —
                 // `descriptions` is where a successful fallback says what
-                // it fell back from.
-                Err(Unstarted::Unavailable(reason)) => slot.attempted(adapter.as_ref(), reason),
+                // it fell back from. The operator hears of it now when a
+                // next candidate follows; the last one's failure is the
+                // launch's, reported below (`docs/operator.md`).
+                Err(Unstarted::Unavailable(reason)) => {
+                    slot.attempted(adapter.as_ref(), reason);
+                    if let (Some(next), Some(attempt)) = (
+                        slot.candidate_names().get(rung + 1),
+                        slot.failed_attempts().last(),
+                    ) {
+                        self.report_candidate_failed(attempt, next);
+                    }
+                }
                 Err(Unstarted::Refused(reason)) => return launch.failed(reason),
             }
+        }
+        // A launch a stop superseded marks nothing, and reports nothing:
+        // the slot is no longer its slot.
+        if !launch.superseded() {
+            self.report_exhausted(&slot);
         }
         launch.exhausted();
     }
@@ -222,11 +237,15 @@ impl Entry {
         // waiting for it would make a shutdown wait with it.
         let Some(mut workspace) = self.lock_within(self.lifetime.publish_bound) else {
             drop(server);
-            return launch.failed(format!(
+            let reason = format!(
                 "this workspace was busy for {:?} while the server was starting, so it was \
                  stopped rather than left running",
                 self.lifetime.publish_bound
-            ));
+            );
+            if !launch.superseded() {
+                self.report_launch_failed(launch.name(), &reason);
+            }
+            return launch.failed(reason);
         };
         if self.lifetime.stopped() {
             // Shutdown claimed the host while this server was starting. Drop it
@@ -252,6 +271,11 @@ impl Entry {
         child.published();
         server.set_registration(child);
         workspace.publish(index, server);
+        // A server serving in place of the candidates above it: the one
+        // success the operator hears about. Before the slot reads
+        // `Running`, so a caller woken by the publication finds the event
+        // already reported (`docs/operator.md`).
+        self.report_fallback(launch.slot());
         launch.published();
     }
 }

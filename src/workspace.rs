@@ -236,6 +236,12 @@ impl Workspace {
         self.config_error.as_deref()
     }
 
+    /// What selection last proposed for this tree; `None` when the
+    /// configuration did not load.
+    pub fn selection(&self) -> Option<&Selection> {
+        self.selection.as_ref()
+    }
+
     /// The running server in `index`'s slot.
     ///
     /// Every index a caller can obtain comes from [`Workspace::select`] or

@@ -87,6 +87,7 @@ Every other invariant here is a consequence, and they are stated in full in
 | The three tools — `definition`, `references`, `rename`, their views, and how answers render | [tools.md](tools.md) | `src/tools.rs`, `src/tools/definition.rs`, `src/tools/references.rs`, `src/tools/rename.rs`, `src/tools/listing.rs`, `src/tools/hits.rs` |
 | Discovery — where a project begins, what a tree is, and which servers it calls for | [discovery.md](discovery.md) | `src/discovery.rs` (+ `src/discovery/`) |
 | Observation — what a batch means, the signal policy, the idle sweep that releases unused servers, and the thread that runs both | [observation.md](observation.md) | `src/host/observation.rs`, `src/clock.rs` |
+| The operator channel — the facts an agent cannot act on, pushed at transitions to a sink the host is built with: stderr, and MCP logging from the front end | [operator.md](operator.md) | `src/operator.rs` (+ `src/operator/`), `src/host/report.rs`, `src/main.rs` |
 | The catalogue's measured set, order, and cuts — which server per language, and what was left out | [catalogue.md](catalogue.md) | `src/discovery/catalogue.rs` (+ `generated.rs`), `src/bin/catalogue.rs`, `tests/conformance/` |
 | The raw-LSP spike — the dev instrument that dumps unrendered server answers | [spike.md](spike.md) | `src/bin/spike/` |
 

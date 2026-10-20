@@ -57,6 +57,7 @@ impl Session {
             ),
             lifetime,
             Arc::new(crate::clock::SystemClock),
+            Arc::new(crate::operator::Stderr),
         ));
         entry.observe(
             evidence,

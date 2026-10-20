@@ -35,6 +35,7 @@
 //! admitted (`docs/correctness.md`).
 
 use crate::host::Entry;
+use crate::operator::{Event as Report, Kind, Level, Operator};
 use notify::Watcher;
 use std::path::{Path, PathBuf};
 use std::sync::Weak;
@@ -334,24 +335,35 @@ fn coalesce(pending: &Pending, park: Option<Duration>) -> Option<Batch> {
 /// refreshes, but the sweep keeps running, because eviction needs only a
 /// clock — and every sweep retries the watch, so a transient failure
 /// self-heals and a persistent one costs one attempt per interval. The loss
-/// and the recovery are each logged once; the retries in between stay
-/// quiet (`docs/observation.md`).
+/// and the recovery are each reported to the operator once; the retries in
+/// between stay quiet (`docs/observation.md`, `docs/operator.md`).
 pub(crate) fn observe(weak: &Weak<Entry>, mut source: Box<dyn Source>) {
-    // The root and the interval only: the Arc is dropped before the loop, so
-    // nothing below parks holding it — a released workspace is not kept
-    // alive by its own watcher.
-    let (root, idle) = match weak.upgrade() {
-        Some(entry) => (entry.root.clone(), entry.idle_eviction),
+    // The root, the interval and the operator only: the Arc is dropped
+    // before the loop, so nothing below parks holding it — a released
+    // workspace is not kept alive by its own watcher.
+    let (root, idle, operator) = match weak.upgrade() {
+        Some(entry) => (
+            entry.root.clone(),
+            entry.idle_eviction,
+            Arc::clone(&entry.operator),
+        ),
         None => return,
+    };
+    let lost = |operator: &dyn Operator, error: &anyhow::Error| {
+        operator.event(&Report::new(
+            Level::Warning,
+            Kind::WatchLost,
+            &root,
+            format!(
+                "the filesystem watch failed: {error:#}; evidence will not refresh until it \
+                 recovers, and the idle sweep goes on"
+            ),
+        ));
     };
     let mut watching = match source.watch(&root) {
         Ok(()) => true,
         Err(error) => {
-            eprintln!(
-                "observation: {}: watch failed: {error:#}; evidence will not refresh \
-                 until it recovers",
-                root.display()
-            );
+            lost(operator.as_ref(), &error);
             false
         }
     };
@@ -388,12 +400,19 @@ pub(crate) fn observe(weak: &Weak<Entry>, mut source: Box<dyn Source>) {
             // without this lock (`Entry::sync_slots`). Taking `interested`
             // while holding the workspace lock cannot deadlock: nothing
             // takes `interested` and then waits for the workspace.
-            let new_languages = {
+            let (new_languages, unserved) = {
                 let mut workspace = entry.lock();
                 let new = workspace.refresh();
                 entry.sync_slots(workspace.slots());
-                new
+                let unserved = workspace
+                    .selection()
+                    .map(|selection| selection.unserved.clone())
+                    .unwrap_or_default();
+                (new, unserved)
             };
+            // Outside the lock; only a language not reported before is
+            // reported now (`docs/operator.md`).
+            entry.report_unserved(&unserved);
             // A filesystem change is a weak signal: it warms a server only
             // when a language is new *and* an agent is attached. An
             // observed-only workspace updates evidence and launches nothing,
@@ -408,27 +427,29 @@ pub(crate) fn observe(weak: &Weak<Entry>, mut source: Box<dyn Source>) {
         // only what has actually expired, so a busy workspace finds nothing
         // and pays a lock acquisition for the look.
         let stopped = entry.sweep_due();
+        entry.report_released(&stopped);
         drop(stopped);
         // Re-establish the watch at sweep cadence when the source reports
         // a loss or the last attempt failed. A drop notice and a dead watch
         // reduce to the same attempt: cheap when the watch is alive,
         // healing when it is not. The loss and the recovery are each
-        // logged once; the retries in between stay quiet.
+        // reported once; the retries in between stay quiet.
         if !watching || source.lost() {
             match source.watch(&root) {
                 Ok(()) => {
                     if !watching {
-                        eprintln!("observation: {}: watch recovered", root.display());
+                        operator.event(&Report::new(
+                            Level::Info,
+                            Kind::WatchRecovered,
+                            &root,
+                            "the filesystem watch recovered; evidence refreshes again",
+                        ));
                     }
                     watching = true;
                 }
-                Err(_) => {
+                Err(error) => {
                     if watching {
-                        eprintln!(
-                            "observation: {}: watch lost; evidence will not refresh \
-                             until it recovers",
-                            root.display()
-                        );
+                        lost(operator.as_ref(), &error);
                         watching = false;
                     }
                 }

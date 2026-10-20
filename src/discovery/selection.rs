@@ -261,6 +261,31 @@ pub enum DeclinedReason {
     Outranked { by: Vec<String> },
 }
 
+/// A language the tree gives evidence for that no candidate serves — a
+/// marker implies it, and nothing in the catalogue or the configuration
+/// serves it, or everything that did is disabled.
+///
+/// Not a decline: there is no server to decline. Nothing an agent can do
+/// changes it, so it is the operator's to hear (`docs/operator.md`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unserved {
+    pub language: String,
+    /// The evidence that the language is present.
+    pub why: Vec<Reason>,
+}
+
+impl Unserved {
+    /// One line, for the operator.
+    pub fn explain(&self) -> String {
+        let why: Vec<String> = self.why.iter().map(Reason::describe).collect();
+        format!(
+            "{} is in the tree ({}) and no catalogued or configured server serves it",
+            self.language,
+            why.join("; ")
+        )
+    }
+}
+
 /// The proposal for one tree: what to start, and what was left out.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Selection {
@@ -269,6 +294,8 @@ pub struct Selection {
     pub plans: Vec<Plan>,
     /// Sorted by server name.
     pub declined: Vec<Declined>,
+    /// Languages with evidence and no candidate, sorted by language.
+    pub unserved: Vec<Unserved>,
 }
 
 impl Selection {
@@ -326,6 +353,7 @@ pub fn select(evidence: &Evidence, catalogue: &Catalogue, overrides: &Overrides)
     }
 
     let mut plans = Vec::new();
+    let mut unserved = Vec::new();
     let mut chosen: BTreeSet<String> = BTreeSet::new();
     let mut outranked: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
@@ -343,7 +371,11 @@ pub fn select(evidence: &Evidence, catalogue: &Catalogue, overrides: &Overrides)
         let Some((winner, rest)) = candidates.split_first() else {
             // Evidence for a language no entry serves. Not a decline —
             // there is no server to decline — and not silently dropped
-            // either: `operator-diagnostics.md` owns telling someone.
+            // either: the operator is told (`docs/operator.md`).
+            unserved.push(Unserved {
+                language: language.clone(),
+                why: reasons,
+            });
             continue;
         };
 
@@ -393,6 +425,7 @@ pub fn select(evidence: &Evidence, catalogue: &Catalogue, overrides: &Overrides)
         root,
         plans,
         declined,
+        unserved,
     }
 }
 

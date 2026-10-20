@@ -149,3 +149,32 @@ while True:
         if msg["method"] == "exit":
             sys.exit(0)
 "#;
+
+/// An operator that keeps every event it is handed, so a test can assert
+/// what was reported, how often, and in what order (`docs/operator.md`).
+#[derive(Default)]
+pub(crate) struct Recorder(std::sync::Mutex<Vec<crate::operator::Event>>);
+
+impl Recorder {
+    pub(crate) fn shared() -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self::default())
+    }
+
+    pub(crate) fn events(&self) -> Vec<crate::operator::Event> {
+        self.0.lock().unwrap().clone()
+    }
+
+    /// The events of one kind, in the order they arrived.
+    pub(crate) fn of(&self, kind: crate::operator::Kind) -> Vec<crate::operator::Event> {
+        self.events()
+            .into_iter()
+            .filter(|event| event.kind == kind)
+            .collect()
+    }
+}
+
+impl crate::operator::Operator for Recorder {
+    fn event(&self, event: &crate::operator::Event) {
+        self.0.lock().unwrap().push(event.clone());
+    }
+}

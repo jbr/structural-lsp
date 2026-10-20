@@ -14,6 +14,7 @@
 
 use crate::clock::{Clock, SystemClock};
 use crate::lsp::server::LspServer;
+use crate::operator::{Operator, Stderr};
 use crate::session::Session;
 use crate::workspace::{ServerSlot, SlotState, Workspace, canonical_root};
 use anyhow::Result;
@@ -121,14 +122,28 @@ pub(crate) struct Entry {
     /// its next event (`docs/observation.md`). `None` when no observer was
     /// spawned — the `Session::new` construction path has none.
     observer_stop: Mutex<Option<Arc<dyn observation::Stop>>>,
+    /// Where this workspace's transitions are reported: the host's
+    /// operator (`docs/operator.md`).
+    operator: Arc<dyn Operator>,
+    /// The languages already reported as present with no server, so each
+    /// is reported once per workspace however often evidence refreshes.
+    unserved_reported: Mutex<BTreeSet<String>>,
 }
 
 impl Entry {
-    pub(crate) fn new(workspace: Workspace, lifetime: Lifetime, clock: Arc<dyn Clock>) -> Self {
+    /// An entry for a freshly built workspace, reporting what the build
+    /// found for the operator — a configuration that does not load, a
+    /// language nothing serves — before anything can start.
+    pub(crate) fn new(
+        workspace: Workspace,
+        lifetime: Lifetime,
+        clock: Arc<dyn Clock>,
+        operator: Arc<dyn Operator>,
+    ) -> Self {
         let root = workspace.root().to_path_buf();
         let idle_eviction = workspace.idle_eviction();
         let slots = Mutex::new(workspace.slots().to_vec());
-        Self {
+        let entry = Self {
             root,
             workspace: Mutex::new(workspace),
             interested: Mutex::new(BTreeSet::new()),
@@ -137,7 +152,11 @@ impl Entry {
             clock,
             idle_eviction,
             observer_stop: Mutex::new(None),
-        }
+            operator,
+            unserved_reported: Mutex::new(BTreeSet::new()),
+        };
+        entry.report_built();
+        entry
     }
 
     /// Lock the workspace for one operation. A panic while holding the lock
@@ -291,6 +310,9 @@ impl Entry {
 /// initializes — the rest of [`Entry`]'s behaviour.
 mod launch;
 
+/// The events an entry reports to the operator (`docs/operator.md`).
+mod report;
+
 impl Drop for Entry {
     /// A workspace that no registry and no session holds is gone: close its
     /// observation source, so its watcher and its thread end now rather
@@ -327,6 +349,10 @@ pub struct Host {
     /// tests install a synthetic source and drive it
     /// (`docs/observation.md`).
     source_factory: Mutex<observation::SourceFactory>,
+    /// Where every workspace's transitions are reported
+    /// (`docs/operator.md`). Cloned into each entry; [`Stderr`] unless
+    /// the host was built [`with_operator`](Host::with_operator).
+    operator: Arc<dyn Operator>,
 }
 
 impl Default for Host {
@@ -351,7 +377,18 @@ impl Host {
             lifetime: Lifetime::with_publish_bound(publish_bound),
             clock: Arc::new(SystemClock),
             source_factory: Mutex::new(observation::default_source_factory()),
+            operator: Arc::new(Stderr),
         }
+    }
+
+    /// Report this host's transitions — a server that would not start, a
+    /// fallback, a language nothing serves, a server released, a watch
+    /// lost — to `operator` instead of stderr (`docs/operator.md`). Set
+    /// before any agent binds: every workspace takes the operator the host
+    /// has when the workspace is created.
+    pub fn with_operator(mut self, operator: Arc<dyn Operator>) -> Self {
+        self.operator = operator;
+        self
     }
 
     /// A host whose workspaces are observed through `factory` instead of
@@ -403,6 +440,7 @@ impl Host {
                     ),
                     self.lifetime.clone(),
                     Arc::clone(&self.clock),
+                    Arc::clone(&self.operator),
                 ));
                 workspaces.insert(key, Arc::clone(&entry));
                 // The workspace watches its own tree: an event batch re-runs

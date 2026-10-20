@@ -18,6 +18,14 @@
 //! that answers liveness probes but never finishes. Either way the process
 //! reaps every child it owns before exiting. Without signals — an MCP harness
 //! closing our stdin — the same `host.shutdown()` runs on the way out.
+//!
+//! What the host reports for the operator — a server that would not start, a
+//! fallback, a language nothing serves — goes to stderr, one line per event,
+//! and to the MCP client as logging (`notifications/message`), which is why
+//! the server declares the `logging` capability. The connection's notifier
+//! is attached at the first tool call admitted once the client has completed
+//! its handshake; events from the eager warm before then are held and sent
+//! first (`docs/operator.md`).
 
 use anyhow::Context;
 use mcplease::{Cli, clap::Parser, traits::Dispatch, types::RequestContext};
@@ -25,10 +33,12 @@ use smol::{Executor, Unblock};
 use std::path::PathBuf;
 use std::sync::Arc;
 use structural::host::{AgentId, Host};
+use structural::operator::mcp::Mcp;
 use structural::tools;
 
 fn main() -> anyhow::Result<()> {
-    let host = Arc::new(Host::new());
+    let operator = Arc::new(Mcp::new());
+    let host = Arc::new(Host::new().with_operator(Arc::clone(&operator) as _));
     // Register before root resolution or eager language-server startup.
     #[cfg(unix)]
     let (signals, input) = signals::install(Arc::clone(&host))?;
@@ -58,8 +68,9 @@ results are listed. Edits on disk, yours or anyone's, are synced before \
 each query. The \
 workspace root is fixed at server start; `path` only scopes inside it.";
 
-        let config =
-            mcplease::ServerConfig::new(mcplease::server_info!()).with_instructions(instructions);
+        let config = mcplease::ServerConfig::new(mcplease::server_info!())
+            .with_instructions(instructions)
+            .with_logging();
         // `try_parse`, so help and usage errors return here and the host is
         // still shut down on the way out.
         let command = match Cli::<tools::Tools>::try_parse() {
@@ -89,7 +100,15 @@ workspace root is fixed at server start; `path` only scopes inside it.";
                     let stdout = Unblock::new(std::io::stdout());
                     let mut calls =
                         mcplease::calls::<tools::Tools, _>(stdin, stdout, session, &config);
+                    let notifier = calls.notifier();
                     while let Some(call) = calls.next().await {
+                        // Each admitted call looks once whether the
+                        // handshake has completed; the first look that
+                        // finds it so sends what was held. Attaching again
+                        // is a no-op.
+                        if notifier.is_open() {
+                            operator.attach(Arc::new(notifier.clone()));
+                        }
                         executor.spawn(call?).detach();
                     }
                     Ok(())

@@ -23,6 +23,9 @@ pub struct Server {
     stdin: Option<std::process::ChildStdin>,
     responses: Receiver<Value>,
     events: Receiver<String>,
+    /// Frames `wait_for` read past while looking for its response — the
+    /// server's notifications, in arrival order.
+    skipped: Vec<Value>,
     pub next_id: u64,
 }
 
@@ -81,6 +84,7 @@ impl Server {
             stdin,
             responses,
             events,
+            skipped: Vec::new(),
             next_id: 0,
         }
     }
@@ -127,7 +131,13 @@ impl Server {
             if value.get("id").and_then(Value::as_u64) == Some(id) {
                 return value;
             }
+            self.skipped.push(value);
         }
+    }
+
+    /// The frames `wait_for` has read past so far, taken.
+    pub fn take_skipped(&mut self) -> Vec<Value> {
+        std::mem::take(&mut self.skipped)
     }
 
     pub fn event(&self, needle: &str) -> String {

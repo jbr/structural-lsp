@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 /// The factory must work for any number of workspaces, so it cannot hand
 /// one driver to one test: it parks each in the vector, and a test with
 /// one workspace reads the first.
-fn synthetic_host() -> (Host, Arc<Mutex<Vec<Driver>>>) {
+pub(super) fn synthetic_host() -> (Host, Arc<Mutex<Vec<Driver>>>) {
     let drivers: Arc<Mutex<Vec<Driver>>> = Arc::new(Mutex::new(Vec::new()));
     let captured = Arc::clone(&drivers);
     let host = Host::with_observation(
@@ -45,7 +45,7 @@ fn synthetic_host() -> (Host, Arc<Mutex<Vec<Driver>>>) {
 
 /// The same, with the shared test clock, so a test advances time instead of
 /// sleeping through the eviction interval.
-fn residency_host() -> (Host, Arc<Mutex<Vec<Driver>>>, Arc<TestClock>) {
+pub(super) fn residency_host() -> (Host, Arc<Mutex<Vec<Driver>>>, Arc<TestClock>) {
     let drivers: Arc<Mutex<Vec<Driver>>> = Arc::new(Mutex::new(Vec::new()));
     let captured = Arc::clone(&drivers);
     let clock = TestClock::shared();
@@ -64,7 +64,7 @@ fn residency_host() -> (Host, Arc<Mutex<Vec<Driver>>>, Arc<TestClock>) {
 }
 
 /// The first workspace's driver. Every test here binds one workspace.
-fn first_driver(drivers: &Arc<Mutex<Vec<Driver>>>) -> Driver {
+pub(super) fn first_driver(drivers: &Arc<Mutex<Vec<Driver>>>) -> Driver {
     drivers.lock().unwrap()[0].clone()
 }
 
@@ -72,7 +72,7 @@ fn first_driver(drivers: &Arc<Mutex<Vec<Driver>>>) -> Driver {
 /// a failure reports rather than hangs; the condition is a fact about
 /// state another thread has already written, never something a wait could
 /// make true.
-fn wait_until(condition: impl Fn() -> bool) -> bool {
+pub(super) fn wait_until(condition: impl Fn() -> bool) -> bool {
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline {
         if condition() {

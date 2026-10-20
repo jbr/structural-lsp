@@ -8,6 +8,7 @@ pub mod discovery;
 pub mod fixtures;
 pub mod host;
 pub mod lsp;
+pub mod operator;
 pub mod progress;
 pub mod session;
 #[cfg(test)]

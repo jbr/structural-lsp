@@ -170,7 +170,10 @@ initialized.
 Activation is best effort. A server that will not start is recorded on its
 own slot, and the call goes on to ask whatever is available; what is missing
 is reported by the query, which knows the scope. Bailing instead would let
-one broken server stop every other from being warmed.
+one broken server stop every other from being warmed. The launch itself
+reports its outcome to the host's operator once — a candidate skipped, a
+ladder exhausted, a fallback serving — whether or not any query is waiting
+([operator.md](operator.md)).
 
 The `Launch` guard owns its slot and leaves `Starting` on **every** exit path
 including a panic (`Drop` marks it failed), so no waiter can be stranded on a

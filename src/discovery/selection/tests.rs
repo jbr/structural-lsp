@@ -344,8 +344,8 @@ fn sources_alone_are_evidence_when_there_is_no_marker() {
 #[test]
 fn a_marker_for_a_language_no_entry_serves_plans_nothing() {
     // Evidence without a server is not a decline — there is no server to
-    // decline — and it is not an error here either. Telling the operator
-    // is `operator-diagnostics.md`.
+    // decline — and it is not an error here either. It is recorded as
+    // unserved, with the evidence, for the operator (`docs/operator.md`).
     let root = tree("unserved", &[], &["go.mod", "main.go"]);
     let evidence = Evidence::gather(&root);
     let catalogue = Catalogue::new(vec![entry("pyright", "python", Some(6))]);
@@ -358,6 +358,43 @@ fn a_marker_for_a_language_no_entry_serves_plans_nothing() {
         Some(&DeclinedReason::NoEvidence {
             languages: vec!["python".to_string()]
         })
+    );
+    assert_eq!(
+        selection.unserved,
+        [Unserved {
+            language: "go".to_string(),
+            why: vec![Reason::Marker {
+                file: "go.mod".to_string(),
+                language: "go".to_string(),
+            }],
+        }]
+    );
+    assert!(
+        selection.unserved[0]
+            .explain()
+            .starts_with("go is in the tree (`go.mod` implies go)"),
+        "{}",
+        selection.unserved[0].explain()
+    );
+}
+
+#[test]
+fn a_language_whose_every_server_is_disabled_is_unserved() {
+    let root = tree("unserved-disabled", &[], &["pyproject.toml", "main.py"]);
+    let evidence = Evidence::gather(&root);
+    let catalogue = Catalogue::new(vec![entry("pyright", "python", Some(6))]);
+
+    let selection = select(&evidence, &catalogue, &Overrides::new().disable("pyright"));
+
+    assert!(selection.plans.is_empty());
+    assert_eq!(
+        selection
+            .unserved
+            .iter()
+            .map(|unserved| unserved.language.as_str())
+            .collect::<Vec<_>>(),
+        ["python"],
+        "the marker still says Python is here"
     );
 }
 

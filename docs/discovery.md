@@ -163,15 +163,20 @@ while a name the catalogue does not know is added unscored.
 
 ## Selection is a function, not a side effect
 
-`select(evidence, catalogue, overrides) -> Selection`. It returns plans
-and declines, and does nothing else.
+`select(evidence, catalogue, overrides) -> Selection`. It returns plans,
+declines, and unserved languages, and does nothing else.
 
 A `Plan` carries the language it was chosen for, the root it would start
 against, its `candidates` — every catalogue entry serving that language, in
 rank order, the preferred one first — and `why`: a
 list of `Reason` values, not prose, so a test can assert a plan is right
 for the *right* reason. A `Declined` records a catalogue entry no plan
-names and why: no evidence for its languages, disabled, or outranked.
+names and why: no evidence for its languages, disabled, or outranked. An
+`Unserved` records a language the tree gives evidence for — a marker
+implies it — that no catalogue entry or configured server serves, or whose
+every server is disabled. It is not a decline, since there is no server to
+decline; the workspace reports it to the operator once
+([operator.md](operator.md)).
 
 Precedence is explicit and ordered: an **override** beats the
 **catalogue**, which beats a **guess from evidence**. `structural.toml` is
