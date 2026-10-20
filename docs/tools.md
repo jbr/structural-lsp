@@ -13,7 +13,7 @@ resolution pipeline ([resolution.md](resolution.md)), so a target that
 | `symbol` | the name, bare (`choose`) or qualified by its container (`Config::new`, `Config.doubled`). Exact match on the name. |
 | `path` | a file or directory under the root, relative to it. A file nominates `symbol` from that file's own outline rather than the workspace index, and picks its language server; a directory narrows the index. With `anchor`, the file the quoted text is in. |
 | `anchor` | source text quoted verbatim from `path`, occurring exactly once in it — the way to reach a local, a call site, an expression. |
-| `focus` | the token within `anchor` that is meant; the whole anchor when absent. |
+| `focus` | the token within `anchor` that is meant, occurring once in the anchor as a whole identifier; the whole anchor when absent. |
 
 The workspace root is fixed at server start (cwd, or `STRUCTURAL_ROOT`).
 `path` only scopes inside it: it is canonicalized, and a symlink escape is

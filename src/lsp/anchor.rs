@@ -2,10 +2,12 @@
 //! pure function over the text read from disk.
 //!
 //! An anchor must occur exactly once in the file; a focus, when given, is a
-//! substring of the anchor that must occur exactly once within it. The
-//! result is the focus's byte range, which the caller converts to a
-//! position with the server's encoding. Nothing here guesses: zero or
-//! several occurrences are errors that say where the occurrences are.
+//! substring of the anchor that must occur exactly once within it, counting
+//! occurrences on identifier boundaries first and as plain substrings only
+//! when none sit on one (docs/resolution.md). The result is the focus's byte
+//! range, which the caller converts to a position with the server's
+//! encoding. Nothing here guesses: zero or several occurrences are errors
+//! that say where the occurrences are.
 
 use anyhow::{Result, bail};
 
@@ -48,7 +50,7 @@ pub fn locate(text: &str, anchor: &str, focus: Option<&str>) -> Result<Selection
             if focus.is_empty() {
                 bail!("`focus` must be non-empty text within the anchor");
             }
-            let within: Vec<usize> = anchor.match_indices(focus).map(|(at, _)| at).collect();
+            let within = focus_occurrences(anchor, focus);
             match within.as_slice() {
                 [] => bail!(
                     "focus `{}` does not occur in the anchor `{}`",
@@ -70,6 +72,45 @@ pub fn locate(text: &str, anchor: &str, focus: Option<&str>) -> Result<Selection
         end,
         line: line_of(text, anchor_start),
     })
+}
+
+/// Byte offsets of `focus` within `anchor`: the occurrences on identifier
+/// boundaries when there are any, otherwise every substring occurrence.
+///
+/// An occurrence is on a boundary when each edge of the focus that is an
+/// identifier character is not continued by one in the anchor, so `boundaries`
+/// does not match inside `extract_boundaries`, while a focus that starts or
+/// ends in punctuation (`::new`, `$el`) is not constrained on that side. The
+/// substring fallback keeps a focus that sits only inside longer words (a
+/// fragment of a string literal or a path) resolvable as before.
+fn focus_occurrences(anchor: &str, focus: &str) -> Vec<usize> {
+    let substrings: Vec<usize> = anchor.match_indices(focus).map(|(at, _)| at).collect();
+    let first = focus.chars().next().is_some_and(is_identifier_char);
+    let last = focus.chars().next_back().is_some_and(is_identifier_char);
+    let bounded: Vec<usize> = substrings
+        .iter()
+        .copied()
+        .filter(|&at| {
+            let before = anchor[..at].chars().next_back();
+            let after = anchor[at + focus.len()..].chars().next();
+            !(first && before.is_some_and(is_identifier_char))
+                && !(last && after.is_some_and(is_identifier_char))
+        })
+        .collect();
+    if bounded.is_empty() {
+        substrings
+    } else {
+        bounded
+    }
+}
+
+/// A character that continues an identifier in the languages served here:
+/// Unicode alphanumerics and `_`. `$` and `-` are not included — they are
+/// identifier characters in JavaScript, PHP, Lisp and CSS but sigils or
+/// operators elsewhere — so a focus next to either still matches on a
+/// boundary, and in `foo-bar` the focus `foo` is not shielded from the dash.
+fn is_identifier_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
 }
 
 /// 1-based line of a byte offset.
@@ -134,5 +175,59 @@ mod tests {
         );
         assert!(locate(TEXT, "", None).is_err());
         assert!(locate(TEXT, "fn run", Some("")).is_err());
+    }
+
+    fn focused<'a>(text: &'a str, focus: &str) -> (&'a str, usize) {
+        let found = locate(text, text, Some(focus)).unwrap();
+        (&text[found.start..found.end], found.start)
+    }
+
+    #[test]
+    fn a_focus_that_prefixes_or_suffixes_a_neighbour_resolves_on_its_boundary() {
+        let line = "let (boundaries, elided) = extract_boundaries(log);";
+        assert_eq!(focused(line, "boundaries"), ("boundaries", 5));
+        // A suffix of a neighbour, and a prefix of one.
+        let mixed = "renew(x) + new(y) + new_len(z)";
+        assert_eq!(focused(mixed, "new_len"), ("new_len", 20));
+        assert_eq!(focused("renew(x) + new(y)", "new"), ("new", 11));
+        assert_eq!(focused("config_path(config)", "config"), ("config", 12));
+        // Punctuation at an edge constrains nothing on that side.
+        let path = "Config::new(3) + Config::news(4)";
+        assert_eq!(focused(path, "::new"), ("::new", 6));
+        assert_eq!(focused("$el + $element", "$el"), ("$el", 0));
+        assert_eq!(focused("$el + $element", "el"), ("el", 1));
+    }
+
+    #[test]
+    fn several_whole_identifier_occurrences_are_still_refused() {
+        let line = "boundaries + boundaries + extract_boundaries()";
+        let err = locate(line, line, Some("boundaries"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("occurs 2 times in the anchor"), "{err}");
+        // Dashes do not join identifiers.
+        let dashed = "(foo-bar foo)";
+        assert!(locate(dashed, dashed, Some("foo")).is_err());
+    }
+
+    #[test]
+    fn a_focus_with_no_boundary_occurrence_falls_back_to_substrings() {
+        assert_eq!(focused("include!(\"xlibx.rs\")", "lib"), ("lib", 11));
+        assert_eq!(focused("renew(x)", "new"), ("new", 2));
+        let two = "renew(renewal)";
+        let err = locate(two, two, Some("new")).unwrap_err().to_string();
+        assert!(err.contains("occurs 2 times in the anchor"), "{err}");
+    }
+
+    #[test]
+    fn boundaries_follow_unicode_alphanumerics() {
+        let line = "let (größe, größer) = größen(größe2);";
+        assert_eq!(focused(line, "größe"), ("größe", 5));
+        assert_eq!(focused("let 名前 = 名前付き();", "名前"), ("名前", 4));
+        assert_eq!(focused("é + é_x + éa", "é"), ("é", 0));
+        // No whole-identifier occurrence: the substring fallback counts the
+        // inner ones, and there are two.
+        let inner = "größen(größer)";
+        assert!(locate(inner, inner, Some("größe")).is_err());
     }
 }

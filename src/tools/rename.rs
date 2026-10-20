@@ -66,8 +66,9 @@ pub struct Rename {
     #[arg(long)]
     pub anchor: Option<String>,
 
-    /// The token within `anchor` that is meant; the whole anchor when
-    /// absent.
+    /// The token within `anchor` that is meant, occurring once in the
+    /// anchor as a whole identifier (`config` is not found inside
+    /// `config_path`); the whole anchor when absent.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub focus: Option<String>,

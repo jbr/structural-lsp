@@ -259,9 +259,23 @@ Anchors skip the symbol index entirely: the file is synced, then
 locals, parameters, call sites and expressions — everything a name cannot
 address.
 
-Focus matching is plain substring matching today, so a focus that is a
-prefix or suffix of a neighbouring identifier collides
-(`../backlog/focus-identifier-boundaries.md`).
+**Focus matches on identifier boundaries first.** The occurrences counted
+are those where each edge of the focus that is an identifier character is
+not continued by one in the anchor, so `boundaries` in `let (boundaries,
+elided) = extract_boundaries(log);` is one occurrence and `new` is not found
+inside `renew`. An identifier character is a Unicode alphanumeric or `_` —
+the one rule for every language. `$` and `-` are not identifier characters:
+they are in JavaScript, PHP, Lisp and CSS but sigils or operators in the
+rest, and treating them as joiners would hide `foo` in Rust's `a-foo` from
+the boundary pass. The cost is that in a dashed language `foo` in
+`(foo-bar x)` matches as a boundary occurrence, as it did as a substring. A focus that begins or
+ends in punctuation (`::new`, `$el`) is unconstrained on that side. Only
+when no occurrence sits on a boundary does matching fall back to plain
+substrings, which keeps a focus inside a string literal or a path
+(`lib` in `"xlibx.rs"`) resolvable. Several occurrences in either pass are
+refused with their count, and nothing in the answer says which pass found
+the occurrence. A fallback hit inside a longer identifier is a position in
+that identifier, and the server answers for it.
 
 **The name is what the definition carries, not how the anchor spelled it.**
 The two differ whenever the anchor is wider than the token it resolves —

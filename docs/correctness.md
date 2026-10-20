@@ -174,8 +174,8 @@ navigate to the same place are one identity, hits that navigate elsewhere are
 listed as ambiguous with their kinds, paths and signatures. Zero exact
 matches produce a fuzzy "similar:" listing with kinds, not a wrong pick.
 Anchors are subject to the same rule in the text domain: an anchor must occur
-exactly once in the file and a focus exactly once within the anchor;
-otherwise the error says where the occurrences are.
+exactly once in the file and a focus exactly once within the anchor (on
+identifier boundaries, else as a substring: `resolution.md`); otherwise the error says where the occurrences are.
 
 Candidates come from the servers' fuzzy symbol index — bounded, and **not
 proven exhaustive** — except in a **file scope**, where a `path` naming a

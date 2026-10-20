@@ -89,8 +89,9 @@ pub struct Definition {
     pub anchor: Option<String>,
 
     /// The token within `anchor` that is meant (`config` in `let config =
-    /// Config::new(3);`), occurring once in the anchor; the whole anchor
-    /// when absent.
+    /// Config::new(3);`), occurring once in the anchor as a whole
+    /// identifier (`config` is not found inside `config_path`); the whole
+    /// anchor when absent.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub focus: Option<String>,
