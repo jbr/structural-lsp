@@ -134,7 +134,7 @@ impl Sources {
 /// A directory the scan does not descend into. Hidden directories are
 /// skipped wholesale: `.git` and friends are named above, and the rest are
 /// tool state rather than a project's sources.
-fn skipped(name: &str) -> bool {
+pub(crate) fn skipped(name: &str) -> bool {
     name.starts_with('.') || SKIPPED_DIRECTORIES.contains(&name)
 }
 

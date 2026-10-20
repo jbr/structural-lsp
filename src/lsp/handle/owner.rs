@@ -35,6 +35,16 @@ pub(super) struct Owner {
     /// A liveness probe has been sent and not yet answered.
     pub(super) probe_outstanding: bool,
     pub(super) debug: bool,
+    /// The ids of the `workspace/didChangeWatchedFiles`
+    /// registrations the server has asked this client to hold.
+    /// `None` until the server registers at all: a server that
+    /// never registered is still told about watched-file changes,
+    /// unsolicited; a server that registered and then withdrew
+    /// every registration has asked not to be told, and is not
+    /// (`docs/correctness.md`). The registrations' glob patterns
+    /// are not kept: every change is sent, and a server filters
+    /// what it asked for.
+    pub(super) watched_files: Option<HashSet<String>>,
 }
 
 impl Owner {
@@ -216,6 +226,26 @@ impl Owner {
             &self.workspace_folders,
             &self.settings.configuration,
         );
+        // What a registration request asks this client to hold,
+        // and what an unregistration retracts, is state the owner
+        // keeps: the reply itself is the handlers' business, this
+        // is what the ask leaves behind (`docs/correctness.md`).
+        match request.method.as_str() {
+            "client/registerCapability" => {
+                let registrations = self.watched_files.get_or_insert_with(HashSet::new);
+                registrations.extend(handlers::watched_file_registrations(
+                    request.params.as_ref(),
+                ));
+            }
+            "client/unregisterCapability" => {
+                if let Some(registrations) = self.watched_files.as_mut() {
+                    for id in handlers::watched_file_unregistrations(request.params.as_ref()) {
+                        registrations.remove(&id);
+                    }
+                }
+            }
+            _ => {}
+        }
         let response = match reply {
             Reply::Success(value) => JsonRpcResponse::success(request.id.clone(), value),
             Reply::Error(code, message) => JsonRpcResponse::error(
@@ -365,6 +395,15 @@ impl Owner {
             }
             Command::CaptureEvents { reply } => {
                 let _ = reply.send(self.events.iter().cloned().collect());
+            }
+            Command::WatchedFiles { reply } => {
+                // A server that never registered is told,
+                // unsolicited. One that registered and then
+                // withdrew every registration has asked not to be
+                // told.
+                let wants =
+                    !matches!(&self.watched_files, Some(registrations) if registrations.is_empty());
+                let _ = reply.send(wants);
             }
             Command::Shutdown => self.begin_shutdown(),
         }

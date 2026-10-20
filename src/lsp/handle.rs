@@ -73,7 +73,7 @@ use mcplease::types::{
     JsonRpcError, JsonRpcMessage, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, RequestId,
 };
 use serde_json::{Value, json};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::BufReader;
 use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::sync::Arc;
@@ -301,6 +301,17 @@ impl ServerHandle {
             .map_err(|_| anyhow!("connection to {} closed", self.label))
     }
 
+    /// Whether this client should send `workspace/didChangeWatchedFiles`
+    /// to the server: the retained registration state, held on the
+    /// owner thread that sees the server's registration requests.
+    /// A closed connection has no state to consult; the next
+    /// operation on it reports the failure.
+    pub fn watched_files(&self) -> bool {
+        let (reply, outcome) = mpsc::channel();
+        let _ = self.admit(Command::WatchedFiles { reply });
+        outcome.recv().unwrap_or(false)
+    }
+
     /// Shut the server down: a graceful `shutdown`/`exit` bounded by
     /// `shutdown_grace`, then kill and reap. Waits for the owner to finish;
     /// unlike worker joins, this wait never detaches the process owner.
@@ -432,6 +443,12 @@ enum Command {
     },
     CaptureEvents {
         reply: Sender<Vec<Value>>,
+    },
+    /// Whether the server wants `workspace/didChangeWatchedFiles`
+    /// notifications, per the registration state it has asked
+    /// this client to hold.
+    WatchedFiles {
+        reply: Sender<bool>,
     },
     Shutdown,
 }

@@ -42,18 +42,28 @@ impl Session {
     pub fn new(cwd: PathBuf) -> Self {
         let lifetime = crate::host::Lifetime::new();
         let view = canonical_root(&cwd);
-        let session = Self::bind(
-            Arc::new(Entry::new(
-                Workspace::new(
-                    crate::host::workspace_key(&view),
-                    lifetime.flag(),
-                    Arc::new(crate::clock::SystemClock),
-                ),
-                lifetime,
+        // The two buffers every event this workspace's watcher
+        // sees land in, and the watching that fills them: a session
+        // built this way is held to the same freshness boundary
+        // as one bound through the host (`docs/correctness.md`).
+        let evidence = Arc::new(crate::host::observation::Pending::new());
+        let watched = Arc::new(crate::host::observation::Pending::new());
+        let entry = Arc::new(Entry::new(
+            Workspace::new(
+                crate::host::workspace_key(&view),
+                lifetime.flag(),
                 Arc::new(crate::clock::SystemClock),
-            )),
-            view,
+                Arc::clone(&watched),
+            ),
+            lifetime,
+            Arc::new(crate::clock::SystemClock),
+        ));
+        entry.observe(
+            evidence,
+            watched,
+            &crate::host::observation::default_source_factory(),
         );
+        let session = Self::bind(entry, view);
         // Warm every configured server, as the MCP process does when an agent
         // starts, and do not wait for them: the query that follows waits. A
         // server that will not start is recorded on its slot, for each call

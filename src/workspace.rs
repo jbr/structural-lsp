@@ -23,6 +23,7 @@ use crate::config::{self, Config, Layout};
 use crate::discovery::catalogue::Catalogue;
 use crate::discovery::evidence::Evidence;
 use crate::discovery::selection::{Selection, select};
+use crate::host::observation::Pending;
 use crate::lsp::adapter::{Adapter, language_for};
 use crate::lsp::server::LspServer;
 use anyhow::{Context, Result, bail};
@@ -32,6 +33,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
+mod boundary;
 mod slot;
 
 #[cfg(test)]
@@ -76,6 +78,12 @@ pub struct Workspace {
     /// default. Copied onto the host entry at acquisition, which is where
     /// the sweep runs from.
     idle_eviction: Duration,
+    /// The filesystem events this workspace's watcher has seen and no
+    /// query has been told about yet — drained at the query boundary
+    /// (`docs/correctness.md`). Shared with the observation thread,
+    /// which coalesces the same events into evidence refreshes
+    /// (`docs/observation.md`).
+    pending: Arc<Pending>,
 }
 
 impl Workspace {
@@ -86,7 +94,12 @@ impl Workspace {
     /// is canonicalized so every scope/candidate check compares real paths,
     /// not symlink spellings; if that fails (root missing) the raw root is
     /// kept for the error.
-    pub fn new(root: PathBuf, stopped: Arc<AtomicBool>, clock: Arc<dyn Clock>) -> Self {
+    pub(crate) fn new(
+        root: PathBuf,
+        stopped: Arc<AtomicBool>,
+        clock: Arc<dyn Clock>,
+        pending: Arc<Pending>,
+    ) -> Self {
         let root = canonical_root(&root);
         let mut workspace = Self {
             root,
@@ -98,6 +111,7 @@ impl Workspace {
             stopped,
             clock,
             idle_eviction: config::DEFAULT_IDLE_EVICTION,
+            pending,
         };
         // Loaded separately from its layout so the interval this file asks
         // for is read even when a server entry fails to parse — though a

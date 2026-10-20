@@ -87,7 +87,7 @@ impl std::fmt::Display for AgentId {
 mod lifetime;
 pub(crate) use lifetime::{Lifetime, Registration};
 
-mod observation;
+pub(crate) mod observation;
 
 /// Maximum publication lock wait; this is not a shutdown grace timer.
 pub const DEFAULT_PUBLISH_BOUND: Duration = Duration::from_secs(30);
@@ -259,6 +259,32 @@ impl Entry {
             stop.stop();
         }
     }
+
+    /// Start watching this workspace's tree: the observation thread
+    /// that reduces every batch to an evidence refresh and runs the
+    /// idle sweep (`docs/observation.md`). The thread holds only a
+    /// [`Weak`] to this entry, so a released workspace is not kept
+    /// alive by its watcher, and the stop handle ends the watching at
+    /// once on release rather than at the tree's next event. Called
+    /// once, when the workspace is created — by the host for an
+    /// agent's binding, and by a standalone session alike, so a
+    /// workspace is observed whichever way it was reached.
+    pub(crate) fn observe(
+        self: &Arc<Self>,
+        evidence: Arc<observation::Pending>,
+        watched: Arc<observation::Pending>,
+        factory: &observation::SourceFactory,
+    ) {
+        let (source, stop) = factory(evidence, watched);
+        *self
+            .observer_stop
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(stop);
+        let weak = Arc::downgrade(self);
+        let _ = std::thread::Builder::new()
+            .name("structural-observation".to_string())
+            .spawn(move || observation::observe(&weak, source));
+    }
 }
 
 /// Electing a launcher, walking a plan's ladder, and publishing what
@@ -324,13 +350,7 @@ impl Host {
             completion: Mutex::new(()),
             lifetime: Lifetime::with_publish_bound(publish_bound),
             clock: Arc::new(SystemClock),
-            source_factory: Mutex::new(Box::new(|| {
-                let (source, stop) = observation::Notify::new();
-                (
-                    Box::new(source) as Box<dyn observation::Source>,
-                    Arc::new(stop) as Arc<dyn observation::Stop>,
-                )
-            })),
+            source_factory: Mutex::new(observation::default_source_factory()),
         }
     }
 
@@ -367,8 +387,20 @@ impl Host {
         let entry = match workspaces.get(&key) {
             Some(entry) => Arc::clone(entry),
             None => {
+                // The two buffers every event this workspace's
+                // watcher sees land in: the observation thread
+                // coalesces and drains one for evidence, and the
+                // query path drains the other at the query
+                // boundary (`docs/correctness.md`).
+                let evidence = Arc::new(observation::Pending::new());
+                let watched = Arc::new(observation::Pending::new());
                 let entry = Arc::new(Entry::new(
-                    Workspace::new(key.clone(), self.lifetime.flag(), Arc::clone(&self.clock)),
+                    Workspace::new(
+                        key.clone(),
+                        self.lifetime.flag(),
+                        Arc::clone(&self.clock),
+                        Arc::clone(&watched),
+                    ),
                     self.lifetime.clone(),
                     Arc::clone(&self.clock),
                 ));
@@ -379,15 +411,7 @@ impl Host {
                 // released workspace is not kept alive by its watcher
                 // (`docs/observation.md`); the stop handle lets a release
                 // end the watching at once instead of at the next event.
-                let weak = Arc::downgrade(&entry);
-                let (source, stop) = (self.source_factory.lock().unwrap())();
-                *entry
-                    .observer_stop
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner) = Some(stop);
-                let _ = std::thread::Builder::new()
-                    .name("structural-observation".to_string())
-                    .spawn(move || observation::observe(&weak, source));
+                entry.observe(evidence, watched, &self.source_factory.lock().unwrap());
                 entry
             }
         };

@@ -21,6 +21,12 @@
 //!   pass is one observation — promotion to ordinary coverage happens only
 //!   when the unit that makes the case hold has validated it per server,
 //!   with wording that says what was observed, never from one run alone.
+//!   Observed once, on rust-analyzer and macOS: the query boundary does
+//!   send the watcher's changes to the server before the query, but FSEvents
+//!   delivers the edit's own event after the query was admitted, so the
+//!   immediate query still misses. The cases stay pending for the
+//!   reconciliation that does not wait on delivery
+//!   (`../../docs/correctness.md` states the boundary).
 //!
 //! No test sleeps, and the acceptance query is the *first* query after the
 //! edit: nothing outlines the target file, nothing else reads it through
@@ -142,7 +148,7 @@ fn a_file_scope_query_is_current_for_an_unopened_file_and_the_bare_name_once_own
 
 #[test]
 #[cfg(feature = "pending-acceptance")]
-#[ignore = "PENDING freshness acceptance, observed failing (docs/correctness.md, process/testing.md): the miss is the honest-looking 'no such symbol'; run explicitly with cargo test --features pending-acceptance -- --ignored -- pending_"]
+#[ignore = "PENDING freshness acceptance, observed (docs/correctness.md): the query boundary tells the server every watcher-delivered change before the query, but macOS FSEvents delivers the edit itself after the query was admitted, so the immediate query still misses; run explicitly with cargo test --features pending-acceptance -- --ignored -- pending_"]
 fn pending_bare_name_sees_an_unopened_files_edit() {
     let root = scratch_root("pending-edit");
     let _scratch = Scratch(root.clone());
@@ -182,7 +188,7 @@ fn pending_bare_name_sees_an_unopened_files_edit() {
 
 #[test]
 #[cfg(feature = "pending-acceptance")]
-#[ignore = "PENDING freshness acceptance, observed failing (docs/correctness.md, process/testing.md): the miss is the honest-looking 'no such symbol' even though the owned crate root was re-fed; run explicitly with cargo test --features pending-acceptance -- --ignored -- pending_"]
+#[ignore = "PENDING freshness acceptance, observed (docs/correctness.md): the query boundary tells the server every watcher-delivered change before the query, but macOS FSEvents delivers the new file's event after the query was admitted, so the immediate query still misses; run explicitly with cargo test --features pending-acceptance -- --ignored -- pending_"]
 fn pending_bare_name_sees_a_newly_created_file() {
     let root = scratch_root("pending-create");
     let _scratch = Scratch(root.clone());

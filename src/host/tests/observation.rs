@@ -12,7 +12,9 @@
 use super::bound;
 use super::fixtures::{ladder_fixture, selective_fixture, servers_launched};
 use crate::clock::TestClock;
-use crate::host::observation::{Batch, Driver, Event, Notify, Source, Stop, Synthetic, reduce};
+use crate::host::observation::{
+    Batch, Driver, Event, Notify, Pending, Source, Stop, Synthetic, reduce,
+};
 use crate::host::{AgentId, Host};
 use crate::workspace::SlotState;
 use std::sync::{Arc, Mutex};
@@ -28,8 +30,8 @@ fn synthetic_host() -> (Host, Arc<Mutex<Vec<Driver>>>) {
     let drivers: Arc<Mutex<Vec<Driver>>> = Arc::new(Mutex::new(Vec::new()));
     let captured = Arc::clone(&drivers);
     let host = Host::with_observation(
-        Box::new(move || {
-            let (source, driver) = Synthetic::new();
+        Box::new(move |evidence, watched| {
+            let (source, driver) = Synthetic::new(evidence, watched);
             captured.lock().unwrap().push(driver.clone());
             (
                 Box::new(source) as Box<dyn Source>,
@@ -48,8 +50,8 @@ fn residency_host() -> (Host, Arc<Mutex<Vec<Driver>>>, Arc<TestClock>) {
     let captured = Arc::clone(&drivers);
     let clock = TestClock::shared();
     let host = Host::with_observation(
-        Box::new(move || {
-            let (source, driver) = Synthetic::new();
+        Box::new(move |evidence, watched| {
+            let (source, driver) = Synthetic::new(evidence, watched);
             captured.lock().unwrap().push(driver.clone());
             (
                 Box::new(source) as Box<dyn Source>,
@@ -140,7 +142,9 @@ fn the_reduction_keeps_the_three_changes_and_drops_the_rest() {
 
 #[test]
 fn the_synthetic_source_hands_out_what_is_pushed_and_ends_on_close() {
-    let (mut source, driver) = Synthetic::new();
+    let evidence = Arc::new(Pending::new());
+    let watched = Arc::new(Pending::new());
+    let (mut source, driver) = Synthetic::new(evidence, watched);
     assert!(driver.watched().is_empty(), "nothing was watched yet");
     driver.push(Batch {
         events: vec![Event::Overflow],
@@ -254,6 +258,10 @@ fn a_new_language_does_not_warm_in_an_observed_only_workspace() {
             path: rust_only.root.join("src/helper.py"),
         }],
     });
+    assert!(
+        wait_until(|| driver.consumed() >= 1),
+        "the first batch was handed out"
+    );
     driver.push(Batch {
         events: vec![Event::Overflow],
     });
@@ -343,13 +351,19 @@ fn batch_content_is_not_trusted() {
     // Two batches naming a file that does not exist. Two, because the
     // thread hands out serially: the second handout proves the first
     // batch's refresh has finished, so what is asserted next is about
-    // completed work, not about timing.
+    // completed work, not about timing. The first is waited for
+    // before the second is pushed: one wake that sees both would
+    // hand them out as one.
     let ghost = rust_only.root.join("src/ghost.py");
     driver.push(Batch {
         events: vec![Event::Created {
             path: ghost.clone(),
         }],
     });
+    assert!(
+        wait_until(|| driver.consumed() >= 1),
+        "the first ghost batch was handed out"
+    );
     driver.push(Batch {
         events: vec![Event::Created { path: ghost }],
     });
@@ -398,10 +412,16 @@ fn a_batch_that_changes_nothing_lays_out_nothing() {
         "the initial layout has both languages"
     );
     // Two batches over an unchanged tree: refresh re-gathers, re-selects,
-    // and re-merges, and no slot is doubled.
+    // and re-merges, and no slot is doubled. The first is waited for
+    // before the second is pushed: one wake that sees both would
+    // hand them out as one.
     driver.push(Batch {
         events: vec![Event::Overflow],
     });
+    assert!(
+        wait_until(|| driver.consumed() >= 1),
+        "the first batch was handed out"
+    );
     driver.push(Batch {
         events: vec![Event::Overflow],
     });
@@ -483,7 +503,7 @@ fn a_released_workspace_stops_observing_at_once() {
 #[test]
 #[ignore = "a real backend: run with --ignored"]
 fn a_real_watcher_yields_a_batch() {
-    let (mut source, _stop) = Notify::new();
+    let (mut source, _stop) = Notify::new(Arc::new(Pending::new()), Arc::new(Pending::new()));
     let dir = std::env::temp_dir().join(format!("structural-notify-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

@@ -305,7 +305,14 @@ pub fn standard_capabilities(position_encodings: &[&str], experimental: Value) -
             // client: per-document edits, and file renames for a module
             // rename. Creation and deletion are not advertised, so a
             // server must not ask for them.
-            "workspaceEdit": { "documentChanges": true, "resourceOperations": ["rename"] }
+            "workspaceEdit": { "documentChanges": true, "resourceOperations": ["rename"] },
+            // Not offered for dynamic registration. rust-analyzer, measured,
+            // registers when it is offered and turns its own watcher off,
+            // which leaves it as current as this client's delivery — later
+            // than its own, and only at a query boundary. Servers keep their
+            // own watchers, and the query boundary's notification is sent
+            // on top, unsolicited (`docs/correctness.md`).
+            "didChangeWatchedFiles": { "dynamicRegistration": false }
         },
         "textDocument": {
             "synchronization": {

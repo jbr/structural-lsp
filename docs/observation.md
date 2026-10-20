@@ -2,8 +2,9 @@
 
 Parent: [README.md](README.md). What a query may claim about currency is
 synchronization's contract, not this one
-([`backlog/discovery/synchronization.md`](../backlog/discovery/synchronization.md),
-still to build).
+([`correctness.md`](correctness.md) states the boundary; what it does
+not cover is recorded in
+[`../backlog/discovery/synchronization.md`](../backlog/discovery/synchronization.md)).
 
 Every workspace gets an event source when it is created
 (`Host::agent_started`): a thread that watches the workspace root and, per
@@ -22,6 +23,15 @@ for. Nothing from the batch survives the reduction; the paths are carried
 for the day something selective is worth proving, not used today. A lost
 event is therefore reconciled by construction rather than trusted: the
 rescan rebuilds what the event would have said.
+
+The watcher's callback fills two buffers, and the two consumers of its
+events cannot take an event from each other. This thread's coalesce
+drains the observation buffer into batches, as above. The query path
+drains the other at the query boundary, so a query is told every change
+the watcher delivered before the query was admitted — the boundary
+[`correctness.md`](correctness.md) states, and the flush that implements
+it. What this thread reduces is evidence; what the query boundary sends
+is the server-facing notification; neither sees the other's copy.
 
 Events coalesce over a half-second window, bounded in size. The window
 bounds the reduction's latency and triggers nothing — it is not a timer in
@@ -154,6 +164,6 @@ and a persistent one costs one attempt per interval. The loss and the
 recovery are each logged once; the retries between stay quiet. Evidence
 stops improving, which is the behaviour the workspace had before there
 was a watcher. A watcher — present, lost, or absent — is not a claim
-about anything: no batch establishes that an answer is current
-([`synchronization.md`](synchronization.md) is that contract, and it is
-not built).
+about anything: no batch establishes that an answer is current. What a
+query may claim is [`correctness.md`](correctness.md)'s boundary, and
+the cases it does not cover are recorded there and in the backlog.

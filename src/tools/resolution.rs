@@ -109,6 +109,11 @@ pub fn resolve_target(state: &mut Workspace, target: Target<'_>) -> Result<Resol
         .path
         .map(|user_path| resolve_scope(&root, user_path))
         .transpose()?;
+    // The query boundary: every filesystem change the watcher
+    // delivered before this query was admitted is told to the
+    // servers that would answer it, before any index is read
+    // (`docs/correctness.md`).
+    state.flush_watched(scope.as_deref())?;
     match (target.symbol, target.anchor) {
         (Some(_), Some(_)) => bail!("give either `symbol` or `anchor`, not both"),
         (None, None) => bail!(

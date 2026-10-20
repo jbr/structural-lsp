@@ -68,6 +68,44 @@ pub fn server_request_reply(
     }
 }
 
+/// The ids of the watched-file registrations a
+/// `client/registerCapability` request asks this client to hold, in
+/// request order. Only `workspace/didChangeWatchedFiles`
+/// registrations are watched-file registrations: every other dynamic
+/// registration this slice knows of is answered and forgotten.
+pub(crate) fn watched_file_registrations(params: Option<&Value>) -> Vec<String> {
+    watched_file_ids(params, "registrations")
+}
+
+/// The registration ids a `client/unregisterCapability` request
+/// retracts, in request order.
+pub(crate) fn watched_file_unregistrations(params: Option<&Value>) -> Vec<String> {
+    watched_file_ids(params, "unregistrations")
+}
+
+/// The ids of the watched-file entries in a registration request's
+/// `list` — `registrations` or `unregistrations`, which share the
+/// `{id, method}` shape.
+fn watched_file_ids(params: Option<&Value>, list: &str) -> Vec<String> {
+    let Some(entries) = params
+        .and_then(|params| params.get(list))
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter(|entry| is_watched_file(entry))
+        .filter_map(|entry| entry.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect()
+}
+
+/// Whether a registration or unregistration entry names
+/// `workspace/didChangeWatchedFiles`.
+fn is_watched_file(entry: &Value) -> bool {
+    entry.get("method").and_then(Value::as_str) == Some("workspace/didChangeWatchedFiles")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +194,53 @@ mod tests {
                 Reply::Success(Value::Null)
             );
         }
+    }
+
+    #[test]
+    fn watched_file_registrations_keep_only_watched_ids() {
+        // With options and without, beside a registration for a
+        // method that is not watchable.
+        let params = json!({
+            "registrations": [
+                {
+                    "id": "one",
+                    "method": "workspace/didChangeWatchedFiles",
+                    "registerOptions": { "watchers": [{ "globPattern": "**/*.rs" }] },
+                },
+                {
+                    "id": "two",
+                    "method": "workspace/didChangeWatchedFiles",
+                },
+                {
+                    "id": "three",
+                    "method": "workspace/configuration",
+                },
+            ],
+        });
+        assert_eq!(
+            watched_file_registrations(Some(&params)),
+            vec!["one".to_string(), "two".to_string()]
+        );
+    }
+
+    #[test]
+    fn watched_file_unregistrations_keep_only_watched_ids() {
+        let params = json!({
+            "unregistrations": [
+                { "id": "one", "method": "workspace/didChangeWatchedFiles" },
+                { "id": "two", "method": "textDocument/semanticTokens" },
+            ],
+        });
+        assert_eq!(
+            watched_file_unregistrations(Some(&params)),
+            vec!["one".to_string()]
+        );
+    }
+
+    #[test]
+    fn watched_file_registrations_without_params_ask_for_nothing() {
+        assert!(watched_file_registrations(None).is_empty());
+        assert!(watched_file_unregistrations(None).is_empty());
     }
 
     #[test]

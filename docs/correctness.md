@@ -61,12 +61,32 @@ pushed text. No settle wait and no re-query.
 Ownership is per running server and does not survive a fresh instance — a
 restarted server owns nothing until something syncs to it again.
 
-The known gap: a **bare-name query owns no file**, so `workspace/symbol` can
-answer from an index that has not seen a recent external edit, and the
-failure is silent (the honest-looking answer is "no such symbol"). A `path`
-naming a file is current; bare-name and directory-scoped queries are not
-yet. This is what units 4 and 5 of the discovery work exist to close
-(`../backlog/bare-name-staleness.md`).
+The boundary for a **bare-name query**, which owns no file: before any
+index is read, every filesystem change the watcher delivered before the
+query was admitted is sent to the servers that would answer it, as
+`workspace/didChangeWatchedFiles` — reduced to each path's state now,
+never for a document the server holds or for a path under a directory
+the evidence scan skips (build output, dependency trees, tool state),
+and reconciled to a full re-statement when the watcher reports lost
+events. The notification is sent on top of each server's own watching,
+not instead of it: the client does not offer the method for dynamic
+registration, because rust-analyzer, offered it, registers and turns
+its own watcher off — leaving it only as current as this client's
+delivery, which is no earlier and reaches it only at a query. Ordering makes the
+server receive the notification before the query; it does not make the
+server's index current. Two gaps remain, and both fail silently (the
+honest-looking answer is "no such symbol"). A change the watcher has
+not delivered yet is invisible: delivery is the platform's, and FSEvents
+on macOS can report a write later than a query issued right after it, so
+an immediate query after an external edit can still answer from an index
+that has not seen it. And a delivered notification is not proof the
+index has caught up by the time the server answers — that is
+server-specific, validated per server, never argued from the spec. A
+`path` naming a file is current by the push above; bare-name and
+directory-scoped queries are current as far as this boundary, and no
+further. Closing the rest — reconciliation that does not wait on
+delivery at all — is the work recorded in
+[`../backlog/discovery/synchronization.md`](../backlog/discovery/synchronization.md).
 
 ## Ranges are verified against the text just read
 

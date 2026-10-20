@@ -606,6 +606,10 @@ pub fn path_uri(path: &Path) -> Result<String> {
         .map_err(|_| anyhow::anyhow!("path {} is not absolute", path.display()))
 }
 
+mod watched;
+
+pub use watched::FileChangeKind;
+
 mod warm;
 
 #[cfg(test)]

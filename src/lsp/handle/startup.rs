@@ -70,6 +70,7 @@ pub(super) fn spawn(
         next_id: 1,
         pending: HashMap::new(),
         waiters: Vec::new(),
+        watched_files: None,
         writes: HashMap::new(),
         next_write: 0,
         progress,
