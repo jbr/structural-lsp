@@ -15,7 +15,7 @@
 //! built at least once — it wants a `build/` directory alongside the
 //! sources, which only `gleam build` (or `gleam check`) produces. If this
 //! column reads all `no`, that is the
-//! `backlog/generic-baseline/answering-is-availability.md` case — a server
+//! `docs/resolution.md` case — a server
 //! that never became ready to answer — not evidence the questions
 //! themselves are wrong.
 

@@ -20,7 +20,7 @@
 //! filesystem change is a weak signal, so it warms only for a workspace
 //! with an attached agent, and an observed-only workspace updates evidence
 //! and launches nothing (`docs/observation.md`). A watcher existing says
-//! nothing about a server's index (`backlog/discovery/synchronization.md`).
+//! nothing about a server's index (`docs/correctness.md`).
 //!
 //! The same thread runs the idle sweep: its park is bounded by the next
 //! slot's expiry, and every wake — batch or park spent — ends with a sweep
@@ -62,7 +62,7 @@ const DEBOUNCE: Duration = Duration::from_millis(500);
 ///
 /// Access events are dropped at the source: they say a file was looked at,
 /// not that the tree changed, and filesystem activity must not act as a
-/// keepalive (`backlog/discovery/README.md`).
+/// keepalive (`docs/observation.md`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Event {
     Created {

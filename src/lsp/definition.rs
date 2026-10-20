@@ -363,7 +363,7 @@ impl NameLocation {
 /// `definition` or `references` request has to be sent at.
 ///
 /// Two occurrences of the name inside one range is ambiguous, and nothing
-/// ambiguous is silently picked (`backlog/symbol-range-convention.md`).
+/// ambiguous is silently picked (`docs/correctness.md`).
 pub fn locate_name_at(
     text: &str,
     range: Range,

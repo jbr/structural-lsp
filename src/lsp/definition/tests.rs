@@ -411,7 +411,7 @@ fn verify_name_at_accepts_the_name_and_empty_ranges_only() {
 /// position — `SymbolInformation.location.range` is the range enclosing the
 /// symbol, so a whole declaration is a conforming answer and a
 /// `definition` request still has to be sent at the name
-/// (`backlog/symbol-range-convention.md`).
+/// (`docs/correctness.md`).
 #[test]
 fn locate_name_at_finds_the_name_inside_a_whole_declaration_range() {
     let text = "pub struct Config {\n    pub limit: usize,\n}\n";

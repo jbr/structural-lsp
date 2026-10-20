@@ -416,7 +416,7 @@ impl Workspace {
     /// is configured, and "no language server serves `py` files" would be
     /// true and useless. Noticing the new language while the workspace is
     /// live is observation's
-    /// (`backlog/discovery/observation.md`); saying so is this.
+    /// (`docs/observation.md`); saying so is this.
     fn not_planned(&self) -> String {
         let Some(selection) = &self.selection else {
             return String::new();

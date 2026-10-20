@@ -4,7 +4,7 @@
 //! a server process is released, never when an answer is ready — the
 //! distinction `docs/correctness.md` draws. The clock is injectable so
 //! tests advance time rather than sleeping through intervals
-//! (`backlog/discovery/observation.md`).
+//! (`docs/observation.md`).
 //!
 //! Every reader takes the clock as an `Arc` clone of the same instance, so
 //! a test's `advance` moves the past along with the present: timestamps

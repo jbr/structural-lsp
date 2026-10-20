@@ -266,7 +266,7 @@ fn an_enclosing_range_that_does_not_belong_to_its_node_is_an_error_not_a_contain
 /// The flat `SymbolInformation[]` shape has no range naming each symbol,
 /// so its declaration line is searched for the advertised name. pylsp
 /// 1.15.0 serves this shape, and before this a file scope could nominate
-/// nothing from it (`backlog/symbol-range-convention.md`).
+/// nothing from it (`docs/correctness.md`).
 #[test]
 fn a_flat_outline_nominates_from_the_declaration_line() {
     // `location.range` spans the whole item; line 3 is `    fn new() {}`.

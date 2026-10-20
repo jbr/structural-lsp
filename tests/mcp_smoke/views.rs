@@ -98,7 +98,7 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     // at the `#[derive(…)]` line with nothing to tell them apart. The
     // header keeps the server's count and the rows are folded into the one
     // that names the traits, with a note for what was folded
-    // (backlog/implementations-derive-rows.md, shipped).
+    // (docs/tools.md).
     let derived = show(
         &state,
         "implementations",

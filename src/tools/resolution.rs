@@ -212,7 +212,7 @@ fn resolve_symbol(
 /// are skipped. Served-ness is what the query observed — running servers —
 /// rather than what is configured: a configured server that is down serves
 /// nothing either, and the note names running servers so the two cases read
-/// the same way (`backlog/directory-scope-message.md`).
+/// the same way (`docs/resolution.md`).
 fn directory_languages_note(state: &Workspace, root: &Path, dir: &Path) -> String {
     let sources = Sources::scan(dir);
     let contained: Vec<String> = sources.by_extension.keys().cloned().collect();

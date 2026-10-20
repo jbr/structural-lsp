@@ -16,7 +16,7 @@
 //! keeps a fixture's symbols out of this repository's own answers, which
 //! has gone wrong before: a Python `resolve` under `reference/` is why the
 //! `identity` acceptance is a standing failure
-//! (`backlog/identity-test-uses-the-repo.md`).
+//! (`process/testing.md`).
 //!
 //! A materialized tree is reproducible from checked-in text, so a scorecard
 //! that names a [`Fixture::revision`] names the tree it measured even

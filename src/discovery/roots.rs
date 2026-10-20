@@ -86,7 +86,7 @@ pub struct Marker {
 
 /// Why a root is the root. Carried so a plan built on it can say where it
 /// came from, which every answer in this project owes
-/// (`backlog/discovery/README.md`).
+/// (`docs/discovery.md`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RootReason {
     /// The outermost project marker within the span.

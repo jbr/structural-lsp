@@ -11,7 +11,7 @@
 //! that depends on resolving `QtObject` or a sibling component
 //! (effectively all of them) is expected to fail closed rather than error,
 //! which is the "answers nothing" case
-//! (`backlog/generic-baseline/answering-is-availability.md`) and not a
+//! (`docs/resolution.md`) and not a
 //! reason to drop the probes.
 
 use crate::probe::{Candidate, Language, Probe, rename_preview, show, uses};

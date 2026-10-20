@@ -29,6 +29,15 @@ a command and its languages:
 | `kind_label` | the word shown for a `SymbolKind` |
 | `rename_note` | a one-line caveat attached to this server's rename answers, when its rename has a known blind spot (rust-analyzer: intra-doc links) |
 
+The seam is narrow on purpose. A behaviour seen on two or more servers, in
+two or more languages, is a class: the fix changes what structural does with
+*any* server's reply, in the generic path. A fix that names one server is a
+case, and goes here or in the catalogue (`catalogue.md`) as data with
+provenance — never in `src/` outside `lsp/adapter/`. The measurements the
+classes were drawn from are `../reference/lsp-server-conventions.md`. A
+server's own limit stays a `no`; what the generic path owes is that the
+`no` is correct, explained, and not worse than the server's own behaviour.
+
 ## Readiness
 
 The transport tracks *standard* readiness itself: the set of

@@ -12,7 +12,7 @@
 //! `~/.elm` package cache (it shells out to the compiler for diagnostics and
 //! reads the cache for `elm/core`). A column that reads `no` straight down
 //! because packages were never downloaded in the probe environment is the
-//! `backlog/generic-baseline/answering-is-availability.md` case — the server
+//! `docs/resolution.md` case — the server
 //! never got to try — not a finding about the server's LSP support.
 
 use crate::probe::{Candidate, Language, Probe, rename_preview, show, uses};

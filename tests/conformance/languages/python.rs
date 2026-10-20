@@ -58,7 +58,7 @@ const CANDIDATES: &[Candidate] = &[
     },
     // ty's errors are structural's, not ty's: it reports the whole
     // declaration as a symbol's range, which the spec allows and
-    // `verify_name_at` refuses (backlog/symbol-range-convention.md).
+    // `verify_name_at` refuses (docs/correctness.md).
     Candidate {
         name: "ty",
         argv: &["ty", "server"],
@@ -203,7 +203,7 @@ const PROBES: &[Probe] = &[
             // says the server's symbol index is empty until a file is
             // opened — a different catalogue fact from "cannot serve
             // workspace/symbol", and the same shape as
-            // `backlog/bare-name-staleness.md`.
+            // the bare-name gap `docs/correctness.md` states.
             let answer = show(state, Some("choose"), None, None);
             Outcome::judge(&answer, |text| {
                 text.contains("helper.py") && text.contains("def choose")
