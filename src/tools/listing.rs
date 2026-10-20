@@ -127,6 +127,25 @@ pub fn directory_scope_note(
     )
 }
 
+/// Servers whose census stopped at the walk's file budget, on a miss.
+///
+/// The query boundary pushes every served file written since the last
+/// census, and the census stops where the evidence scan does, so in a tree
+/// past the budget an edit beyond it reaches the server only by its own
+/// watching — a miss there may be a symbol not seen yet rather than one
+/// that is not there (docs/correctness.md). Empty when every census
+/// covered its tree.
+pub fn unreconciled_note(servers: &[String]) -> String {
+    if servers.is_empty() {
+        return String::new();
+    }
+    format!(
+        "note: this tree has more than {} files, so {} may not yet have seen a recent edit to a file past that budget; naming its file in `path` syncs it\n",
+        crate::discovery::evidence::FILE_BUDGET,
+        servers.join(", "),
+    )
+}
+
 /// Servers that advertised an index, were asked, and have answered nothing
 /// all session.
 ///

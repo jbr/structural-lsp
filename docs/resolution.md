@@ -102,8 +102,8 @@ is exhaustive: it is the server's statement about one file, and an item a
 macro generated need not be listed. A qualifier that matches none of that
 file's candidates is reported as an unqualified listing of them, never with
 whatever the index would have offered. A **directory** scope still narrows
-the bounded index, as a bare name does (`../backlog/bare-name-staleness.md`
-is the other half of that gap).
+the bounded index, as a bare name does; both are brought current by the
+query boundary ([correctness.md](correctness.md)).
 
 Every scope is relative to the session's **view** — the working directory
 the caller was bound with — and never to the workspace key, which may be a

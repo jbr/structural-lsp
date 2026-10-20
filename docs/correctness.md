@@ -61,32 +61,58 @@ pushed text. No settle wait and no re-query.
 Ownership is per running server and does not survive a fresh instance — a
 restarted server owns nothing until something syncs to it again.
 
-The boundary for a **bare-name query**, which owns no file: before any
-index is read, every filesystem change the watcher delivered before the
-query was admitted is sent to the servers that would answer it, as
-`workspace/didChangeWatchedFiles` — reduced to each path's state now,
-never for a document the server holds or for a path under a directory
-the evidence scan skips (build output, dependency trees, tool state),
-and reconciled to a full re-statement when the watcher reports lost
-events. The notification is sent on top of each server's own watching,
-not instead of it: the client does not offer the method for dynamic
-registration, because rust-analyzer, offered it, registers and turns
-its own watcher off — leaving it only as current as this client's
-delivery, which is no earlier and reaches it only at a query. Ordering makes the
-server receive the notification before the query; it does not make the
-server's index current. Two gaps remain, and both fail silently (the
-honest-looking answer is "no such symbol"). A change the watcher has
-not delivered yet is invisible: delivery is the platform's, and FSEvents
-on macOS can report a write later than a query issued right after it, so
-an immediate query after an external edit can still answer from an index
-that has not seen it. And a delivered notification is not proof the
-index has caught up by the time the server answers — that is
-server-specific, validated per server, never argued from the spec. A
-`path` naming a file is current by the push above; bare-name and
-directory-scoped queries are current as far as this boundary, and no
-further. Closing the rest — reconciliation that does not wait on
-delivery at all — is the work recorded in
-[`../backlog/discovery/synchronization.md`](../backlog/discovery/synchronization.md).
+A **bare-name query** owns no file, and neither does a directory scope, so
+ownership alone cannot make them current. Every query therefore crosses
+the **query boundary** first: each server that would answer is brought up
+to the tree before any index is read.
+
+Each server keeps a **census** — a stat (modification time and length) of
+every file of its languages, walked as the evidence scan walks
+([discovery.md](discovery.md)) — taken before its process is spawned and
+re-taken at every boundary. A file created or written since the last
+census is pushed with the text just read, exactly as a file-scoped query
+pushes its file, and is owned from then on. A file gone from the census
+is closed if owned and told to the server as deleted. Taking the first
+census before the process exists means nothing falls between the two:
+what was written before it is on disk for the server's own first read,
+and what was written after it is pushed.
+
+Content, not a change notice, is what makes this message-ordering
+freshness: the server holds the text before the query arrives, and
+nothing waits on the platform's change delivery. A watcher-only boundary
+was built first and measured short of this — FSEvents on macOS delivers
+a write later than a query issued right after it
+(`journal/2026-10-13-the-query-boundary-and-its-edge.md`). A stamp
+cannot show a second write of the same length within one filesystem
+tick, so a file whose stamp lies within two seconds of the census that
+recorded it is not trusted and is pushed by the next one; once owned,
+its content rather than its stamp is compared.
+
+The watcher's delivered events are told to the servers after the
+reconciliation, as `workspace/didChangeWatchedFiles` — reduced to each
+path's state now, never for a document the server holds or for a path
+under a directory the evidence scan skips, and re-stated in full after
+the watcher reports lost events. That is what reaches the files no
+census covers — manifests, configuration, files outside a server's
+languages — and those ride on delivery: a `Cargo.toml` edited just
+before a query may not be seen by it. The notification is sent on top
+of each server's own watching, not instead of it: the client does not
+offer the method for dynamic registration, because rust-analyzer,
+offered it, registers and turns its own watcher off — leaving it only as
+current as this client's delivery, which is no earlier and reaches it
+only at a query.
+
+What this does not establish, stated rather than implied away. Whether a
+server's symbol search answers from a document it was just handed is the
+server's: validated on rust-analyzer and pyright
+(`tests/mcp_smoke/staleness.rs` — an edit to an unopened file, a new
+file, and a deleted file, each followed immediately by a bare-name
+query), and not argued from the spec for any other. The census stops at
+the evidence scan's file budget, so in a tree past it an edit beyond the
+budget reaches the server only by its own watching; a miss in such a
+tree says so. The cost is a stat walk per answering server per query,
+measured at 3 ms for this repository's 133 Rust files and 190 ms for a
+4,500-file Rust tree.
 
 ## Ranges are verified against the text just read
 

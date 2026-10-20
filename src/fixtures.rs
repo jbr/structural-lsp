@@ -31,6 +31,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 /// One file of a fixture: where it goes, relative to the tree's root, and
 /// what is in it.
@@ -175,7 +176,16 @@ impl Fixture {
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(target, file.text)?;
+            std::fs::write(&target, file.text)?;
+            // Dated a minute back: a tree under test stands in for a
+            // project at rest. A file written as the session starts lies
+            // in the census's racy window and is pushed at the first query
+            // (`docs/correctness.md`), which would measure every server
+            // with every file open rather than as an agent finds it.
+            std::fs::File::options()
+                .write(true)
+                .open(&target)?
+                .set_modified(SystemTime::now() - Duration::from_secs(60))?;
         }
         Ok(())
     }

@@ -41,7 +41,7 @@ use crate::lsp::server::LspServer;
 use crate::tools::listing::{
     AmbiguousEntry, directory_scope_note, location_line, no_index_note, qualifier_scope_note,
     render_ambiguous, render_fuzzy, render_not_found, render_null_definition, render_unqualified,
-    unanswered_note,
+    unanswered_note, unreconciled_note,
 };
 use crate::tools::resolution::nominate::{Nominated, nominate};
 use crate::workspace::Workspace;
@@ -109,11 +109,9 @@ pub fn resolve_target(state: &mut Workspace, target: Target<'_>) -> Result<Resol
         .path
         .map(|user_path| resolve_scope(&root, user_path))
         .transpose()?;
-    // The query boundary: every filesystem change the watcher
-    // delivered before this query was admitted is told to the
-    // servers that would answer it, before any index is read
-    // (`docs/correctness.md`).
-    state.flush_watched(scope.as_deref())?;
+    // The query boundary: the servers that would answer are brought up
+    // to the tree before any index is read (`docs/correctness.md`).
+    state.query_boundary(scope.as_deref())?;
     match (target.symbol, target.anchor) {
         (Some(_), Some(_)) => bail!("give either `symbol` or `anchor`, not both"),
         (None, None) => bail!(
@@ -169,6 +167,7 @@ fn resolve_symbol(
         // miss alone, as with the directory note below.
         if fuzzy.is_empty() && unqualified.is_empty() {
             listed.push_str(&unanswered_note_for(state, &selected));
+            listed.push_str(&unreconciled_note(&state.unreconciled(&selected)));
         }
         // A directory scope that found nothing at all may sit over files no
         // running server serves; that is routing, not absence, and it gets

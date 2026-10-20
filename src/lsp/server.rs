@@ -51,6 +51,7 @@ pub struct Spawning {
     adapter: Arc<dyn Adapter>,
     root: PathBuf,
     handle: ServerHandle,
+    census: Census,
 }
 
 impl Spawning {
@@ -69,6 +70,7 @@ impl Spawning {
             adapter,
             root,
             handle,
+            census,
         } = self;
         let params = json!({
             "processId": std::process::id(),
@@ -108,6 +110,7 @@ impl Spawning {
             encoding,
             capabilities,
             opened: HashMap::new(),
+            census,
             registration: None,
             answered: false,
         })
@@ -128,6 +131,9 @@ pub struct LspServer {
     /// Documents opened with the server, keyed by URI, with the snapshot the
     /// server was last given.
     opened: HashMap<String, OpenedDoc>,
+    /// The served files as of the last reconciliation, or as of the
+    /// moment before the process was spawned (`server/census.rs`).
+    census: Census,
     registration: Option<crate::host::Registration>,
     /// Whether the server has answered anything non-empty this session
     /// ([`LspServer::has_answered`]).
@@ -158,12 +164,18 @@ impl LspServer {
             progress_create_is_work: adapter.progress_create_is_work(),
             ..Settings::default()
         };
+        // Before the process exists: whatever is written after this is
+        // pushed at the next query boundary, and whatever was written
+        // before it is on disk for the server's own first read
+        // (`docs/correctness.md`).
+        let census = Census::take(root, adapter.as_ref());
         let handle = ServerHandle::spawn_with(command, args, settings, adapter.readiness_policy())
             .with_context(|| format!("starting {}", adapter.name()))?;
         Ok(Spawning {
             adapter,
             root: root.to_path_buf(),
             handle,
+            census,
         })
     }
 
@@ -606,8 +618,11 @@ pub fn path_uri(path: &Path) -> Result<String> {
         .map_err(|_| anyhow::anyhow!("path {} is not absolute", path.display()))
 }
 
+mod census;
+mod reconcile;
 mod watched;
 
+use census::Census;
 pub use watched::FileChangeKind;
 
 mod warm;

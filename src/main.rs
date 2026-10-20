@@ -54,7 +54,8 @@ site, or expression, quote source text (`anchor` in the file `path`, \
 `focus` naming the token) instead of a line number: your snapshot of a \
 file may be stale. `rename` previews with a `digest`, then `apply` needs \
 that digest back. `path` scopes where the symbol is looked up, not where \
-results are listed; a query that names a file syncs it first. The \
+results are listed. Edits on disk, yours or anyone's, are synced before \
+each query. The \
 workspace root is fixed at server start; `path` only scopes inside it.";
 
         let config =

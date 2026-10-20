@@ -1,10 +1,9 @@
 # Observation: the event source a workspace watches itself with
 
 Parent: [README.md](README.md). What a query may claim about currency is
-synchronization's contract, not this one
-([`correctness.md`](correctness.md) states the boundary; what it does
-not cover is recorded in
-[`../backlog/discovery/synchronization.md`](../backlog/discovery/synchronization.md)).
+synchronization's contract, not this one: [`correctness.md`](correctness.md)
+states the query boundary, which reconciles each server against the tree
+without waiting on this watcher.
 
 Every workspace gets an event source when it is created
 (`Host::agent_started`): a thread that watches the workspace root and, per
@@ -166,4 +165,4 @@ stops improving, which is the behaviour the workspace had before there
 was a watcher. A watcher — present, lost, or absent — is not a claim
 about anything: no batch establishes that an answer is current. What a
 query may claim is [`correctness.md`](correctness.md)'s boundary, and
-the cases it does not cover are recorded there and in the backlog.
+the cases it does not cover are stated there.

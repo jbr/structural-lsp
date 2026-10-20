@@ -58,10 +58,10 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// `let config = Config::new(3);`). Only exact names resolve, and several
 /// distinct definitions are listed rather than picked (docs/resolution.md).
 ///
-/// Servers are waited for before each query and owned files are re-synced
-/// from disk; a query that names a file syncs it first, while a bare-name
-/// lookup can miss a recent edit to a file no query has opened
-/// (docs/correctness.md). The workspace root is fixed at server start.
+/// Before each query, every file in the servers' languages that was
+/// written, created, or deleted since they last answered is pushed to them
+/// from disk, and they are waited for; an edit made just before the call is
+/// seen (docs/correctness.md). The workspace root is fixed at server start.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "definition")]
 #[group(skip)]

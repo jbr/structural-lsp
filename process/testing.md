@@ -114,8 +114,9 @@ spawns real servers and is slow.
 
 Some acceptance cases assert behavior that does not hold yet — they are
 written for the unit that will make it hold. They are compiled only under
-the `pending-acceptance` cargo feature (today: the bare-name freshness
-cases in `tests/mcp_smoke/staleness.rs`), so `cargo test` and the standing
+the `pending-acceptance` cargo feature (today: none — the bare-name
+freshness cases that used it were promoted when the query boundary's
+census shipped), so `cargo test` and the standing
 `cargo test -- --ignored` cannot run them — the cases are not even built —
 and the suite stays green until they are asked for:
 

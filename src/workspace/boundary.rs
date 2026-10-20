@@ -14,10 +14,39 @@ use std::path::{Path, PathBuf};
 mod tests;
 
 impl Workspace {
-    /// Deliver the filesystem changes that landed since the last
-    /// query to the servers that would answer this one, before
-    /// the query reads any index: the query boundary
-    /// (`docs/correctness.md`).
+    /// The query boundary: bring every server that would answer a query
+    /// in `scope` up to the tree before the query reads any index
+    /// (`docs/correctness.md`). Each server is reconciled against its own
+    /// census — every served file written, created, or removed since is
+    /// pushed or closed — and then told what the watcher delivered, which
+    /// reaches the files no census covers: manifests, configuration, any
+    /// file outside the server's languages.
+    pub(crate) fn query_boundary(&mut self, scope: Option<&Path>) -> Result<()> {
+        // A scope nothing serves reconciles nothing; the query itself
+        // reports why nothing serves it.
+        if let Ok(selected) = self.select(scope) {
+            for index in selected {
+                self.server_mut(index)?.reconcile()?;
+            }
+        }
+        self.flush_watched(scope)?;
+        Ok(())
+    }
+
+    /// The selected servers whose census stopped at the file budget, so
+    /// the query boundary did not reach every file they serve.
+    pub(crate) fn unreconciled(&self, selected: &[usize]) -> Vec<String> {
+        selected
+            .iter()
+            .filter_map(|&index| self.server(index).ok())
+            .filter(|server| server.census_truncated())
+            .map(|server| server.name().to_string())
+            .collect()
+    }
+
+    /// The watcher's half of the query boundary: deliver the
+    /// filesystem changes that landed since the last query to the
+    /// servers that would answer this one (`docs/correctness.md`).
     ///
     /// A drain reduces to one change per path — the file's state
     /// on disk now, not its event history — and is never sent for
@@ -26,17 +55,16 @@ impl Workspace {
     /// overflow event
     /// names no path, so what the lost window changed is unknown:
     /// the reconciliation is the whole tree, re-stated
-    /// (`docs/observation.md`). Returns how many servers were
-    /// told.
-    pub(crate) fn flush_watched(&mut self, scope: Option<&Path>) -> Result<usize> {
+    /// (`docs/observation.md`).
+    fn flush_watched(&mut self, scope: Option<&Path>) -> Result<()> {
         let events = self.pending.drain();
         if events.is_empty() {
-            return Ok(0);
+            return Ok(());
         }
         // A scope nothing serves flushes nothing; the query itself
         // reports why nothing serves it.
         let Ok(selected) = self.select(scope) else {
-            return Ok(0);
+            return Ok(());
         };
         let overflowed = events.iter().any(|event| matches!(event, Event::Overflow));
         let changes = reduce_watched(&self.root, &events);
@@ -48,7 +76,6 @@ impl Workspace {
         } else {
             None
         };
-        let mut told = 0;
         for &index in &selected {
             let server = self.server_mut(index)?;
             if !server.watched_files() {
@@ -63,9 +90,8 @@ impl Workspace {
                 continue;
             }
             server.notify_watched_files(&batch)?;
-            told += 1;
         }
-        Ok(told)
+        Ok(())
     }
 }
 
