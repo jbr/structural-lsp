@@ -8,6 +8,8 @@
 
 use super::{Exclusions, file_scope};
 use crate::lsp::definition::{Candidate, Partition, Resolution, partition};
+use crate::tools::listing::Truncated;
+use crate::tools::resolution::qualify::advertises;
 use crate::workspace::Workspace;
 use anyhow::Result;
 use std::path::Path;
@@ -29,6 +31,9 @@ pub struct Nominated {
     /// says the symbol is absent, and the two are not the same thing
     /// (`docs/resolution.md`).
     pub unindexed: Vec<String>,
+    /// The servers whose answer reached their `workspace/symbol` cap without
+    /// naming the symbol: what they hold past the cap is unknown.
+    pub truncated: Vec<Truncated>,
 }
 
 /// Nominate candidates for the bare name: from a named file's own outline,
@@ -67,15 +72,22 @@ fn discover(
     root: &Path,
     scope: Option<&Path>,
 ) -> Result<Nominated> {
-    // The wait is unbounded except by the inactivity backstop: a busy server
-    // is waited for, a silent one is an error.
+    // Every push first, then every wait: the waits are unbounded except by
+    // the inactivity backstop, so a busy server is waited for and a silent
+    // one is an error. A server can still begin work after its wait — while
+    // another is waited for, or after its own query is on the wire — and
+    // that is the transport's guard: an answer below that arrives while
+    // work begun since its write is outstanding is set aside, and the
+    // query asked again once the server is ready (docs/correctness.md).
     for &index in selected {
-        let server = state.server_mut(index)?;
-        server.sync_owned()?;
-        server.wait_ready()?;
+        state.server_mut(index)?.sync_owned()?;
+    }
+    for &index in selected {
+        state.server_mut(index)?.wait_ready()?;
     }
     let mut merged = Partition::default();
     let mut unindexed: Vec<String> = Vec::new();
+    let mut truncated: Vec<Truncated> = Vec::new();
     for &index in selected {
         let server = state.server_mut(index)?;
         // The capability is consulted before the request is sent anyway
@@ -96,6 +108,23 @@ fn discover(
         // rather than a server that never became ready (docs/resolution.md).
         if !infos.is_empty() {
             server.mark_answered();
+        }
+        // An answer at the server's cap is a prefix of its matches. One that
+        // does not name the symbol says nothing about whether the server
+        // holds it; one whose last entry names it may have more of the same
+        // name past the cap, since a server that orders by name or by score
+        // keeps them together. Either is carried to the answer
+        // (docs/resolution.md).
+        if let Some(cap) = server.symbol_cap_reached(infos.len()) {
+            let names = |info: &lsp_types::SymbolInformation| advertises(&info.name, symbol);
+            let named = infos.iter().any(names);
+            if !named || infos.last().is_some_and(names) {
+                truncated.push(Truncated {
+                    server: server.name().to_string(),
+                    cap,
+                    named,
+                });
+            }
         }
         merged.absorb(partition(symbol, server.name(), infos, root, scope));
     }
@@ -121,5 +150,6 @@ fn discover(
         fuzzy,
         exclusions,
         unindexed,
+        truncated,
     })
 }

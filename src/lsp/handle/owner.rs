@@ -4,6 +4,7 @@
 use super::*;
 
 mod lifecycle;
+mod query;
 
 pub(super) struct Owner {
     pub(super) label: String,
@@ -20,6 +21,13 @@ pub(super) struct Owner {
     pub(super) next_id: i64,
     pub(super) pending: HashMap<RequestId, PendingRequest>,
     pub(super) waiters: Vec<Waiter>,
+    /// Semantic requests held until the server is ready (`owner/query.rs`).
+    pub(super) deferred: Vec<Deferred>,
+    /// Transitions to not-ready observed so far: what a semantic answer is
+    /// checked against.
+    pub(super) generation: u64,
+    /// Semantic answers set aside because work began before they arrived.
+    pub(super) reasked: u64,
     pub(super) writes: HashMap<u64, PendingWrite>,
     pub(super) next_write: u64,
     pub(super) progress: ProgressTokens,
@@ -132,13 +140,18 @@ impl Owner {
 
     pub(super) fn on_incoming(&mut self, incoming: Incoming) {
         if self.debug {
+            // The body too, truncated: a response's content is what a
+            // readiness or truncation bug is read from.
             let summary = match &incoming {
-                Incoming::Message(message, _) => summarize(message),
+                Incoming::Message(message, _) => {
+                    format!("{} {}", summarize(message), truncated(message))
+                }
                 Incoming::Malformed(error) => format!("MALFORMED {error}"),
                 Incoming::Eof => "EOF".to_string(),
             };
             eprintln!("[lsp<] {summary}");
         }
+        let was_ready = self.ready();
         match incoming {
             Incoming::Eof => self.fail("language server closed stdout".to_string()),
             Incoming::Malformed(error) => {
@@ -156,7 +169,9 @@ impl Owner {
                 }
             }
         }
+        self.track_generation(was_ready);
         self.complete_ready_waiters();
+        self.release_deferred();
     }
 
     /// Any message resets inactivity for every pending operation.
@@ -173,6 +188,12 @@ impl Owner {
         let Some(pending) = self.pending.remove(&id) else {
             // Nobody is waiting: a retired or unknown id. Keep it, do not
             // drop it.
+            self.record(serde_json::to_value(&response).unwrap_or(Value::Null));
+            return;
+        };
+        let Some(pending) = self.accept(&id, pending) else {
+            // A semantic answer produced after work began: set aside and
+            // held for readiness, the response kept in the log.
             self.record(serde_json::to_value(&response).unwrap_or(Value::Null));
             return;
         };
@@ -278,51 +299,8 @@ impl Owner {
                 params,
                 reply,
                 admitted_at,
-            } => {
-                if let Some(reason) = self.refusal() {
-                    let _ = reply.send(Err(anyhow!("{reason}")));
-                    return;
-                }
-                if self.operations() >= self.settings.pending_cap {
-                    let _ = reply.send(Err(anyhow!(
-                        "{}: {} operations already pending (cap); {method} not admitted",
-                        self.label,
-                        self.settings.pending_cap
-                    )));
-                    return;
-                }
-                if method == "initialize" {
-                    // A server that sees `workspace.workspaceFolders` may
-                    // later ask for these.
-                    self.workspace_folders = params
-                        .get("workspaceFolders")
-                        .cloned()
-                        .unwrap_or(Value::Null);
-                }
-                let id = RequestId::Integer(self.next_id);
-                self.next_id += 1;
-                let frame = JsonRpcMessage::Request(JsonRpcRequest::new(
-                    id.clone(),
-                    method.as_str(),
-                    Some(params),
-                ));
-                // Registered before the frame can be written: the owner is
-                // the only thread that routes responses, so none can be
-                // processed between here and the enqueue below.
-                self.pending.insert(
-                    id.clone(),
-                    PendingRequest {
-                        method: method.clone(),
-                        reply: Some(reply.clone()),
-                        admitted_at,
-                        backstop: self.settings.backstop,
-                    },
-                );
-                if let Err(reason) = self.enqueue(&frame, None, None) {
-                    self.pending.remove(&id);
-                    let _ = reply.send(Err(anyhow!("{}: {method} not sent: {reason}", self.label)));
-                }
-            }
+                guarded,
+            } => self.admit_request(method, params, reply, admitted_at, guarded),
             Command::Notify {
                 method,
                 params,
@@ -420,7 +398,7 @@ impl Owner {
     }
 
     pub(super) fn operations(&self) -> usize {
-        self.pending.len() + self.waiters.len() + self.writes.len()
+        self.pending.len() + self.waiters.len() + self.deferred.len() + self.writes.len()
     }
 
     pub(super) fn ready(&self) -> bool {
@@ -433,6 +411,8 @@ impl Owner {
             ready: self.ready(),
             open_progress_tokens: self.progress.len(),
             pending_operations: self.operations(),
+            generation: self.generation,
+            reasked: self.reasked,
             last_message: self.last_summary.clone(),
             since_last_message: self.last_incoming.map(|at| at.elapsed()),
             failure: self.failed.clone(),

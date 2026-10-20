@@ -14,11 +14,74 @@ use std::path::Path;
 /// Entries listed before "… N more".
 pub const MAX_LISTED: usize = 20;
 
-pub fn render_not_found(symbol: &str, exclusions: Exclusions) -> String {
+/// `capped`: a symbol index answered at its cap without the name, so the
+/// miss is within what it returned rather than in the workspace.
+pub fn render_not_found(symbol: &str, exclusions: Exclusions, capped: bool) -> String {
     format!(
-        "no symbol named '{symbol}'\n{}",
+        "no symbol named '{symbol}'{}\n{}",
+        if capped { CAPPED_MISS } else { "" },
         exclusion_notes(exclusions)
     )
+}
+
+/// What a miss heading adds when an index's answer was truncated.
+const CAPPED_MISS: &str = " among the matches the symbol index returned";
+
+/// A server whose `workspace/symbol` answer reached its cap without naming
+/// the symbol asked for, or ending in it (docs/resolution.md).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Truncated {
+    pub server: String,
+    pub cap: usize,
+    /// The answer named the symbol, and its last entry did: more of the
+    /// same name may follow past the cap.
+    pub named: bool,
+}
+
+/// One line per truncated answer: what was cut, and the scope that does not
+/// depend on the index.
+pub fn truncated_note(truncated: &[Truncated]) -> String {
+    truncated
+        .iter()
+        .map(|cut| {
+            let what = if cut.named {
+                "ending in the name, so more definitions of it may be past the cap"
+            } else {
+                "without the name, so a definition of it may be past the cap"
+            };
+            format!(
+                "note: {}'s symbol index answered with its cap of {} matches, {what}; a `path` \
+                 naming the declaring file resolves from that file's outline\n",
+                cut.server, cut.cap
+            )
+        })
+        .collect()
+}
+
+/// One definition found while another server's answer was truncated: not
+/// resolved, because what that server holds past its cap is unknown.
+pub fn render_capped_one(
+    root: &Path,
+    symbol: &str,
+    entry: &AmbiguousEntry,
+    truncated: &[Truncated],
+    exclusions: Exclusions,
+) -> String {
+    let mut text = format!(
+        "one definition of '{symbol}' found, and it may not be the only one:\n{}",
+        header(
+            entry.kind_label,
+            &entry.name,
+            &location_line(root, &entry.location.uri, entry.location.range.start),
+        )
+    );
+    if let Some(signature) = &entry.signature {
+        text.push_str(&format!(" · {signature}"));
+    }
+    text.push_str(&format!(" · {}\n", entry.server));
+    text.push_str(&exclusion_notes(exclusions));
+    text.push_str(&truncated_note(truncated));
+    text
 }
 
 /// Fuzzy hits only: listed, never resolved. No definition was queried, so
@@ -29,8 +92,12 @@ pub fn render_fuzzy(
     fuzzy: &[Candidate],
     labels: &dyn Fn(&str, SymbolKind) -> &'static str,
     exclusions: Exclusions,
+    capped: bool,
 ) -> String {
-    let mut text = format!("no exact match for '{symbol}'; similar:\n");
+    let mut text = format!(
+        "no exact match for '{symbol}'{}; similar:\n",
+        if capped { CAPPED_MISS } else { "" }
+    );
     for candidate in fuzzy.iter().take(MAX_LISTED) {
         let info = &candidate.info;
         text.push_str(&format!(

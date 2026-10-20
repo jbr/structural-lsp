@@ -40,6 +40,23 @@ means "silent *and* not answering probes for this long", and a server that
 answers probes but never finishes is alive and stuck — see
 [correctness.md](correctness.md) for why that is the deliberate boundary.
 
+## The readiness generation
+
+The owner counts every transition to not-ready it observes, comparing
+readiness before and after each message it applies. `ServerHandle::query`
+is the semantic request: held in the owner (`owner/query.rs`) until the
+server is ready, written with the count current at the write, and its
+response set aside — into the event log, the request held to be written
+again — when the count has moved and the server is still not ready as
+the response arrives; work that began and ended before it does not. Held requests count as
+pending operations and are bounded by the backstop like a readiness
+wait. `request` is the unguarded path, used for `initialize`, and the
+`Snapshot` carries the count and how many answers were set aside
+([correctness.md](correctness.md)).
+
+`STRUCTURAL_WIRE=1` traces every frame to stderr, each incoming one with
+its body truncated to 240 characters, and each set-aside answer.
+
 ## Bounds
 
 Every queue is bounded and admission never blocks a caller. The caps in

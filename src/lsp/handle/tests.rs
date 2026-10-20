@@ -111,6 +111,7 @@ macro_rules! needs_python {
 }
 
 mod force;
+mod generation;
 mod lifecycle;
 mod readiness;
 
@@ -172,6 +173,7 @@ def progress(token, kind):
 
 held_pair = None
 next_server_id = 7001
+straddled = set()
 
 while True:
     msg = read_msg()
@@ -217,6 +219,40 @@ while True:
         elif method == "test/gate":
             notify("test/gate", {"open": bool(params["open"])})
             reply(msg, "sent")
+        elif method == "test/straddle":
+            # The first time a tag is asked, work begins after the request
+            # was read and ends after it is answered — the answer straddles
+            # the start of work, as rust-analyzer's does when it applies a
+            # change off its message stream. Every later time it is answered
+            # settled. `how` says which signal opens the work.
+            tag = params["tag"]
+            if tag in straddled:
+                reply(msg, "settled")
+            else:
+                straddled.add(tag)
+                how = params.get("how", "progress")
+                if how == "progress":
+                    progress(tag, "begin")
+                elif how == "create":
+                    send({"jsonrpc": "2.0", "id": next_server_id,
+                          "method": "window/workDoneProgress/create",
+                          "params": {"token": tag}})
+                    next_server_id += 1
+                elif how == "gate":
+                    notify("test/gate", {"open": False})
+                elif how == "report":
+                    # Not a start of work: a report on no open token.
+                    progress(tag, "report")
+                elif how == "scoped":
+                    # The request's own work, opened and ended before its
+                    # answer, the way pyright reports "Finding references".
+                    progress(tag, "begin")
+                    progress(tag, "end")
+                reply(msg, None if params.get("null") else "unsettled")
+                if how in ("progress", "create"):
+                    progress(tag, "end")
+                elif how == "gate":
+                    notify("test/gate", {"open": True})
         elif method == "test/flood-arm":
             # Open the token, answer, then flood — and leave the token open.
             # Ending it here would race the caller's next look at readiness;

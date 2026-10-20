@@ -171,6 +171,7 @@ pub(super) fn from_anchor(
         &name,
         &focus_text,
         Exclusions::default(),
+        &[],
     )
 }
 

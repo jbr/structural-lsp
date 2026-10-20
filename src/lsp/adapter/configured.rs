@@ -159,6 +159,16 @@ impl Adapter for Configured {
         }
     }
 
+    fn null_is_unloaded(&self, method: &str) -> bool {
+        self.base
+            .as_ref()
+            .is_some_and(|base| base.null_is_unloaded(method))
+    }
+
+    fn symbol_result_cap(&self) -> Option<usize> {
+        self.base.as_ref().and_then(|base| base.symbol_result_cap())
+    }
+
     fn reference_aliases(&self) -> Vec<&'static str> {
         match &self.base {
             Some(base) => base.reference_aliases(),
@@ -240,6 +250,14 @@ mod tests {
             builtin.hover_params("file:///x.rs", range),
         );
         assert_eq!(over.reference_aliases(), builtin.reference_aliases());
+        for method in ["workspace/symbol", "textDocument/references"] {
+            assert_eq!(
+                over.null_is_unloaded(method),
+                builtin.null_is_unloaded(method),
+                "what a null to {method} means"
+            );
+        }
+        assert_eq!(over.symbol_result_cap(), builtin.symbol_result_cap());
         assert_eq!(over.symbol_query("Config"), builtin.symbol_query("Config"));
         assert_eq!(
             over.initialization_options(),

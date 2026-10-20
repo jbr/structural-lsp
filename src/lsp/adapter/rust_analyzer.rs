@@ -10,6 +10,20 @@ mod views;
 
 pub struct RustAnalyzer;
 
+/// `workspace.symbol.search.limit`. rust-analyzer orders a symbol search's
+/// matches by name and truncates at this many, default 128: with `fn
+/// tool_call` beside two hundred `fn a_tool_call_NNN`, the exact match sat
+/// at position 203 of 401 and was cut, and the query answered "no exact
+/// match" about a function plainly in the tree. Bounded rather than
+/// unbounded because a one-letter query matches nearly every symbol: on a
+/// 4,500-file tree, unbounded `e` answered 122,599 matches in 31.9 MB —
+/// half the transport's frame cap — where 1024 answers about 270 KB in
+/// 0.3 to 2.7 s once the index is built, measured on a heavily loaded
+/// machine. An answer at the limit is
+/// marked as truncated rather than read as complete (docs/resolution.md;
+/// journal/2026-10-20-readiness-generation.md).
+pub const SYMBOL_SEARCH_LIMIT: usize = 1024;
+
 impl Adapter for RustAnalyzer {
     fn name(&self) -> &str {
         "rust-analyzer"
@@ -32,14 +46,39 @@ impl Adapter for RustAnalyzer {
     /// when that is empty, so a function whose name fuzzy-matches some type
     /// is unreachable; and imports and re-exports are reported as symbols,
     /// which makes every re-exported name ambiguous.
+    ///
+    /// The limit replaces the default of 128 ([`SYMBOL_SEARCH_LIMIT`]).
     fn initialization_options(&self) -> Value {
         json!({
             "workspace": {
                 "symbol": {
-                    "search": { "kind": "all_symbols", "excludeImports": true }
+                    "search": {
+                        "kind": "all_symbols",
+                        "excludeImports": true,
+                        "limit": SYMBOL_SEARCH_LIMIT,
+                    }
                 }
             }
         })
+    }
+
+    /// The limit set at `initialize`: an answer of that many is truncated.
+    fn symbol_result_cap(&self) -> Option<usize> {
+        Some(SYMBOL_SEARCH_LIMIT)
+    }
+
+    /// rust-analyzer answers a request with its result type's default —
+    /// `null` for these — while its file roots are loading, and `[]` once
+    /// settled with nothing to report: measured on 1.101.0-nightly for
+    /// `workspace/symbol` with no match, and `definition` and
+    /// `implementation` at a keyword and at whitespace. Not
+    /// `references`, whose settled answer away from a name is `null` too
+    /// (docs/servers.md).
+    fn null_is_unloaded(&self, method: &str) -> bool {
+        matches!(
+            method,
+            "workspace/symbol" | "textDocument/definition" | "textDocument/implementation"
+        )
     }
 
     /// rust-analyzer sends `experimental/serverStatus` only when the client
@@ -261,6 +300,33 @@ mod tests {
             options.pointer("/workspace/symbol/search/excludeImports"),
             Some(&json!(true))
         );
+        // The cap it declares is the limit it asks for.
+        assert_eq!(
+            options.pointer("/workspace/symbol/search/limit"),
+            Some(&json!(SYMBOL_SEARCH_LIMIT))
+        );
+        assert_eq!(adapter.symbol_result_cap(), Some(SYMBOL_SEARCH_LIMIT));
+    }
+
+    /// Only the methods measured to answer `[]` when settled read `null` as
+    /// an unloaded index; `references` answers `null` settled too.
+    #[test]
+    fn null_means_unloaded_only_where_measured() {
+        let adapter = RustAnalyzer;
+        for method in [
+            "workspace/symbol",
+            "textDocument/definition",
+            "textDocument/implementation",
+        ] {
+            assert!(adapter.null_is_unloaded(method), "{method}");
+        }
+        for method in [
+            "textDocument/references",
+            "textDocument/hover",
+            "textDocument/rename",
+        ] {
+            assert!(!adapter.null_is_unloaded(method), "{method}");
+        }
     }
     #[test]
     fn the_rename_answer_carries_the_doc_link_caveat() {

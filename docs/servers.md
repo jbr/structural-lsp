@@ -22,6 +22,8 @@ a command and its languages:
 | `initialization_options`, `experimental_capabilities`, `client_capabilities`, `position_encodings` | what to say at `initialize` |
 | `readiness_policy` | an extra, server-specific readiness condition |
 | `symbol_query` | rewriting a `workspace/symbol` query |
+| `symbol_result_cap` | the most `workspace/symbol` results this server returns; an answer of that many is a prefix of the matches ([resolution.md](resolution.md)) |
+| `null_is_unloaded` | the methods whose `null` result means this server's index is not loaded rather than an empty answer — measured per server, never a default ([correctness.md](correctness.md)) |
 | `backstop` | this server's inactivity backstop |
 | `extra_views`, `extra_view_request`, `render_extra_view` | non-standard views this server offers |
 | `hover_params` | how `view = "type"` asks for a type |
@@ -54,6 +56,15 @@ a server-specific signal observes the notification stream through
 `ReadinessPolicy::observe` and keeps its own protocol state — it never
 rescans the event log, which is capped and diagnostics-only.
 
+Every transition of `ready` from true to false — a token opened, the
+policy turning — bumps the connection's **readiness generation**. A
+semantic request is written only while `ready` holds; an answer that
+arrives after a transition, while `ready` still does not hold, is set
+aside and the request asked again once it does
+([correctness.md](correctness.md)). A policy therefore
+needs nothing beyond `observe` and `is_ready` to take part: the transport
+compares `ready` before and after each message it applies.
+
 ### A reservation is not always work
 
 Counting `window/workDoneProgress/create` as an open token goes beyond the
@@ -84,7 +95,16 @@ it reserved.
 the default search looks at types first and falls back to everything only
 when that is empty, so a function whose name fuzzy-matches some type would be
 unreachable, and imports and re-exports reported as symbols would make every
-re-exported name ambiguous. It advertises `serverStatusNotification`, which
+re-exported name ambiguous. It also sets `limit` to 1024 in place of the
+default 128 and declares that as its `symbol_result_cap`
+([resolution.md](resolution.md)). While it loads its file roots it
+answers a request with its result type's default, and that is `null` for
+`workspace/symbol`, `definition` and `implementation`, whose settled
+answer with nothing to report is `[]` (measured on 1.101.0-nightly, at a
+keyword and at whitespace): `null_is_unloaded` names those three, so such
+a `null` with no work reported is an error rather than no results.
+`references` is left out, because its settled answer away from a name is
+`null` as well. It advertises `serverStatusNotification`, which
 the `Quiescence` policy observes, and `hoverRange`, which is what lets
 `view = "type"` answer with the type of a whole expression rather than the
 thing under one position. Its extra views are `expanded` (macro expansion at
@@ -247,10 +267,14 @@ connection; `sync_owned` re-pushes every owned file before a query. Ownership
 does not survive a fresh instance. `moved(from)` handles a file a rename
 relocated.
 
-Queries are thin wrappers that wait for readiness and then send:
-`workspace_symbol`, `definition`, `references`, `implementation`,
-`prepare_call_hierarchy` / `calls`, `hover`, `prepare_rename` / `rename`,
-`document_symbol`, and a generic `request` for adapter-specific methods.
+Queries are thin wrappers over one guarded path, `LspServer::query` in
+`src/lsp/server/queries.rs`, which sends through the transport's
+`ServerHandle::query` (written when ready, set aside if work that began
+after the write is outstanding when the answer arrives) and applies the adapter's `null_is_unloaded`:
+`workspace_symbol`, `definition`, `declaration`, `references`,
+`implementation`, `prepare_call_hierarchy` / `calls`, `hover`,
+`prepare_rename` / `rename`, `document_symbol`, and a generic `request`
+for adapter-specific methods. `initialize` alone is sent unguarded.
 `supports(provider)` reads the negotiated capabilities, so a view that a
 particular server cannot answer is reported as unsupported rather than
 attempted.

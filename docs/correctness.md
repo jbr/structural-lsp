@@ -42,6 +42,70 @@ of never returning a partial answer on a timer.
 What this rules out, permanently: settle sleeps, retry loops, "best result so
 far", and any bound on a query that is progressing.
 
+### An answer is accepted only from a ready window
+
+"Ready when the request was written" is a claim about the moment of the
+write, and a server can begin work after it. rust-analyzer applies a
+change off its message stream: measured, its `quiescent: false` arrived 1
+to 18 ms after the next request was already written, and a query that
+lands while it re-scans its file roots is answered `null` — no error —
+where its settled answer is the list. Mapped to "no results", that was a
+silent wrong answer: in a tree with Rust and TypeScript both defining a
+name, the bare name resolved to the TypeScript candidate alone. A wait on
+each server in turn has the same hole one level up: a server can begin
+work while the next one is waited for.
+
+So the transport keeps a **readiness generation**: a count of the
+transitions to not-ready it has observed — a `$/progress` `begin`, a
+counted `window/workDoneProgress/create`, the readiness policy turning
+(rust-analyzer's `quiescent: false`). Every semantic request — symbol
+search, definition, declaration, references, implementation, call
+hierarchy, hover, rename and prepare-rename, document symbols, an
+adapter's extension views — goes through `ServerHandle::query`, which
+writes it only while the server is ready and records the generation at
+the write. A response that arrives under a different generation *while
+the server is still not ready* was sent while work that began after the
+write was outstanding: it is set aside, whatever it says, and the request
+waits for readiness and is written again
+(`src/lsp/handle/owner/query.rs`).
+
+Work that began and ended before the response arrived does not set it
+aside. A server reports its own state in order on its one stream, so
+that response was sent by a server that had settled again. And the work
+may be the request's own: pyright opens and ends a "Finding references"
+progress token for every `references` it answers, before the answer. The
+first version of this guard set aside any response under a moved
+generation, and against the real servers it asked pyright the same
+`references` question tens of thousands of times in a few minutes.
+
+This is the readiness wait's own postcondition, not a retry loop. What
+triggers it is a protocol signal of work, never the content of the
+answer; it is not bounded by a count or a timer, because it ends exactly
+when the server stops starting work that outlasts its answers, and a
+server that keeps doing so is busy, which the backstop and the probe
+already distinguish from broken. What it does not cover, stated: a
+server that ends its request-scoped progress *after* sending the answer
+would be asked again each time; none measured here does. It costs nothing for a server that stays idle: one integer
+compared per response. For one that does start work in the window, the
+cost is the wait a query issued a moment later would have paid, plus
+one more request — including for unrelated work, a `cargo check` that
+begins as the answer is being written, which is the same rule the wait
+already follows. The responses set aside are kept in the event log, and
+the count is in the connection's `Snapshot`.
+
+The generation is not a substitute for the adapter's knowledge of what
+an answer means. rust-analyzer's `null` to `workspace/symbol`,
+`definition` and `implementation` is its answer while it is not loaded —
+measured, its settled answer with nothing to report is `[]` — and that
+is declared by its adapter (`Adapter::null_is_unloaded`,
+[servers.md](servers.md)). Such a `null` arriving under an unchanged
+generation is an **error** naming the server and saying its index is not
+loaded, never "no results": there is no reported work left to wait for,
+and reading it as empty is the silent wrong answer this section exists
+to prevent. It is declared per server and per method from measurement;
+`references` is not on the list, because rust-analyzer's settled answer
+away from a name is `null` too.
+
 Two mechanisms carry clocks here, and they are different kinds. The
 inactivity backstop bounds a *query's* wait for a broken server. The idle
 sweep ([observation.md](observation.md)) is a **resource-expiry** timer: it
@@ -191,6 +255,16 @@ cross-workspace response; the outline itself is not a proven-exhaustive
 declaration index either (`resolution.md`). What is not proven is stated in
 the tool descriptions and in the server's MCP instructions rather than
 implied away.
+
+A server that truncates its symbol search declares its cap
+(`Adapter::symbol_result_cap`). An answer that reaches the cap without
+naming the symbol is a prefix of the matches, so a miss in it is not
+absence and an exact match from another server beside it is not proven
+to be the only one: the first is listed as a miss *among the matches the
+index returned*, the second as one definition that may not be the only
+one, each with a note naming the server and its cap and pointing at a
+file scope, which resolves from the file's outline instead
+(`resolution.md`).
 
 ## Degradation is named, never silent
 

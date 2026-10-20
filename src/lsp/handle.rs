@@ -31,6 +31,19 @@
 //! answers probes but never finishes is alive and stuck, which no timer can
 //! tell from slow; that boundary is deliberate.
 //!
+//! # The readiness generation
+//!
+//! "Ready when the request was written" can be stale by the time the
+//! server reads it: rust-analyzer applies a change off its message stream
+//! and can report `quiescent: false` after the next request is already on
+//! the wire, then answer that request from an index it has not loaded. So
+//! the owner counts every transition to not-ready it observes, and a
+//! semantic request ([`ServerHandle::query`]) records the count when it is
+//! written. A response that arrives under a different count while the
+//! server is still not ready was sent while work was outstanding; it is
+//! set aside, and the request waits for readiness and is written again
+//! (docs/correctness.md).
+//!
 //! # Bounds
 //!
 //! Every queue is bounded and admission never blocks a caller: the owner's
@@ -83,11 +96,15 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 mod child;
+mod messages;
 mod owner;
 mod progress;
 mod startup;
 mod workers;
 use child::OwnedChild;
+use messages::{
+    Command, Deferred, Guard, OwnerMsg, PendingRequest, PendingWrite, Waiter, WriterJob,
+};
 use owner::Owner;
 use progress::ProgressTokens;
 use workers::{reader_loop, writer_loop};
@@ -178,6 +195,13 @@ pub struct Snapshot {
     pub ready: bool,
     pub open_progress_tokens: usize,
     pub pending_operations: usize,
+    /// How many transitions to not-ready the connection has observed: the
+    /// readiness generation a semantic answer is checked against
+    /// ([`ServerHandle::query`]).
+    pub generation: u64,
+    /// How many semantic answers were set aside because the server began
+    /// work between the request's write and its response.
+    pub reasked: u64,
     /// A one-line summary of the last message the server sent.
     pub last_message: Option<String>,
     pub since_last_message: Option<Duration>,
@@ -226,12 +250,35 @@ impl ServerHandle {
     /// fails, or the inactivity backstop trips. An error response is an
     /// `Err`; an explicit `"result": null` is `Ok(Value::Null)`.
     pub fn request(&self, method: &str, params: Value) -> Result<Value> {
+        self.send_request(method, params, false)
+    }
+
+    /// A **semantic** request: one whose answer is read from the server's
+    /// index, and so must be produced while the server has no outstanding
+    /// work (docs/correctness.md).
+    ///
+    /// It is written only when the server is ready, and waits for that
+    /// otherwise. When a transition to not-ready — a `$/progress` begin, a
+    /// counted `window/workDoneProgress/create`, the readiness policy
+    /// turning — was observed after the write and the server is still not
+    /// ready as the response arrives, the answer was sent while work was
+    /// outstanding: it is set aside, and the request waits for readiness
+    /// and is written again. Work that began and ended before the response
+    /// does not set it aside; it may be the request's own. The trigger is a
+    /// protocol signal of work, never the answer's content; the only bound
+    /// is the inactivity backstop. A server that stays idle pays nothing.
+    pub fn query(&self, method: &str, params: Value) -> Result<Value> {
+        self.send_request(method, params, true)
+    }
+
+    fn send_request(&self, method: &str, params: Value, guarded: bool) -> Result<Value> {
         let (reply, outcome) = mpsc::channel();
         self.admit(Command::Request {
             method: method.to_string(),
             params,
             reply,
             admitted_at: Instant::now(),
+            guarded,
         })?;
         match outcome.recv() {
             Ok(result) => result,
@@ -405,85 +452,6 @@ impl Stopper {
         self.terminate.store(true, Ordering::SeqCst);
         let _ = self.inbox.try_send(OwnerMsg::Admit(Command::Shutdown));
     }
-}
-
-// --- messages between the threads ---
-
-enum OwnerMsg {
-    FromServer(Incoming),
-    Admit(Command),
-    /// The writer wrote (or acknowledged) this tracked frame; the owner may
-    /// forget it. Best effort: a full inbox loses it, and the entry then
-    /// lingers until its backstop, harmlessly.
-    Written(u64),
-    /// The writer could not write a frame; the connection is dead.
-    WriteFailed(String),
-}
-
-enum Command {
-    Request {
-        method: String,
-        params: Value,
-        reply: Sender<Result<Value>>,
-        admitted_at: Instant,
-    },
-    Notify {
-        method: String,
-        params: Value,
-        ack: Sender<Result<()>>,
-        admitted_at: Instant,
-    },
-    WaitReady {
-        backstop: Duration,
-        reply: Sender<Result<()>>,
-        admitted_at: Instant,
-    },
-    Snapshot {
-        reply: Sender<Snapshot>,
-    },
-    CaptureEvents {
-        reply: Sender<Vec<Value>>,
-    },
-    /// Whether the server wants `workspace/didChangeWatchedFiles`
-    /// notifications, per the registration state it has asked
-    /// this client to hold.
-    WatchedFiles {
-        reply: Sender<bool>,
-    },
-    Shutdown,
-}
-
-struct WriterJob {
-    frame: Vec<u8>,
-    /// Present for notifications: the caller is told the real outcome of
-    /// the write. Requests carry none — their outcome is the response.
-    ack: Option<Sender<Result<()>>>,
-    /// The owner's id for a tracked write, reported back once done.
-    tracked: Option<u64>,
-}
-
-/// A notification handed to the writer whose caller is still waiting for
-/// the ack: the inactivity backstop applies to it as to a request, so a
-/// write blocked on a wedged server fails its caller instead of hanging.
-struct PendingWrite {
-    method: String,
-    ack: Sender<Result<()>>,
-    admitted_at: Instant,
-    backstop: Duration,
-}
-
-struct PendingRequest {
-    method: String,
-    /// `None` for the owner's own `shutdown` request.
-    reply: Option<Sender<Result<Value>>>,
-    admitted_at: Instant,
-    backstop: Duration,
-}
-
-struct Waiter {
-    reply: Sender<Result<()>>,
-    admitted_at: Instant,
-    backstop: Duration,
 }
 
 /// Wire tracing to stderr, enabled by `STRUCTURAL_WIRE` (or the spike's

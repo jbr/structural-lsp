@@ -12,6 +12,7 @@ mod mock_scope;
 mod module_paths;
 mod operator;
 mod outline;
+mod readiness_race;
 mod rename;
 mod responsive;
 mod routing;

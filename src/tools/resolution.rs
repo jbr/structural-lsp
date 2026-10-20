@@ -39,8 +39,9 @@ use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::tools::listing::{
-    AmbiguousEntry, location_line, no_index_note, qualifier_scope_note, render_ambiguous,
-    render_fuzzy, render_not_found, render_null_definition, render_unqualified, unreconciled_note,
+    AmbiguousEntry, Truncated, location_line, no_index_note, qualifier_scope_note,
+    render_ambiguous, render_capped_one, render_fuzzy, render_not_found, render_null_definition,
+    render_unqualified, truncated_note, unreconciled_note,
 };
 use crate::tools::resolution::miss::{directory_languages_note, unanswered_note_for};
 use crate::tools::resolution::nominate::{Nominated, nominate};
@@ -158,6 +159,7 @@ fn resolve_symbol(
         fuzzy,
         exclusions,
         unindexed,
+        truncated,
     } = nominate(state, &selected, &qualified.name, root, scope.as_deref())?;
     // A `path` naming a file nominated from that file's outline, so its
     // candidates already carry what the outline encloses them in.
@@ -168,16 +170,25 @@ fn resolve_symbol(
         let mut listed = if !unqualified.is_empty() {
             render_unqualified(root, &qualified, &unqualified, &labels)
         } else if fuzzy.is_empty() {
-            render_not_found(&display, exclusions)
+            render_not_found(&display, exclusions, !truncated.is_empty())
         } else {
-            render_fuzzy(root, &display, &fuzzy, &labels, exclusions)
+            render_fuzzy(
+                root,
+                &display,
+                &fuzzy,
+                &labels,
+                exclusions,
+                !truncated.is_empty(),
+            )
         };
         // Why the index had nothing comes before what a container could
-        // have narrowed: a language with no index never offered one.
+        // have narrowed: a language with no index never offered one, and an
+        // answer cut at its cap never reached past it.
         listed.push_str(&no_index_note(
             &unindexed,
             scope.as_deref().is_some_and(Path::is_file),
         ));
+        listed.push_str(&truncated_note(&truncated));
         // A server that was asked and has answered nothing all session is a
         // project not set up for it, not an absent name. Fuzzy or
         // container-narrowable hits are candidates, so the note is for the
@@ -215,11 +226,14 @@ fn resolve_symbol(
         &qualified.name,
         &display,
         exclusions,
+        &truncated,
     )
 }
 
 /// One identity is the resolution; several are the ambiguous listing; one
-/// with no definition is stated.
+/// with no definition is stated. One found while another server's answer
+/// was cut at its cap is listed, not resolved: what that server holds past
+/// the cap is unknown (docs/resolution.md).
 fn finish(
     state: &mut Workspace,
     root: &Path,
@@ -227,11 +241,22 @@ fn finish(
     name: &str,
     display: &str,
     exclusions: Exclusions,
+    truncated: &[Truncated],
 ) -> Result<Resolved> {
     if identities.len() != 1 {
         let entries = ambiguous_entries(state, &identities);
-        return Ok(Resolved::Listed(render_ambiguous(
-            root, display, &entries, exclusions,
+        let mut listed = render_ambiguous(root, display, &entries, exclusions);
+        listed.push_str(&truncated_note(truncated));
+        return Ok(Resolved::Listed(listed));
+    }
+    if !truncated.is_empty() {
+        let entries = ambiguous_entries(state, &identities);
+        return Ok(Resolved::Listed(render_capped_one(
+            root,
+            display,
+            &entries[0],
+            truncated,
+            exclusions,
         )));
     }
     let identity = identities.pop().expect("exactly one");

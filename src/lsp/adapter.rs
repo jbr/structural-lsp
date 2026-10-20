@@ -187,6 +187,26 @@ pub trait Adapter: Send + Sync {
         true
     }
 
+    /// Whether a `null` result to `method` means this server's index is not
+    /// loaded, rather than an empty answer.
+    ///
+    /// A statement measured per server and per method, never a default: a
+    /// server whose settled answer with nothing to report is `[]` and which
+    /// answers `null` only while it is loading. Such a `null`, arriving with
+    /// no work reported, is refused rather than read as no results
+    /// (docs/correctness.md).
+    fn null_is_unloaded(&self, method: &str) -> bool {
+        let _ = method;
+        false
+    }
+
+    /// The most `workspace/symbol` results this server returns for one
+    /// query, when it truncates. An answer of that many is a prefix of the
+    /// matches, so a miss in it is not absence (docs/resolution.md).
+    fn symbol_result_cap(&self) -> Option<usize> {
+        None
+    }
+
     /// Views beyond the standard ones this server can answer through its
     /// own extensions, by their `view` names.
     fn extra_views(&self) -> Vec<&'static str> {

@@ -61,7 +61,8 @@ Every other invariant here is a consequence, and they are stated in full in
 1. **No timer decides an answer.** Before any semantic query the server must
    have *no outstanding work* — every `$/progress` token ended and the
    adapter's readiness policy agreeing — including work unrelated to this
-   query. The only timer is an **inactivity backstop** for a broken server,
+   query, and an answer that arrives after the server began work is set
+   aside and asked again. The only timer is an **inactivity backstop** for a broken server,
    and a silent server is probed with `$/structural/ping` before it can trip.
    No settle sleeps, no retry loops, no partial answers on a timer.
 2. **Freshness comes from message ordering, not timing.** Files structural

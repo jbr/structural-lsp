@@ -43,10 +43,43 @@ are merged, with cross-server collisions tagged by the server that owns each.
 ## Nomination
 
 `workspace/symbol` is a **bounded, fuzzy-ordered pool over the whole
-workspace**, not a complete list: rust-analyzer truncates its answer (128
-results on the version measured) after ordering the matches by its own
-fuzzy score, so a common name's later definitions are simply not in it. That
-bound is what a file scope must not depend on.
+workspace**, not a complete list: rust-analyzer orders the matches by name
+and truncates its answer at `workspace.symbol.search.limit`, 128 by
+default, so a name sorted after enough near-misses is simply not in it —
+with `fn tool_call` beside two hundred `fn a_tool_call_NNN`, the exact
+match sat at position 203 of 401, and the query answered "no exact
+match" about a function plainly in the tree. That bound is what a file
+scope must not depend on.
+
+structural sets the limit to 1024 (`SYMBOL_SEARCH_LIMIT` in
+`src/lsp/adapter/rust_analyzer.rs`; the measurements behind the number
+are in the journal), and makes the bound visible rather than silent. An
+adapter declares its cap (`Adapter::symbol_result_cap`); in
+`src/tools/resolution/nominate.rs`, a server whose answer reaches it
+without naming the symbol is recorded as **truncated** (as is one ending in
+it, below), and the answer
+carries one note per such server, naming it and its cap and pointing at
+a `path` naming the declaring file, which resolves from the outline:
+
+- with no exact candidate at all, the miss is "no symbol named 'x' among
+  the matches the symbol index returned", or the fuzzy listing's "no
+  exact match for 'x' among the matches the symbol index returned;
+  similar:", instead of a claim of absence;
+- with exactly one definition found elsewhere, it is listed under "one
+  definition of 'x' found, and it may not be the only one:" and **not
+  resolved** — what the truncated server holds past its cap is unknown,
+  so resolving would be a silent pick;
+- an ambiguous listing carries the same note.
+
+An answer at its cap whose **last** entry names the symbol is recorded
+as truncated too, with the note saying more definitions of the name may
+be past the cap: its exact candidates are nominated, and a single one is
+listed rather than resolved. A server that orders by name (rust-analyzer)
+or by score puts the entries of one name together, so the run can only
+continue past the cap when it reaches the end; an answer at its cap that
+names the symbol earlier and ends elsewhere is used as it is. For a
+server that orders some other way that inference does not hold; only
+rust-analyzer declares a cap, and its name order is what was measured.
 
 A `path` that names a **file** nominates from that file's own
 `textDocument/documentSymbol` instead, in `src/tools/resolution/file_scope.rs`:

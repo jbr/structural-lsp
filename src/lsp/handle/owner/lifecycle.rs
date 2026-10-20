@@ -30,6 +30,7 @@ impl Owner {
             .filter(|p| p.reply.is_some())
             .map(|p| p.admitted_at)
             .chain(self.waiters.iter().map(|w| w.admitted_at))
+            .chain(self.deferred.iter().map(|d| d.admitted_at))
             .chain(self.writes.values().map(|w| w.admitted_at))
             .min()?;
         let since = match self.last_incoming {
@@ -58,6 +59,7 @@ impl Owner {
                 reply: None,
                 admitted_at: Instant::now(),
                 backstop: self.settings.backstop,
+                guard: None,
             },
         );
         match self.enqueue(&frame, None, None) {
@@ -77,12 +79,17 @@ impl Owner {
             .waiters
             .iter()
             .map(|w| self.deadline_for(w.admitted_at, w.backstop));
+        let deferred = self
+            .deferred
+            .iter()
+            .map(|d| self.deadline_for(d.admitted_at, d.backstop));
         let writes = self
             .writes
             .values()
             .map(|w| self.deadline_for(w.admitted_at, w.backstop));
         pending
             .chain(waiters)
+            .chain(deferred)
             .chain(writes)
             .chain(self.shutting_down)
             .chain(self.probe_due())
@@ -120,6 +127,19 @@ impl Owner {
                 let _ = waiter.reply.send(Err(error));
             } else {
                 self.waiters.push(waiter);
+            }
+        }
+        let deferred = std::mem::take(&mut self.deferred);
+        for held in deferred {
+            if now >= self.deadline_for(held.admitted_at, held.backstop) {
+                let error = self.inactivity_error(
+                    &format!("{} (held for readiness)", held.method),
+                    held.admitted_at,
+                    held.backstop,
+                );
+                let _ = held.reply.send(Err(error));
+            } else {
+                self.deferred.push(held);
             }
         }
         let overdue: Vec<u64> = self
@@ -183,6 +203,7 @@ impl Owner {
                 reply: None,
                 admitted_at: Instant::now(),
                 backstop: grace,
+                guard: None,
             },
         );
         let frame = JsonRpcMessage::Request(JsonRpcRequest::new(id.clone(), "shutdown", None));
@@ -214,6 +235,12 @@ impl Owner {
             let _ = waiter
                 .reply
                 .send(Err(anyhow!("{reason} (readiness wait was pending)")));
+        }
+        for held in self.deferred.drain(..) {
+            let _ = held.reply.send(Err(anyhow!(
+                "{reason} ({} was held for readiness)",
+                held.method
+            )));
         }
         for (_, write) in self.writes.drain() {
             let _ = write.ack.send(Err(anyhow!(
