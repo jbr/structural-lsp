@@ -89,7 +89,18 @@ the `Quiescence` policy observes, and `hoverRange`, which is what lets
 `view = "type"` answer with the type of a whole expression rather than the
 thing under one position. Its extra views are `expanded` (macro expansion at
 the focus) and `related-tests` (which returns a runnable cargo command per
-test). Its rename edit covers code references only — the reference search
+test). `expanded` is `rust-analyzer/expandMacro` at the focused token: a
+macro call, an attribute macro and a proc-macro derive (at a token of its
+path inside the parentheses, `Serialize` in `#[derive(Serialize)]`) answer
+with the expansion. It answers `null` at `#`, `[`, `derive` and `(`, and at
+any position for the builtin derives (`Clone`, `Copy`, `Debug`, `Default`,
+`Eq`, `Hash`, `Ord`, `PartialEq`, `PartialOrd`). When the result is `null`
+and the focus was quoted from source, the adapter reads the enclosing
+`#[derive(…)]` from that source and the answer names which of those it is,
+instead of "the focus is not a macro call"; elsewhere the generic line
+stands. `render_extra_view` receives the quoted text and the focus's byte
+offset for this (`ViewSite`); a name-addressed target has no quoted source
+and gets the generic line. Its rename edit covers code references only — the reference search
 does not visit doc comments — so `rename_note` attaches a one-line caveat to
 every answer that carries an edit, telling the caller to check doc comments
 for the old name rather than trusting the edit ([tools.md](tools.md)). An

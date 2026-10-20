@@ -1,7 +1,7 @@
 //! A server named in `structural.toml`: either a wholly generic command with
 //! its languages, or an override of a built-in's command or backstop.
 
-use super::{Adapter, Language, ReadinessPolicy};
+use super::{Adapter, Language, ReadinessPolicy, ViewSite};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
@@ -144,9 +144,10 @@ impl Adapter for Configured {
         view: &str,
         result: &Value,
         root: &std::path::Path,
+        site: Option<ViewSite<'_>>,
     ) -> anyhow::Result<String> {
         match &self.base {
-            Some(base) => base.render_extra_view(view, result, root),
+            Some(base) => base.render_extra_view(view, result, root, site),
             None => anyhow::bail!("{} has no view named `{view}`", self.name()),
         }
     }
@@ -260,7 +261,8 @@ mod tests {
         // case can say is that the override does not answer "no such view"
         // for a view the built-in offers.
         for view in builtin.extra_views() {
-            let rendered = over.render_extra_view(view, &Value::Null, std::path::Path::new("/"));
+            let rendered =
+                over.render_extra_view(view, &Value::Null, std::path::Path::new("/"), None);
             let message = rendered
                 .map(|_| String::new())
                 .unwrap_or_else(|e| e.to_string());

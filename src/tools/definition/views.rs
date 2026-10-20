@@ -2,6 +2,7 @@
 //! and the three answers an unavailable view gets (unknown name, not
 //! supported by the server, not applicable to the target).
 
+use crate::lsp::adapter::ViewSite;
 use crate::tools::listing::{header, location_line, relative_display};
 use crate::tools::resolution::anchored::locate_focus;
 use crate::tools::resolution::{
@@ -70,7 +71,7 @@ fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> 
     // An anchor asks at the focus itself (a macro call is expanded where
     // it is written, not at the macro's definition); a name asks at the
     // definition.
-    let (index, uri, position, head) = match target.anchor {
+    let (index, uri, position, head, site_text) = match target.anchor {
         Some(anchor) => {
             if target.symbol.is_some() {
                 bail!("give either `symbol` or `anchor`, not both");
@@ -90,7 +91,13 @@ fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> 
                 relative_display(root, &focus.file),
                 focus.line
             );
-            (focus.server, focus.uri, focus.range.start, head)
+            (
+                focus.server,
+                focus.uri,
+                focus.range.start,
+                head,
+                Some((focus.text, focus.offset)),
+            )
         }
         None => {
             let found = match resolve_target(state, target)? {
@@ -102,7 +109,13 @@ fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> 
             let index = state
                 .index_of(&found.identity.server)
                 .with_context(|| format!("{} is no longer running", found.identity.server))?;
-            (index, synced.uri, found.target.selection_range.start, head)
+            (
+                index,
+                synced.uri,
+                found.target.selection_range.start,
+                head,
+                None,
+            )
         }
     };
     let server = state.server(index)?;
@@ -120,7 +133,13 @@ fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> 
     };
     server.wait_ready()?;
     let result = server.request(&method, params)?;
-    let body = server.adapter().render_extra_view(view, &result, root)?;
+    let site = site_text.as_ref().map(|(text, offset)| ViewSite {
+        text,
+        offset: *offset,
+    });
+    let body = server
+        .adapter()
+        .render_extra_view(view, &result, root, site)?;
     Ok(format!("{head}\n{body}"))
 }
 

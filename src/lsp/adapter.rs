@@ -78,6 +78,14 @@ impl Language {
     }
 }
 
+/// The source an extra view's request was made at, when the caller quoted
+/// it: the document text and the byte offset of the focus in it.
+#[derive(Debug, Clone, Copy)]
+pub struct ViewSite<'a> {
+    pub text: &'a str,
+    pub offset: usize,
+}
+
 /// The default inactivity backstop: a server that says nothing for this
 /// long while work is pending is broken, not busy.
 pub const DEFAULT_BACKSTOP: Duration = Duration::from_secs(90);
@@ -183,12 +191,15 @@ pub trait Adapter: Send + Sync {
     }
 
     /// Render the result of an extra view's request. `root` is for
-    /// relative paths.
+    /// relative paths; `site` is the source the request was made at, when
+    /// the caller quoted it, for an answer that depends on what the focus
+    /// sits in.
     fn render_extra_view(
         &self,
         view: &str,
         _result: &Value,
         _root: &std::path::Path,
+        _site: Option<ViewSite<'_>>,
     ) -> anyhow::Result<String> {
         anyhow::bail!("{} has no view named `{view}`", self.name())
     }

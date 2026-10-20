@@ -267,3 +267,84 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     drop(state);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A workspace of a proc-macro crate (one derive) and a crate using it
+/// beside two builtin derives.
+fn derive_tree() -> PathBuf {
+    let root = std::env::temp_dir().join(format!("structural-derive-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let aged = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    for (path, text) in [
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"pm\", \"app\"]\nresolver = \"2\"\n",
+        ),
+        (
+            "pm/Cargo.toml",
+            "[package]\nname = \"pm\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[lib]\nproc-macro = true\n",
+        ),
+        (
+            "pm/src/lib.rs",
+            "use proc_macro::TokenStream;\n\n#[proc_macro_derive(Hello)]\npub fn hello(_item: TokenStream) -> TokenStream {\n    \"pub fn hello_generated() -> u32 { 7 }\".parse().unwrap()\n}\n",
+        ),
+        (
+            "app/Cargo.toml",
+            "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\npm = { path = \"../pm\" }\n",
+        ),
+        (
+            "app/src/lib.rs",
+            "#[derive(Debug, Clone, pm::Hello)]\npub struct ToolCall {\n    pub name: String,\n}\n",
+        ),
+    ] {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, text).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(aged)
+            .unwrap();
+    }
+    std::fs::canonicalize(root).unwrap()
+}
+
+#[test]
+#[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
+fn expanded_reaches_a_proc_macro_derive_and_explains_the_rest() {
+    let root = derive_tree();
+    let state = structural::session::Session::new(root.clone());
+    let anchor = Some("#[derive(Debug, Clone, pm::Hello)]\npub struct ToolCall {");
+    let at = |focus: &str| {
+        show(
+            &state,
+            "expanded",
+            None,
+            Some("app/src/lib.rs"),
+            anchor,
+            Some(focus),
+        )
+    };
+
+    // rust-analyzer expands a proc-macro derive at a token of its path.
+    let hello = at("Hello");
+    assert!(
+        hello.starts_with("`Hello` · app/src/lib.rs:1\nexpanded pm::Hello\n"),
+        "{hello}"
+    );
+    assert!(hello.contains("hello_generated"), "{hello}");
+
+    // It returns nothing for a builtin derive, nor at `derive` itself, and
+    // the answer says so rather than "not a macro call".
+    let builtin = at("Debug");
+    assert!(builtin.contains("builtin derive `Debug`"), "{builtin}");
+    let keyword = at("derive");
+    assert!(
+        keyword.contains("expands a derive at the derived trait's name"),
+        "{keyword}"
+    );
+    assert!(!keyword.contains("not a macro call"), "{keyword}");
+
+    drop(state);
+    let _ = std::fs::remove_dir_all(&root);
+}

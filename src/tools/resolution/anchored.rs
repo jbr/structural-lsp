@@ -23,6 +23,8 @@ pub struct Focus {
     pub uri: String,
     pub text: String,
     pub range: Range,
+    /// Byte offset of the focus's start in `text`.
+    pub offset: usize,
     pub focus_text: String,
     /// 1-based line of the anchor.
     pub line: u32,
@@ -68,6 +70,7 @@ pub fn locate_focus(
         uri: synced.uri,
         text: synced.text,
         range: Range { start, end },
+        offset: selection.start,
         focus_text,
         line: selection.line,
     })

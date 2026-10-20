@@ -1,6 +1,6 @@
 //! rust-analyzer: everything the generic transport must not know about it.
 
-use super::{Adapter, Language, ReadinessPolicy, default_kind_label};
+use super::{Adapter, Language, ReadinessPolicy, ViewSite, default_kind_label};
 use lsp_types::{Position, Range, SymbolKind};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -73,8 +73,14 @@ impl Adapter for RustAnalyzer {
         views::request(view, uri, position)
     }
 
-    fn render_extra_view(&self, view: &str, result: &Value, root: &Path) -> anyhow::Result<String> {
-        views::render(view, result, root)
+    fn render_extra_view(
+        &self,
+        view: &str,
+        result: &Value,
+        root: &Path,
+        site: Option<ViewSite<'_>>,
+    ) -> anyhow::Result<String> {
+        views::render(view, result, root, site)
     }
 
     /// Offered in this order; rust-analyzer takes the first it supports.

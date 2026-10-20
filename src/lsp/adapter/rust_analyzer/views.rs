@@ -2,11 +2,14 @@
 //! results read. Method names and result shapes are from rust-analyzer's
 //! `lsp-extensions.md`; nothing here is standard LSP.
 
+use crate::lsp::adapter::ViewSite;
 use anyhow::{Context, Result, bail};
 use lsp_types::Position;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::Path;
+
+mod derive;
 
 pub const EXPANDED: &str = "expanded";
 pub const RELATED_TESTS: &str = "related-tests";
@@ -24,23 +27,32 @@ pub fn request(view: &str, uri: &str, position: Position) -> Option<(String, Val
     }
 }
 
-pub fn render(view: &str, result: &Value, root: &Path) -> Result<String> {
+pub fn render(
+    view: &str,
+    result: &Value,
+    root: &Path,
+    site: Option<ViewSite<'_>>,
+) -> Result<String> {
     match view {
-        EXPANDED => render_expansion(result),
+        EXPANDED => render_expansion(result, site),
         RELATED_TESTS => render_related_tests(result, root),
         _ => bail!("rust-analyzer has no view named `{view}`"),
     }
 }
 
-/// `{ name, expansion }`, or `null` when the position is not on a macro
-/// call.
-fn render_expansion(result: &Value) -> Result<String> {
+/// `{ name, expansion }`, or `null` when rust-analyzer expands nothing at the
+/// position: not a macro call, or a derive it does not expand
+/// (docs/servers.md).
+fn render_expansion(result: &Value, site: Option<ViewSite<'_>>) -> Result<String> {
     #[derive(Deserialize)]
     struct Expansion {
         name: String,
         expansion: String,
     }
     if result.is_null() {
+        if let Some(message) = site.and_then(derive::explain_empty) {
+            return Ok(message);
+        }
         return Ok("not applicable: the focus is not a macro call\n".to_string());
     }
     let expansion: Expansion =
@@ -157,11 +169,12 @@ mod tests {
             EXPANDED,
             &json!({ "name": "format!", "expansion": "{\n    let res = ...;\n    res\n}\n" }),
             Path::new("/r"),
+            None,
         )
         .unwrap();
         assert_eq!(text, "expanded format\n{\n    let res = ...;\n    res\n}\n");
         assert_eq!(
-            render(EXPANDED, &Value::Null, Path::new("/r")).unwrap(),
+            render(EXPANDED, &Value::Null, Path::new("/r"), None).unwrap(),
             "not applicable: the focus is not a macro call\n"
         );
     }
@@ -185,13 +198,13 @@ mod tests {
                 }
             }
         }]);
-        let text = render(RELATED_TESTS, &result, Path::new("/r")).unwrap();
+        let text = render(RELATED_TESTS, &result, Path::new("/r"), None).unwrap();
         assert_eq!(
             text,
             "1 related test\ntest tests::smoke · src/lib.rs:72\n  cargo test --package fixture --lib -- tests::smoke --exact --show-output\n"
         );
         assert_eq!(
-            render(RELATED_TESTS, &json!([]), Path::new("/r")).unwrap(),
+            render(RELATED_TESTS, &json!([]), Path::new("/r"), None).unwrap(),
             "no related tests\n"
         );
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
