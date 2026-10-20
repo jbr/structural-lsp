@@ -20,16 +20,22 @@ impl Workspace {
     /// census — every served file written, created, or removed since is
     /// pushed or closed — and then told what the watcher delivered, which
     /// reaches the files no census covers: manifests, configuration, any
-    /// file outside the server's languages.
-    pub(crate) fn query_boundary(&mut self, scope: Option<&Path>) -> Result<()> {
-        // A scope nothing serves reconciles nothing; the query itself
+    /// file outside the server's languages. The servers are the ones the
+    /// query will ask — `scope` narrowed to `language` — by the same
+    /// routing rule (`docs/ownership.md`).
+    pub(crate) fn query_boundary(
+        &mut self,
+        scope: Option<&Path>,
+        language: Option<&str>,
+    ) -> Result<()> {
+        // A scope nothing serves reconciles and is told nothing — what the
+        // watcher delivered is still drained — and the query itself
         // reports why nothing serves it.
-        if let Ok(selected) = self.select(scope) {
-            for index in selected {
-                self.server_mut(index)?.reconcile()?;
-            }
+        let selected = self.select(scope, language).unwrap_or_default();
+        for &index in &selected {
+            self.server_mut(index)?.reconcile()?;
         }
-        self.flush_watched(scope)?;
+        self.flush_watched(&selected)?;
         Ok(())
     }
 
@@ -56,16 +62,11 @@ impl Workspace {
     /// names no path, so what the lost window changed is unknown:
     /// the reconciliation is the whole tree, re-stated
     /// (`docs/observation.md`).
-    fn flush_watched(&mut self, scope: Option<&Path>) -> Result<()> {
+    fn flush_watched(&mut self, selected: &[usize]) -> Result<()> {
         let events = self.pending.drain();
         if events.is_empty() {
             return Ok(());
         }
-        // A scope nothing serves flushes nothing; the query itself
-        // reports why nothing serves it.
-        let Ok(selected) = self.select(scope) else {
-            return Ok(());
-        };
         let overflowed = events.iter().any(|event| matches!(event, Event::Overflow));
         let changes = reduce_watched(&self.root, &events);
         // The reconciliation is computed once and filtered per
@@ -76,7 +77,7 @@ impl Workspace {
         } else {
             None
         };
-        for &index in &selected {
+        for &index in selected {
             let server = self.server_mut(index)?;
             if !server.watched_files() {
                 continue;

@@ -326,7 +326,7 @@ fn a_query_demand_starts_a_new_language() {
     );
     let indices = session
         .workspace()
-        .select(Some(helper.as_path()))
+        .select(Some(helper.as_path()), None)
         .expect("the demand-started server answers for its scope");
     assert!(!indices.is_empty());
     host.shutdown();

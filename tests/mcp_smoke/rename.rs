@@ -45,6 +45,8 @@ fn action(
         new_name: Some(new_name.to_string()),
         mode: mode.map(str::to_string),
         digest: digest.map(str::to_string),
+        workspace: None,
+        language: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("rename {symbol} → {new_name} ({mode:?}): {error:#}"))
@@ -58,6 +60,8 @@ fn show(state: &structural::session::Session, symbol: &str, path: &str) -> Strin
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("show {symbol}: {error:#}"))
@@ -350,6 +354,8 @@ fn rename_previews_then_applies_with_a_matching_digest() {
         new_name: Some("pick".to_string()),
         mode: None,
         digest: None,
+        workspace: None,
+        language: None,
     }
     .run(&state);
     assert!(same.unwrap_err().to_string().contains("already the name"));
@@ -361,6 +367,8 @@ fn rename_previews_then_applies_with_a_matching_digest() {
         new_name: None,
         mode: None,
         digest: None,
+        workspace: None,
+        language: None,
     }
     .run(&state);
     assert!(

@@ -33,6 +33,8 @@ fn outline(
         focus: None,
         view: Some("outline".to_string()),
         page,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }

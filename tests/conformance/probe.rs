@@ -101,6 +101,8 @@ pub fn show(
         focus: anchor.map(|(_, focus)| focus.to_string()),
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }
@@ -113,6 +115,8 @@ pub fn uses(state: &structural::session::Session, symbol: &str) -> anyhow::Resul
         focus: None,
         within: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }
@@ -130,6 +134,8 @@ pub fn rename_preview(
         new_name: Some(new_name.to_string()),
         mode: None,
         digest: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }

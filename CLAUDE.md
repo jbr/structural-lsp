@@ -56,10 +56,12 @@ is silently picked. The full contract, and what each mechanism costs, is
 
 ## Module map
 
-`src/host.rs` + `src/host/launch.rs` + `src/host/lifetime.rs` (workspaces,
-launching, admission, shutdown) ·
-`src/workspace.rs` + `src/workspace/slot.rs` + `src/clock.rs` (one root's
-servers, their lifecycle, and the clock residency runs on) · `src/session.rs` (a caller's binding) · `src/lsp/handle.rs`
+`src/host.rs` + `src/host/binding.rs` + `src/host/launch.rs` +
+`src/host/lifetime.rs` (workspaces, agent binding, launching, admission,
+shutdown) · `src/operator.rs` (the operator channel) ·
+`src/workspace.rs` + `src/workspace/slot.rs` + `src/workspace/routing.rs` +
+`src/clock.rs` (one root's servers, their lifecycle, routing a call to them,
+and the clock residency runs on) · `src/session.rs` (a caller's binding) · `src/lsp/handle.rs`
 (one server on three threads) · `src/lsp/server.rs` (documents and queries) ·
 `src/lsp/adapter/` (all server-specific strings) · `src/tools/` (the three
 tools and the shared resolution pipeline) · `src/main.rs` (the front end).

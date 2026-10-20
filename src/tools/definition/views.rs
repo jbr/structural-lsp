@@ -4,7 +4,7 @@
 
 use crate::lsp::adapter::ViewSite;
 use crate::tools::listing::{header, location_line, relative_display};
-use crate::tools::resolution::anchored::locate_focus;
+use crate::tools::resolution::anchored::{Anchored, locate_focus};
 use crate::tools::resolution::{
     Found, Resolved, Target, describe, resolve_target, server_named, sync_target,
 };
@@ -93,7 +93,13 @@ fn extra(state: &mut Workspace, root: &Path, view: &str, target: Target<'_>) -> 
                     })
                 })
                 .transpose()?;
-            let focus = locate_focus(state, root, scope, anchor, target.focus)?;
+            let anchored = Anchored {
+                scope,
+                anchor,
+                focus: target.focus,
+                language: target.language,
+            };
+            let focus = locate_focus(state, root, anchored)?;
             let head = format!(
                 "`{}` · {}:{}",
                 focus.focus_text,

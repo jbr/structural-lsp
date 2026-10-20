@@ -63,10 +63,12 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// `let config = Config::new(3);`). Only exact names resolve, and several
 /// distinct definitions are listed rather than picked (docs/resolution.md).
 ///
-/// Before each query, every file in the servers' languages that was
-/// written, created, or deleted since they last answered is pushed to them
-/// from disk, and they are waited for; an edit made just before the call is
-/// seen (docs/correctness.md). The workspace root is fixed at server start.
+/// `workspace` answers about another project for one call, and `language`
+/// narrows a name to one language's servers (`{"symbol": "Config",
+/// "language": "python"}`). Before each query, every file in the servers'
+/// languages that was written, created, or deleted since they last
+/// answered is pushed to them from disk, and they are waited for; an edit
+/// made just before the call is seen (docs/correctness.md).
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "definition")]
 #[group(skip)]
@@ -115,6 +117,20 @@ pub struct Definition {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub page: Option<usize>,
+
+    /// Another project to answer about for this call: a directory, absolute
+    /// or relative to the workspace root, whose project's servers answer;
+    /// `path` and the paths in the answer are then relative to it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub workspace: Option<String>,
+
+    /// Ask only the servers for one language, named by id or extension
+    /// (`rust`, `python`, `ts`); without it a name is looked up in every
+    /// language here and same-named definitions in several are listed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub language: Option<String>,
 }
 
 impl ToolMeta for Definition {
@@ -133,6 +149,8 @@ impl ToolMeta for Definition {
                     focus: None,
                     view: None,
                     page: None,
+                    workspace: None,
+                    language: None,
                 },
             },
             Example {
@@ -144,6 +162,21 @@ impl ToolMeta for Definition {
                     focus: None,
                     view: None,
                     page: None,
+                    workspace: None,
+                    language: None,
+                },
+            },
+            Example {
+                description: "Ask only one language's servers about a name several languages define (Python)",
+                item: Self {
+                    symbol: Some("Config".to_string()),
+                    path: None,
+                    anchor: None,
+                    focus: None,
+                    view: None,
+                    page: None,
+                    workspace: None,
+                    language: Some("python".to_string()),
                 },
             },
             Example {
@@ -155,6 +188,8 @@ impl ToolMeta for Definition {
                     focus: Some("choose".to_string()),
                     view: None,
                     page: None,
+                    workspace: None,
+                    language: None,
                 },
             },
         ]
@@ -165,7 +200,8 @@ impl ToolMeta for Definition {
             read_only_hint: Some(true),
             destructive_hint: Some(false),
             idempotent_hint: Some(true),
-            // The tool touches only the workspace root it was started with.
+            // The tool touches only local workspaces: its own, or the one a
+            // call names in `workspace`.
             open_world_hint: Some(false),
             ..Default::default()
         })
@@ -182,7 +218,9 @@ impl Tool<Session> for Definition {
 
 impl Definition {
     pub fn run(self, session: &Session) -> Result<String> {
-        let mut state = session.acquire(self.path.as_deref())?;
+        let session = session.elsewhere(self.workspace.as_deref())?;
+        let language = crate::tools::given(self.language.as_deref());
+        let mut state = session.acquire(self.path.as_deref(), language)?;
         let root = state.view().to_path_buf();
         let target = Target {
             view: &root,
@@ -190,6 +228,7 @@ impl Definition {
             path: self.path.as_deref(),
             anchor: self.anchor.as_deref(),
             focus: self.focus.as_deref(),
+            language,
         };
         match self.view.as_deref().map(str::trim) {
             None | Some("") | Some(views::DEFINITION) if self.page.is_some() => {

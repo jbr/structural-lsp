@@ -29,7 +29,7 @@ pub(super) fn run(
     let number = page.unwrap_or(1);
     page::start_of(number)?;
     if target.symbol.is_none() && target.anchor.is_none() {
-        return path_outline(state, root, target.path, number);
+        return path_outline(state, root, target.path, target.language, number);
     }
     let found = match resolve_target(state, target)? {
         Resolved::Listed(listing) => return Ok(listing),
@@ -79,6 +79,7 @@ fn path_outline(
     state: &mut Workspace,
     root: &Path,
     path: Option<&str>,
+    language: Option<&str>,
     number: usize,
 ) -> Result<String> {
     let Some(path) = path else {
@@ -92,14 +93,20 @@ fn path_outline(
         bail!("`{path}` escapes the workspace root");
     }
     if named.is_dir() {
-        return directory::outline(state, root, &named, number);
+        return directory::outline(state, root, &named, language, number);
     }
-    file_outline(state, root, &named, number)
+    file_outline(state, root, &named, language, number)
 }
 
 /// The whole outline of `file`, locals left out, one page of it.
-fn file_outline(state: &mut Workspace, root: &Path, file: &Path, number: usize) -> Result<String> {
-    let index = state.select(Some(file))?[0];
+fn file_outline(
+    state: &mut Workspace,
+    root: &Path,
+    file: &Path,
+    language: Option<&str>,
+    number: usize,
+) -> Result<String> {
+    let index = state.select(Some(file), language)?[0];
     let server = state.server_mut(index)?;
     server.sync_owned()?;
     server.wait_ready()?;

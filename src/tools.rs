@@ -15,6 +15,12 @@ mcplease::tools!(
     (Rename, rename, "rename")
 );
 
+/// An optional string argument as given, or `None` when it is absent or
+/// blank, so `""` means the same as leaving the argument out.
+pub(crate) fn given(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
+}
+
 /// How long a call runs before its first progress notification: long enough
 /// that a warm query never sends one.
 const FIRST_TICK: Duration = Duration::from_secs(1);

@@ -51,6 +51,8 @@ fn show(state: &structural::session::Session, symbol: &str, path: &str) -> Strin
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("{symbol}: {error:#}"))

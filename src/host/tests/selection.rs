@@ -333,7 +333,7 @@ fn a_ladder_that_runs_out_reports_every_candidate_it_tried() {
     let error = format!(
         "{:#}",
         workspace
-            .select(Some(&fixture.root.join("src/lib.rs")))
+            .select(Some(&fixture.root.join("src/lib.rs")), None)
             .expect_err("nothing on the ladder started")
     );
     assert!(error.contains("a-preferred"), "{error}");

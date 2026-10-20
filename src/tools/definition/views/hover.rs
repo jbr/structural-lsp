@@ -5,7 +5,7 @@
 
 use super::unsupported;
 use crate::tools::listing::relative_display;
-use crate::tools::resolution::anchored::{Focus, locate_focus};
+use crate::tools::resolution::anchored::{Anchored, Focus, locate_focus};
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
@@ -34,7 +34,16 @@ pub(super) fn run(state: &mut Workspace, root: &Path, target: Target<'_>) -> Res
             focus_text,
             line,
             ..
-        } = locate_focus(state, root, scope, anchor, target.focus)?;
+        } = locate_focus(
+            state,
+            root,
+            Anchored {
+                scope,
+                anchor,
+                focus: target.focus,
+                language: target.language,
+            },
+        )?;
         let server = state.server(index)?;
         if !server.supports("hoverProvider") {
             return Ok(unsupported("type", server.name()));

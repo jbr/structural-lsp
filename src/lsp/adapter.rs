@@ -76,6 +76,20 @@ impl Language {
             extensions: extensions.iter().map(|e| e.to_string()).collect(),
         }
     }
+
+    /// Whether a caller's `language` argument names this language: its
+    /// LSP id, or one of its extensions with or without the leading dot,
+    /// compared case-insensitively — `rust`, `Python`, `ts`, `.py`
+    /// (docs/ownership.md).
+    pub fn answers_to(&self, asked: &str) -> bool {
+        let asked = asked.trim();
+        let extension = asked.strip_prefix('.').unwrap_or(asked);
+        self.id.eq_ignore_ascii_case(asked)
+            || self
+                .extensions
+                .iter()
+                .any(|known| known.eq_ignore_ascii_case(extension))
+    }
 }
 
 /// The source an extra view's request was made at, when the caller quoted
@@ -446,5 +460,24 @@ mod tests {
         );
         assert!(language_for(&languages, std::path::Path::new("/x/a.rs")).is_none());
         assert!(language_for(&languages, std::path::Path::new("/x/Makefile")).is_none());
+    }
+
+    #[test]
+    fn a_language_answers_to_its_id_and_its_extensions() {
+        let python = Language::new("python", &["py", "pyi"]);
+        for asked in [
+            "python", "Python", "PYTHON", "py", ".py", "pyi", ".PYI", " py ",
+        ] {
+            assert!(python.answers_to(asked), "{asked}");
+        }
+        // Not a prefix, not another language, and the dot belongs only to
+        // an extension.
+        for asked in ["pyth", "rust", "rs", ".python", "", "."] {
+            assert!(!python.answers_to(asked), "{asked}");
+        }
+        let typescript = Language::new("typescript", &["ts", "mts", "cts"]);
+        assert!(typescript.answers_to("ts"));
+        assert!(typescript.answers_to("TypeScript"));
+        assert!(!typescript.answers_to("tsx"));
     }
 }

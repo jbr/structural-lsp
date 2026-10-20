@@ -23,6 +23,8 @@ fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("show {symbol} {path:?}: {error:#}"))
@@ -36,6 +38,8 @@ fn uses(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
         focus: None,
         within: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("uses {symbol} {path:?}: {error:#}"))

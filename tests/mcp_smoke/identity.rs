@@ -17,6 +17,8 @@ fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("show {symbol}: {error:#}"))
@@ -71,6 +73,8 @@ fn exact_hits_are_deduplicated_by_definition_target() {
         focus: None,
         within: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("uses group_by_target: {error:#}"));

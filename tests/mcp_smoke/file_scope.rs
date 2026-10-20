@@ -116,6 +116,8 @@ fn show(
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }
@@ -132,6 +134,8 @@ fn uses(
         focus: None,
         within: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }

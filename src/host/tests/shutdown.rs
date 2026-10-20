@@ -9,9 +9,9 @@ fn soft_shutdown_protects_an_admitted_operation_and_refuses_new_calls() {
     let host = std::sync::Arc::new(Host::new());
     let session = bound(&host, "a", &fixture.root);
     let pids = fixture.launches();
-    let operation = session.acquire(None).unwrap();
+    let operation = session.acquire(None, None).unwrap();
     host.request_shutdown();
-    assert!(session.acquire(None).is_err());
+    assert!(session.acquire(None, None).is_err());
     assert!(pids.iter().copied().all(alive));
     assert!(host.lifetime.song.guard_count() > 0);
     let (done, completed) = mpsc::channel();
@@ -58,7 +58,7 @@ fn force_reaches_running_processes_while_workspace_is_held() {
     let host = std::sync::Arc::new(Host::new());
     let session = bound(&host, "a", &fixture.root);
     let pids = fixture.launches();
-    let operation = session.acquire(None).unwrap();
+    let operation = session.acquire(None, None).unwrap();
     host.request_shutdown();
     let (done, completed) = mpsc::channel();
     let waiter = {
@@ -289,7 +289,7 @@ fn concurrent_shutdowns_each_return_after_the_one_sweep() {
         .expect("a shutdown after the shutdown returns");
     third.join().unwrap();
     assert!(host.is_shutting_down());
-    assert!(session.acquire(None).is_err());
+    assert!(session.acquire(None, None).is_err());
     assert!(
         session
             .workspace()

@@ -49,6 +49,8 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("show Greet: {error:#}"));
@@ -73,6 +75,8 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         focus: None,
         within: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("uses Greet: {error:#}"));
@@ -94,6 +98,8 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         focus: Some("Greet".to_string()),
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("anchored show Greet: {error:#}"));
@@ -110,6 +116,8 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         focus: None,
         view: Some("type".to_string()),
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("show type Greet: {error:#}"));
@@ -131,6 +139,8 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         new_name: Some("Hello".to_string()),
         mode: None,
         digest: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("rename Greet: {error:#}"));
@@ -158,6 +168,8 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         new_name: Some("Hello".to_string()),
         mode: Some("apply".to_string()),
         digest: Some(digest),
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("apply rename Greet: {error:#}"));

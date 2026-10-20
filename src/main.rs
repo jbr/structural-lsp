@@ -5,11 +5,13 @@
 //!
 //! The workspace root is the current directory, or `STRUCTURAL_ROOT` when
 //! set: the MCP front end's default workspace context, acquired through the
-//! same host an embedded consumer uses. Every configured language server is
-//! started before either path runs, so indexing begins immediately — and
-//! none of them is waited for here, so the MCP handshake is answered while
-//! the indexes are still warming (`docs/ownership.md`). The first tool call
-//! waits for them.
+//! same host an embedded consumer uses. A call naming another `workspace`
+//! binds the same agent through that host for the call, so the process cwd
+//! and the default never change (`docs/ownership.md`). Every configured
+//! language server is started before either path runs, so indexing begins
+//! immediately — and none of them is waited for here, so the MCP handshake
+//! is answered while the indexes are still warming (`docs/ownership.md`).
+//! The first tool call waits for them.
 //!
 //! Shutdown is best-effort graceful, escalated by the caller (`docs/shutdown.md`):
 //! on Unix, the first SIGINT/SIGTERM/SIGHUP requests a soft shutdown — new tool
@@ -49,7 +51,10 @@ fn main() -> anyhow::Result<()> {
         };
         let root = std::fs::canonicalize(&root)
             .with_context(|| format!("workspace root `{}` does not exist", root.display()))?;
-        let session = host.agent_started(AgentId::mcp(), &root);
+        // Bound so that a call naming another `workspace` binds the same
+        // agent through this host, sharing that root's servers
+        // (`docs/ownership.md`).
+        let session = host.bind(AgentId::mcp(), &root);
         let instructions = "\
 You have LSP-backed code intelligence: `definition` (go to definition and \
 other IDE views), `references` (find all references), `rename` (rename a \
@@ -65,8 +70,10 @@ site, or expression, quote source text (`anchor` in the file `path`, \
 file may be stale. `rename` previews with a `digest`, then `apply` needs \
 that digest back. `path` scopes where the symbol is looked up, not where \
 results are listed. Edits on disk, yours or anyone's, are synced before \
-each query. The \
-workspace root is fixed at server start; `path` only scopes inside it.";
+each query. `path` \
+scopes inside the workspace root; `workspace` names another project's \
+directory for one call, and `language` (`rust`, `python`, `ts`) asks only \
+that language's servers.";
 
         let config = mcplease::ServerConfig::new(mcplease::server_info!())
             .with_instructions(instructions)

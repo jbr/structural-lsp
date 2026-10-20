@@ -14,11 +14,23 @@ resolution pipeline ([resolution.md](resolution.md)), so a target that
 | `path` | a file or directory under the root, relative to it. A file nominates `symbol` from that file's own outline rather than the workspace index, and picks its language server; a directory narrows the index. With `anchor`, the file the quoted text is in. |
 | `anchor` | source text quoted verbatim from `path`, occurring exactly once in it — the way to reach a local, a call site, an expression. |
 | `focus` | the token within `anchor` that is meant, occurring once in the anchor as a whole identifier; the whole anchor when absent. |
+| `workspace` | another project to answer about for this call: a directory, absolute or relative to the caller's view. Its project root is discovered as at startup, so a subdirectory of a project answers from that project's servers about the subdirectory; `path` and the rendered paths are relative to it. Not a directory: an argument error naming `workspace`. |
+| `language` | which language's servers the call starts and asks, by LSP id or extension, case-insensitively (`rust`, `python`, `ts`, `.py`). Without it a bare name asks every server here and same-named definitions are listed. One no server here speaks lists this workspace's languages; one a file `path` contradicts says which server serves the file. |
 
-The workspace root is fixed at server start (cwd, or `STRUCTURAL_ROOT`).
-`path` only scopes inside it: it is canonicalized, and a symlink escape is
-rejected. `path` scopes where the **symbol is looked up**, not where results
-are listed.
+The default root is the caller's view, fixed at binding — for the MCP
+front end the cwd, or `STRUCTURAL_ROOT`. `path` only scopes inside the
+call's root: it is canonicalized, and a symlink escape is rejected. `path`
+scopes where the **symbol is looked up**, not where results are listed.
+
+`workspace` binds for the call and changes no default: the MCP session
+binds the same agent through the same host, so the other root's servers
+are shared with any other caller on it, warmed on the first call, and
+released by the idle sweep; a cold start is reported by the progress
+heartbeat like any first query ([ownership.md](ownership.md#a-call-in-another-workspace)).
+`language` goes through the one routing rule that also decides what
+starts, and its argument errors are decided on the workspace's planned
+servers, never on which are running
+([ownership.md](ownership.md#routing-a-scope-to-servers)).
 
 ## `definition`
 
@@ -224,9 +236,9 @@ Rendering lives apart from logic (`definition/render.rs`, `references/render.rs`
 (which servers answered), and notes only when something is degraded — a cap
 hit, a body truncated, a view unsupported, a server not running with its
 install hint. The standing caveats — the fuzzy index is not proven
-exhaustive, only exact names resolve, the root is fixed — are stated once
+exhaustive, only exact names resolve, `path` scopes inside the root — are stated once
 in the tool descriptions and in the MCP server instructions, not repeated
 per answer.
 
 Tool annotations: `definition` and `references` are read-only and idempotent; all three
-are closed-world (they touch only the root they were started with).
+are closed-world (they touch only the local workspaces they are pointed at).

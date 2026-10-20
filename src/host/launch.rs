@@ -27,26 +27,29 @@ enum Unstarted {
 }
 
 impl Entry {
-    /// Make the servers that would answer for `scope` running, starting the
-    /// ones that are not.
+    /// Make the servers that would answer for `scope`, narrowed to
+    /// `language`, running, starting the ones that are not.
     ///
     /// No workspace lock is held here, deliberately: a launch publishes
     /// *under* that lock, so waiting for one while holding it would deadlock
     /// against the very launcher this call elects.
-    pub(crate) fn activate(self: &Arc<Self>, scope: Option<&Path>) {
+    pub(crate) fn activate(self: &Arc<Self>, scope: Option<&Path>, language: Option<&str>) {
         // Start every needed launch first and wait afterwards. Waiting as we
         // went would serialize exactly what giving each launch a thread was
         // for: one server's `initialize` would still be a delay to the next.
         let _waiting = crate::progress::waiting_on("starting language servers");
-        for index in self.warm(scope) {
+        for index in self.warm(scope, language) {
             if let Some(slot) = self.slot(index) {
                 let _ = slot.wait_for_launch();
             }
         }
     }
 
-    /// Start the servers that would answer for `scope` without waiting for
-    /// any of them, and say which ones were wanted.
+    /// Start the servers that would answer for `scope`, narrowed to
+    /// `language`, without waiting for any of them, and say which ones
+    /// were wanted. The routing is [`crate::workspace::serving`], the
+    /// rule a query's `select` also uses, so what starts and what is asked
+    /// cannot disagree (`docs/ownership.md`).
     ///
     /// This is binding a session, not answering a query: a caller that has
     /// not asked anything yet has nothing to be correct about, and every
@@ -54,9 +57,13 @@ impl Entry {
     /// instead would put a whole `initialize` plus index warm-up
     /// (`../docs/servers.md`) in front of the front end's first byte — long
     /// enough on a cold index for an MCP client to give up on the handshake.
-    pub(crate) fn warm(self: &Arc<Self>, scope: Option<&Path>) -> Vec<usize> {
+    pub(crate) fn warm(
+        self: &Arc<Self>,
+        scope: Option<&Path>,
+        language: Option<&str>,
+    ) -> Vec<usize> {
         let snapshot = self.slots_snapshot();
-        let wanted = crate::workspace::serving(&snapshot, scope);
+        let wanted = crate::workspace::serving(&snapshot, scope, language);
         // A strong signal refreshes the idle clock of every slot it
         // addresses — a bind all of them, a query the ones its scope routes
         // to. A filesystem batch never does: activity is not a keepalive

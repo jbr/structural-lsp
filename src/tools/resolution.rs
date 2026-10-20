@@ -31,7 +31,6 @@
 //! Servers: a `path` naming a file goes to the server for its language;
 //! otherwise every running server is asked and the candidates are merged.
 
-use crate::discovery::evidence::Sources;
 use crate::lsp::definition::{
     Candidate, DefinitionSet, DefinitionTarget, Identity, NavigationProvenance, Origin,
     group_by_target, locate_name_at, parse_definition_result, verify_name_at,
@@ -40,10 +39,10 @@ use crate::lsp::outline::{self, Extent};
 use crate::lsp::positions::position_to_offset;
 use crate::lsp::server::LspServer;
 use crate::tools::listing::{
-    AmbiguousEntry, directory_scope_note, location_line, no_index_note, qualifier_scope_note,
-    render_ambiguous, render_fuzzy, render_not_found, render_null_definition, render_unqualified,
-    unanswered_note, unreconciled_note,
+    AmbiguousEntry, location_line, no_index_note, qualifier_scope_note, render_ambiguous,
+    render_fuzzy, render_not_found, render_null_definition, render_unqualified, unreconciled_note,
 };
+use crate::tools::resolution::miss::{directory_languages_note, unanswered_note_for};
 use crate::tools::resolution::nominate::{Nominated, nominate};
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
@@ -53,6 +52,7 @@ use std::path::{Path, PathBuf};
 
 pub mod anchored;
 pub mod file_scope;
+mod miss;
 pub mod nominate;
 pub mod qualify;
 
@@ -83,6 +83,9 @@ pub struct Target<'a> {
     /// The token within the anchor that is meant; the whole anchor when
     /// absent.
     pub focus: Option<&'a str>,
+    /// The language the call is narrowed to: which servers are asked, by
+    /// the routing rule (`docs/ownership.md`).
+    pub language: Option<&'a str>,
 }
 
 /// The outcome of resolving a target.
@@ -113,7 +116,7 @@ pub fn resolve_target(state: &mut Workspace, target: Target<'_>) -> Result<Resol
         .transpose()?;
     // The query boundary: the servers that would answer are brought up
     // to the tree before any index is read (`docs/correctness.md`).
-    state.query_boundary(scope.as_deref())?;
+    state.query_boundary(scope.as_deref(), target.language)?;
     match (target.symbol, target.anchor) {
         (Some(_), Some(_)) => bail!("give either `symbol` or `anchor`, not both"),
         (None, None) => bail!(
@@ -124,9 +127,17 @@ pub fn resolve_target(state: &mut Workspace, target: Target<'_>) -> Result<Resol
             if target.focus.is_some() {
                 bail!("`focus` selects within an `anchor`; with `symbol` it has no meaning");
             }
-            resolve_symbol(state, &root, symbol, scope)
+            resolve_symbol(state, &root, symbol, scope, target.language)
         }
-        (None, Some(anchor)) => anchored::from_anchor(state, &root, scope, anchor, target.focus),
+        (None, Some(anchor)) => {
+            let anchored = anchored::Anchored {
+                scope,
+                anchor,
+                focus: target.focus,
+                language: target.language,
+            };
+            anchored::from_anchor(state, &root, anchored)
+        }
     }
 }
 
@@ -136,10 +147,11 @@ fn resolve_symbol(
     root: &Path,
     symbol: &str,
     scope: Option<PathBuf>,
+    language: Option<&str>,
 ) -> Result<Resolved> {
     let qualified = qualify::parse(symbol)?;
     let display = qualified.display();
-    let selected = state.select(scope.as_deref())?;
+    let selected = state.select(scope.as_deref(), language)?;
 
     let Nominated {
         exact,
@@ -183,7 +195,7 @@ fn resolve_symbol(
             && unqualified.is_empty()
             && let Some(dir) = scope.as_deref().filter(|scope| scope.is_dir())
         {
-            listed.push_str(&directory_languages_note(state, root, dir));
+            listed.push_str(&directory_languages_note(state, &selected, root, dir));
         }
         listed.push_str(qualifier_scope_note(&qualified, scope.is_some()));
         return Ok(Resolved::Listed(listed));
@@ -204,80 +216,6 @@ fn resolve_symbol(
         &display,
         exclusions,
     )
-}
-
-/// Which extensions live under a directory scope that found nothing, and
-/// which of them no running server serves.
-///
-/// A directory scope asks every running server by design
-/// (`Workspace::select`), so a miss over an unserved tree reads as an
-/// absent name. The scan is the discovery budget walk (`Sources::scan`):
-/// presence claims hold under truncation, and build and hidden directories
-/// are skipped. Served-ness is what the query observed — running servers —
-/// rather than what is configured: a configured server that is down serves
-/// nothing either, and the note names running servers so the two cases read
-/// the same way (`docs/resolution.md`).
-fn directory_languages_note(state: &Workspace, root: &Path, dir: &Path) -> String {
-    let sources = Sources::scan(dir);
-    let contained: Vec<String> = sources.by_extension.keys().cloned().collect();
-    if contained.is_empty() {
-        return String::new();
-    }
-    let running: Vec<&LspServer> = state.running().collect();
-    let serves = |extension: &str| {
-        running.iter().any(|server| {
-            server
-                .adapter()
-                .languages()
-                .iter()
-                .flat_map(|language| language.extensions.iter())
-                .any(|known| known.eq_ignore_ascii_case(extension))
-        })
-    };
-    let unserved: Vec<String> = contained
-        .iter()
-        .filter(|extension| !serves(extension))
-        .cloned()
-        .collect();
-    let display = dir
-        .strip_prefix(root)
-        .map(|relative| relative.display().to_string())
-        .ok()
-        .filter(|relative| !relative.is_empty())
-        .unwrap_or_else(|| dir.display().to_string());
-    let names = running
-        .iter()
-        .map(|server| server.name())
-        .collect::<Vec<_>>()
-        .join(", ");
-    directory_scope_note(&format!("{display}/"), &contained, &unserved, &names)
-}
-
-/// The asked servers behind a total miss that advertised an index yet have
-/// answered nothing all session.
-///
-/// Only servers that were asked and could have answered: one with no
-/// workspace index is unserved rather than silent, and a server that yielded
-/// once — from its index or from an outline — has shown it is working
-/// (docs/resolution.md).
-fn unanswered_note_for(state: &Workspace, selected: &[usize]) -> String {
-    let mut servers = Vec::new();
-    let mut languages = Vec::new();
-    for &index in selected {
-        let Ok(server) = state.server(index) else {
-            continue;
-        };
-        if !server.supports("workspaceSymbolProvider") || server.has_answered() {
-            continue;
-        }
-        servers.push(server.name().to_string());
-        for language in server.adapter().languages() {
-            if !languages.contains(&language.id) {
-                languages.push(language.id);
-            }
-        }
-    }
-    unanswered_note(&servers, &languages)
 }
 
 /// One identity is the resolution; several are the ambiguous listing; one

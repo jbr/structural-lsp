@@ -24,7 +24,7 @@ use crate::discovery::catalogue::Catalogue;
 use crate::discovery::evidence::Evidence;
 use crate::discovery::selection::{Selection, select};
 use crate::host::observation::Pending;
-use crate::lsp::adapter::{Adapter, language_for};
+use crate::lsp::adapter::Adapter;
 use crate::lsp::server::LspServer;
 use anyhow::{Context, Result, bail};
 use std::collections::BTreeSet;
@@ -34,11 +34,13 @@ use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 mod boundary;
+mod routing;
 mod slot;
 
 #[cfg(test)]
 mod tests;
 
+pub use routing::serving;
 pub use slot::{Attempt, Demand, Launch, ServerSlot, SlotState};
 
 pub struct Workspace {
@@ -283,40 +285,6 @@ impl Workspace {
             .filter(|index| self.servers[*index].is_some())
     }
 
-    /// The running slots a query should go to: the ones serving `scope`'s
-    /// extension when the scope is a file of a known language, otherwise
-    /// every running slot. An actionable error when none of them is running,
-    /// naming what each configured server is doing instead.
-    pub fn select(&self, scope: Option<&Path>) -> Result<Vec<usize>> {
-        let candidates = serving(&self.slots, scope);
-        if candidates.is_empty() {
-            // A config that will not parse means nothing was configured, so
-            // the answer is about the file rather than about this scope.
-            if self.config_error.is_some() {
-                bail!("{}", self.nothing_running());
-            }
-            bail!(
-                "no language server here serves `{}` files.\n  here: {}\n{}",
-                scope
-                    .and_then(Path::extension)
-                    .unwrap_or_default()
-                    .to_string_lossy(),
-                self.names(),
-                self.not_planned()
-            );
-        }
-        let running = self.running_of(&candidates);
-        if running.is_empty() {
-            // A file names the servers that should have served it; a bare
-            // scope has nothing to name but the whole configuration.
-            if scope.is_some_and(|scope| scope.is_file()) {
-                bail!("{}", self.servers_down(&candidates));
-            }
-            bail!("{}", self.nothing_running());
-        }
-        Ok(running)
-    }
-
     /// Every running server, for the questions a view asks about what is
     /// currently offered — adapters answer for what is merely configured.
     pub fn running(&self) -> impl Iterator<Item = &LspServer> {
@@ -402,46 +370,6 @@ impl Workspace {
             .collect()
     }
 
-    /// Which of `candidates` have a server, read from the workspace's own
-    /// copy: while this lock is held, a server in `servers` *is* a running
-    /// server. The slot's state is for readers that hold no workspace lock.
-    fn running_of(&self, candidates: &[usize]) -> Vec<usize> {
-        candidates
-            .iter()
-            .copied()
-            .filter(|index| self.servers[*index].is_some())
-            .collect()
-    }
-
-    /// The servers this workspace has no slot for, and why selection left
-    /// each one out.
-    ///
-    /// Without this a configured server simply vanishes from the message.
-    /// The case is ordinary: a tree with no Python lays out no Python
-    /// slot, and then a `.py` file appears — the file is real, `pyright`
-    /// is configured, and "no language server serves `py` files" would be
-    /// true and useless. Noticing the new language while the workspace is
-    /// live is observation's
-    /// (`docs/observation.md`); saying so is this.
-    fn not_planned(&self) -> String {
-        let Some(selection) = &self.selection else {
-            return String::new();
-        };
-        selection
-            .declined
-            .iter()
-            .map(|declined| format!("  not here: {}\n", declined.explain()))
-            .collect()
-    }
-
-    fn names(&self) -> String {
-        self.slots
-            .iter()
-            .map(|slot| slot.name())
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
-
     fn no_such_server(&self, index: usize) -> String {
         match self.slots.get(index) {
             Some(slot) => format!(
@@ -451,48 +379,6 @@ impl Workspace {
             ),
             None => format!("no such language server slot: {index}"),
         }
-    }
-
-    /// What to say when the servers that would serve a file are not running:
-    /// each one's state, and how to fix the ones that failed.
-    fn servers_down(&self, candidates: &[usize]) -> String {
-        let mut text = String::new();
-        for &index in candidates {
-            let slot = &self.slots[index];
-            let state = slot.state();
-            text.push_str(&format!("  {}: {}", slot.name(), state.label()));
-            if let Some(reason) = state.reason() {
-                text.push_str(&format!(
-                    ": {reason}; to fix: {}",
-                    slot.adapter().install_hint()
-                ));
-            }
-            text.push('\n');
-            text.push_str(&tried(slot));
-        }
-        text
-    }
-
-    fn nothing_running(&self) -> String {
-        let mut text = String::from("no language server is running.\n");
-        if let Some(error) = &self.config_error {
-            text.push_str(&format!("  structural.toml: {error}\n"));
-        }
-        for slot in &self.slots {
-            let state = slot.state();
-            text.push_str(&format!("  {}: {}", slot.name(), state.label()));
-            if let Some(reason) = state.reason() {
-                text.push_str(&format!(
-                    "; to fix: {}",
-                    slot.adapter().install_hint().as_str()
-                ));
-                text.push_str(&format!("\n    {reason}"));
-            }
-            text.push('\n');
-            text.push_str(&tried(slot));
-        }
-        text.push_str("Restart this server after installing or configuring one.");
-        text
     }
 }
 
@@ -551,37 +437,6 @@ fn ladder_for(selection: &Selection, layout: &Layout, language: &str) -> Vec<Arc
                 .collect()
         })
         .unwrap_or_default()
-}
-
-/// The candidates a slot tried and rejected, indented under it. Empty for a
-/// slot that never fell back, so an ordinary failure reads as it always did.
-fn tried(slot: &ServerSlot) -> String {
-    slot.failed_attempts()
-        .iter()
-        .map(|attempt| format!("    tried {}\n", attempt.explain()))
-        .collect()
-}
-
-/// The slots that would serve `scope`: the ones whose adapter knows the
-/// file's language, or every slot when the scope names no file.
-///
-/// One rule, in one place, because two callers need it for different reasons
-/// — a launch asks which servers to start, a query asks which to send to —
-/// and they must never disagree about it.
-pub fn serving(slots: &[Arc<ServerSlot>], scope: Option<&Path>) -> Vec<usize> {
-    let all = || (0..slots.len()).collect::<Vec<usize>>();
-    let Some(scope) = scope.filter(|scope| scope.is_file()) else {
-        return all();
-    };
-    let serving: Vec<usize> = (0..slots.len())
-        .filter(|index| language_for(&slots[*index].adapter().languages(), scope).is_some())
-        .collect();
-    if serving.is_empty() && scope.extension().is_none() {
-        // A file of no known language and no extension leaves nothing to
-        // route by, so every server is a candidate, as it always was.
-        return all();
-    }
-    serving
 }
 
 /// The canonical spelling of a root, so two callers naming the same tree

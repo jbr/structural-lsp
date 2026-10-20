@@ -207,6 +207,8 @@ fn action(
         new_name: Some(new_name.to_string()),
         mode: mode.map(str::to_string),
         digest: digest.map(str::to_string),
+        workspace: None,
+        language: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("rename greet → {new_name} ({mode:?}): {error:#}"))

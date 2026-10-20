@@ -1,8 +1,9 @@
 # Ownership: host, workspace, session, slot
 
 Who owns a language-server process, who may use it, and what serializes
-against what. Implemented in `src/host.rs`, `src/host/lifetime.rs`,
-`src/workspace.rs`, `src/workspace/slot.rs` and `src/session.rs`.
+against what. Implemented in `src/host.rs`, `src/host/binding.rs`,
+`src/host/lifetime.rs`, `src/workspace.rs`, `src/workspace/slot.rs`,
+`src/workspace/routing.rs` and `src/session.rs`.
 
 ## The four types
 
@@ -81,6 +82,11 @@ plus index warm-up in front of the MCP front end's first byte — seconds on a
 warm index, longer than a client's negotiation timeout on a cold one — while
 buying no query a thing.
 
+`Host::bind(self: &Arc<Host>, agent, cwd)` is `agent_started` on a session
+that also records how to bind again: a `Weak<Host>` and the `AgentId`
+(`Rebind`, in `src/host/binding.rs`). The MCP front end binds this way; an
+embedded consumer and the tests may call either.
+
 `Host::agent_ended(agent)` removes that agent's interest wherever it was
 recorded. Releasing one agent leaves another's session and the shared servers
 untouched. When the last interest goes, the workspace leaves the map and a
@@ -95,6 +101,42 @@ addressed to them for the interval, default 30 minutes, `idle_eviction_secs`
 in `structural.toml` — when the last session holding the workspace drops,
 or at shutdown. The next query reacquires what it needs, exactly as a
 fresh bind would ([`observation.md`](observation.md)).
+
+## A call in another workspace
+
+Every tool takes `workspace`: a directory, absolute or relative to the
+session's view, naming another project to answer about for that call.
+`Session::elsewhere` turns it into the session the call runs in, and
+changes nothing else — not the process cwd, not the caller's own session,
+not another caller's default:
+
+- it must exist and be a directory, or the call is an argument error
+  naming `workspace`;
+- its workspace is keyed exactly as at binding (`host::workspace_key`), so
+  a subdirectory of a project lands on that project's workspace with the
+  subdirectory as the view, and `path` and every rendered path are
+  relative to it;
+- a directory under the session's own key reuses the session's workspace
+  with the new view;
+- a session bound through a host (`Host::bind`) binds the **same agent**
+  through the **same host**: the workspace is shared with every other
+  caller on that root, the agent's interest in it lasts until the agent
+  ends, and its servers are released by the idle sweep like any other
+  ([`observation.md`](observation.md)). The bind warms the whole root
+  only when it records the agent's interest for the first time; later
+  calls start only what their own scope routes to, because a warm is a
+  strong signal and warming every slot on every call would keep the
+  sweep from releasing a server no call asks for. A host that is gone or
+  shutting down is an error rather than a new workspace the shutdown
+  sweep has already passed;
+- a session built by `Session::new`, which has no host (in-process
+  callers and tests), gets a fresh `Session::new` for the call, whose
+  servers stop when the call's session drops. The binary's argv path
+  binds through its host like the MCP path.
+
+The first call into a new workspace waits for its servers' startup like
+any first query, reported by the tool-call progress heartbeat
+(`src/tools.rs`).
 
 ## Slots: one server's lifecycle
 
@@ -146,10 +188,11 @@ launcher that will not wake it.
 
 ## The launch path, and why the lock ordering is what it is
 
-`Session::acquire(path)` is one function on purpose: it takes admission,
-resolves the tool's relative `path` against the root, **activates** the
-servers that scope needs, and only then takes the workspace lock for the rest
-of the call.
+`Session::acquire(path, language)` is one function on purpose: it takes
+admission, resolves the tool's relative `path` against the view,
+**activates** the servers that scope and language route to, and only then
+takes the workspace lock for the rest of the call — checking the
+`language` against the slots first thing under it.
 
 `Entry::activate` starts every needed launch *before* waiting on any, so the
 latency is the slowest server rather than the sum. It is the waiting half of
@@ -195,21 +238,46 @@ failing every later call would turn one panic into a dead session.
 
 ## Routing a scope to servers
 
-`serving(slots, scope)` is the single routing rule, in one place because two
-callers need it for different reasons — a launch asks which servers to start,
-a query asks which to send to — and they must never disagree:
+`serving(slots, scope, language)` in `src/workspace/routing.rs` is the
+single routing rule, in one place because two callers need it for
+different reasons — a launch asks which servers to start
+(`Entry::activate`, `Entry::warm`), a query asks which to send to
+(`Workspace::select`, and through it the query boundary) — and they must
+never disagree. If they did, a call could wait for a server it never asks,
+or ask one it never started and be told nothing is running:
 
 - a scope naming an existing **file** selects the slots whose adapter knows
   that file's language;
 - anything else — no scope, a directory, a path that is not a file — selects
   every slot;
 - a file with **no extension** that matches nothing selects every slot, since
-  there is nothing to route by.
+  there is nothing to route by;
+- a **`language`** then keeps the slots one of whose adapter's languages
+  answers to it: the LSP id or an extension, with or without the dot,
+  case-insensitively (`rust`, `python`, `ts`, `.py`;
+  `Language::answers_to`). It is how an extensionless script is routed,
+  and how a bare name is asked of one language's servers only.
+
+`Workspace::check_language` makes a `language` an argument error before
+anything is asked, in `Session::acquire` once the workspace is locked and
+again at the top of `select`: one no slot here answers to lists this
+workspace's languages and, where selection knows, why a server for it is
+not here; one that a file `path` contradicts says which server serves the
+file. Both are decided on **slots** — the plans the tree called for —
+never on what is running, so a call valid while a server is starting stays
+valid once it has started. A tree that grows a language lays out a slot,
+which can make a refused language valid; slots are never removed, so an
+accepted one cannot become invalid.
+
+Without a `language`, a bare name still asks every selected server, and
+same-named definitions in several languages are listed, never picked
+(`resolution.md`).
 
 `Workspace::select` then narrows to the *running* ones and, when none is
-running, produces the error: a file names the servers that should have served
-it and their states; a bare scope names the whole configuration, the config
-error if there is one, and each server's install hint.
+running, produces the error: a file or a language names the servers that
+should have served it and their states; a bare scope names the whole
+configuration, the config error if there is one, and each server's install
+hint.
 
 ## Sharing, in one sentence each
 
@@ -217,6 +285,8 @@ error if there is one, and each server's install hint.
 - Concurrent demand on a cold slot produces exactly one launch, by the slot's
   election rather than by any coarse lock.
 - Releasing one agent's interest leaves the other agent's session working.
+- A call naming another `workspace` binds the same agent through the same
+  host, so it shares that root's processes rather than starting its own.
 - Unrelated roots neither share processes nor serialize.
 - An operation already under way is never cut short by a release: the
   `Session` holds an `Arc` to the entry.

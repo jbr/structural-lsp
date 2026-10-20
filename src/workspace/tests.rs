@@ -133,7 +133,7 @@ fn a_file_no_slot_serves_is_told_what_is_not_here_and_why() {
     std::fs::write(&late, "def a():\n    pass\n").unwrap();
 
     let error = rust
-        .select(Some(&late))
+        .select(Some(&late), None)
         .expect_err("no slot serves python here");
     let text = format!("{error:#}");
     assert!(text.contains("serves `py` files"), "{text}");

@@ -25,9 +25,11 @@ tools; `structural definition choose` runs the same tool once from argv. Behind
 either front end sits a **host**: a process's workspaces, keyed by canonical
 root, each owning the language-server processes for that root and shared by
 every caller bound to it. The MCP front end is one such caller
-(`AgentId::mcp()`); the intended embedded consumer — a harness running
-several agents with different effective working directories — is many, and
-they share servers instead of each launching a set.
+(`AgentId::mcp()`), and a call naming another project in `workspace` binds
+that same caller to it through the same host; the intended embedded
+consumer — a harness running several agents with different effective
+working directories — is many, and they share servers instead of each
+launching a set.
 
 A call arrives at a tool, which acquires the session's workspace for the
 whole call, resolves its target to one *identity* through the shared
@@ -79,7 +81,7 @@ Every other invariant here is a consequence, and they are stated in full in
 | Subsystem | Doc | Governing modules |
 | --- | --- | --- |
 | The correctness contract every other doc inherits | [correctness.md](correctness.md) | `src/lsp/server.rs`, `src/lsp/handle.rs`, `src/tools/resolution.rs` |
-| Host, workspaces, sessions, slots — who owns a server and who may use it | [ownership.md](ownership.md) | `src/host.rs`, `src/host/launch.rs`, `src/host/lifetime.rs`, `src/workspace.rs`, `src/workspace/slot.rs`, `src/session.rs` |
+| Host, workspaces, sessions, slots — who owns a server and who may use it, and how a call is routed to servers | [ownership.md](ownership.md) | `src/host.rs`, `src/host/binding.rs`, `src/host/launch.rs`, `src/host/lifetime.rs`, `src/workspace.rs`, `src/workspace/routing.rs`, `src/workspace/slot.rs`, `src/session.rs` |
 | Shutdown — soft admission, force reach, process trees, signals and EOF | [shutdown.md](shutdown.md) | `src/host.rs`, `src/host/launch.rs`, `src/host/lifetime.rs`, `src/lsp/handle/owner/lifecycle.rs`, `src/main.rs` |
 | The transport — one server on three threads, the backstop, the probe, the bounds | [transport.md](transport.md) | `src/lsp/handle.rs` (+ `src/lsp/handle/`), `src/lsp/framing.rs`, `src/lsp/jsonrpc.rs`, `src/lsp/handlers.rs` |
 | Servers and adapters — what each language server needs said to it, and `structural.toml` | [servers.md](servers.md) | `src/lsp/adapter.rs` (+ `src/lsp/adapter/`), `src/lsp/server.rs`, `src/config.rs` |

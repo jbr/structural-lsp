@@ -10,9 +10,8 @@
 use super::page::{self, Line, PAGE_LINES};
 use super::{file_nodes, symbol_line};
 use crate::discovery::evidence::{FILE_BUDGET, skipped};
-use crate::lsp::adapter::language_for;
 use crate::tools::listing::relative_display;
-use crate::workspace::Workspace;
+use crate::workspace::{Workspace, serving};
 use anyhow::Result;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -25,23 +24,28 @@ enum Route {
     Unserved,
     /// Slots serve it, and none is running: their names and states.
     Down(String),
+    /// Slots serve it, and none of them speaks the call's `language`.
+    Narrowed,
 }
 
 pub(super) fn outline(
     state: &mut Workspace,
     root: &Path,
     directory: &Path,
+    language: Option<&str>,
     number: usize,
 ) -> Result<String> {
     let (files, truncated) = walk(directory);
     let mut served: Vec<(PathBuf, usize)> = Vec::new();
-    let mut unserved: BTreeMap<String, usize> = BTreeMap::new();
-    let mut down: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut left = LeftOut::default();
     for file in files {
-        match route(state, &file) {
+        match route(state, &file, language) {
             Route::Served(index) => served.push((file, index)),
-            Route::Unserved => *unserved.entry(extension(&file)).or_default() += 1,
-            Route::Down(servers) => *down.entry((extension(&file), servers)).or_default() += 1,
+            Route::Unserved => *left.unserved.entry(extension(&file)).or_default() += 1,
+            Route::Down(servers) => {
+                *left.down.entry((extension(&file), servers)).or_default() += 1
+            }
+            Route::Narrowed => *left.narrowed.entry(extension(&file)).or_default() += 1,
         }
     }
 
@@ -103,7 +107,7 @@ pub(super) fn outline(
     };
     page.render(&mut text);
     if number == 1 {
-        text.push_str(&left_out(&unserved, &down, truncated, named));
+        text.push_str(&left_out(&left, language, truncated, named));
     }
     text.push_str(&page.continuation(&format!(
         "{} more file(s)",
@@ -113,17 +117,22 @@ pub(super) fn outline(
 }
 
 /// Which running server outlines `file`, by its extension alone — a file
-/// with no extension is no language's, rather than every server's.
-fn route(state: &Workspace, file: &Path) -> Route {
-    let serving: Vec<usize> = state
-        .slots()
-        .iter()
-        .enumerate()
-        .filter(|(_, slot)| language_for(&slot.adapter().languages(), file).is_some())
-        .map(|(index, _)| index)
-        .collect();
-    if serving.is_empty() {
+/// with no extension is no language's, rather than every server's — and
+/// then by the call's `language`, through the routing rule's own match
+/// (`docs/ownership.md`).
+fn route(state: &Workspace, file: &Path, language: Option<&str>) -> Route {
+    let by_file = |language: Option<&str>| -> Vec<usize> {
+        if file.extension().is_none() {
+            return Vec::new();
+        }
+        serving(state.slots(), Some(file), language)
+    };
+    if by_file(None).is_empty() {
         return Route::Unserved;
+    }
+    let serving = by_file(language);
+    if serving.is_empty() {
+        return Route::Narrowed;
     }
     if let Some(&index) = serving.iter().find(|&&index| state.server(index).is_ok()) {
         return Route::Served(index);
@@ -144,31 +153,36 @@ fn extension(file: &Path) -> String {
         .unwrap_or_else(|| "no extension".to_string())
 }
 
+/// The files a directory outline could not list, by reason: counted by
+/// extension, and for files whose servers are down, by those servers.
+#[derive(Default)]
+struct LeftOut {
+    unserved: BTreeMap<String, usize>,
+    down: BTreeMap<(String, String), usize>,
+    narrowed: BTreeMap<String, usize>,
+}
+
 /// What page 1 says about the files it could not outline: one line per
 /// reason, each capped.
-fn left_out(
-    unserved: &BTreeMap<String, usize>,
-    down: &BTreeMap<(String, String), usize>,
-    truncated: bool,
-    named: &str,
-) -> String {
+fn left_out(left: &LeftOut, language: Option<&str>, truncated: bool, named: &str) -> String {
     let mut text = String::new();
-    if !unserved.is_empty() {
-        let total: usize = unserved.values().sum();
-        let mut kinds: Vec<String> = unserved
-            .iter()
-            .take(5)
-            .map(|(extension, count)| format!("{extension} ({count})"))
-            .collect();
-        if unserved.len() > 5 {
-            kinds.push(format!("and {} more", unserved.len() - 5));
-        }
+    if !left.unserved.is_empty() {
         text.push_str(&format!(
-            "note: {total} file(s) no server here serves are not listed: {}\n",
-            kinds.join(", ")
+            "note: {} file(s) no server here serves are not listed: {}\n",
+            left.unserved.values().sum::<usize>(),
+            kinds(&left.unserved)
         ));
     }
-    for ((extension, servers), count) in down {
+    if let Some(language) = language
+        && !left.narrowed.is_empty()
+    {
+        text.push_str(&format!(
+            "note: {} file(s) outside `language: {language}` are not listed: {}\n",
+            left.narrowed.values().sum::<usize>(),
+            kinds(&left.narrowed)
+        ));
+    }
+    for ((extension, servers), count) in &left.down {
         text.push_str(&format!(
             "note: {count} {extension} file(s) are not listed: {servers}\n"
         ));
@@ -179,6 +193,19 @@ fn left_out(
         ));
     }
     text
+}
+
+/// Extensions with their counts, the first five, then how many more.
+fn kinds(counted: &BTreeMap<String, usize>) -> String {
+    let mut kinds: Vec<String> = counted
+        .iter()
+        .take(5)
+        .map(|(extension, count)| format!("{extension} ({count})"))
+        .collect();
+    if counted.len() > 5 {
+        kinds.push(format!("and {} more", counted.len() - 5));
+    }
+    kinds.join(", ")
 }
 
 /// Every file under `directory`, sorted by path, not descending into

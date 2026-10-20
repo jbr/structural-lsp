@@ -15,7 +15,7 @@ use std::process::Command;
 /// outline for `src/tool.rs` (hierarchical) and `src/flat.rs` (flat), and a
 /// definition pointing at `new` in the file asked about. Everything else is
 /// `null`.
-const MOCK_PY: &str = r#"
+pub(super) const MOCK_PY: &str = r#"
 import json, sys
 
 def read_headers():
@@ -109,7 +109,7 @@ while True:
 "#;
 
 /// A dependency-free module: a struct, and an impl of it.
-const TOOL_RS: &str = "\
+pub(super) const TOOL_RS: &str = "\
 //! A scratch module.
 pub struct Tool {
     name: String,
@@ -144,7 +144,7 @@ impl Tool {
 /// A Python 3 that starts fast enough for the launch backstop; the same
 /// search `src/test_support.rs` makes, which an integration test cannot
 /// reach.
-fn python() -> String {
+pub(super) fn python() -> String {
     let explicit = std::env::var("STRUCTURAL_TEST_PYTHON").ok();
     let candidates = [
         "/opt/homebrew/bin/python3",
@@ -167,7 +167,7 @@ fn python() -> String {
         .expect("a Python 3 to run the mock server; set STRUCTURAL_TEST_PYTHON")
 }
 
-fn quoted(path: &Path) -> String {
+pub(super) fn quoted(path: &Path) -> String {
     path.display()
         .to_string()
         .replace('\\', "\\\\")
@@ -241,6 +241,8 @@ fn show(
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }

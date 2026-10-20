@@ -30,16 +30,25 @@ pub struct Focus {
     pub line: u32,
 }
 
+/// What an anchored target names: the file, the quoted text, the token in
+/// it, and the language the call is narrowed to.
+pub struct Anchored<'a> {
+    pub scope: Option<PathBuf>,
+    pub anchor: &'a str,
+    pub focus: Option<&'a str>,
+    pub language: Option<&'a str>,
+}
+
 /// Sync the anchor's file with the server for its language and locate the
 /// focus in the text just read. The server has been waited for; the sync
 /// precedes any query the caller sends.
-pub fn locate_focus(
-    state: &mut Workspace,
-    root: &Path,
-    scope: Option<PathBuf>,
-    anchor: &str,
-    focus: Option<&str>,
-) -> Result<Focus> {
+pub fn locate_focus(state: &mut Workspace, root: &Path, anchored: Anchored<'_>) -> Result<Focus> {
+    let Anchored {
+        scope,
+        anchor,
+        focus,
+        language,
+    } = anchored;
     let Some(file) = scope else {
         bail!("`anchor` needs `path` naming the file the quoted text is in");
     };
@@ -51,7 +60,7 @@ pub fn locate_focus(
     }
     // The first server serving the file's language; `select` errors when
     // none does.
-    let index = state.select(Some(&file))?[0];
+    let index = state.select(Some(&file), language)?[0];
     let server = state.server_mut(index)?;
     server.sync_owned()?;
     server.wait_ready()?;
@@ -79,11 +88,9 @@ pub fn locate_focus(
 pub(super) fn from_anchor(
     state: &mut Workspace,
     root: &Path,
-    scope: Option<PathBuf>,
-    anchor: &str,
-    focus: Option<&str>,
+    anchored: Anchored<'_>,
 ) -> Result<Resolved> {
-    let located = locate_focus(state, root, scope, anchor, focus)?;
+    let located = locate_focus(state, root, anchored)?;
     let Focus {
         server: index,
         file,

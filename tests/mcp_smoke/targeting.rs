@@ -31,6 +31,8 @@ fn show(
         focus: focus.map(str::to_string),
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }
@@ -49,6 +51,8 @@ fn uses(
         focus: focus.map(str::to_string),
         within: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(state)
 }

@@ -6,8 +6,10 @@
 //! real language server is needed and every launch is recorded.
 
 use super::*;
+use crate::session::Session;
 use fixtures::{alive, asymmetric_fixture, wait_for_launches};
 
+mod binding;
 mod fixtures;
 mod observation;
 mod operator;
@@ -147,7 +149,7 @@ fn a_demand_after_shutdown_launches_nothing_and_leaves_slots_cold() {
             .all(|slot| slot.state().label() == "not started"),
         "every slot is still cold"
     );
-    let error = workspace.select(None).unwrap_err().to_string();
+    let error = workspace.select(None, None).unwrap_err().to_string();
     assert!(error.contains("no language server is running"), "{error}");
 }
 
@@ -252,13 +254,13 @@ fn a_server_that_will_not_start_leaves_the_others_running() {
 
     // Reported for what it would have served, and confined to it.
     let error = workspace
-        .select(Some(&fixture.root.join("src/lib.rs")))
+        .select(Some(&fixture.root.join("src/lib.rs")), None)
         .unwrap_err()
         .to_string();
     assert!(error.contains("rust-analyzer"), "{error}");
     assert!(
         workspace
-            .select(Some(&fixture.root.join("src/helper.py")))
+            .select(Some(&fixture.root.join("src/helper.py")), None)
             .is_ok(),
         "python still routes to the server that is running"
     );
@@ -288,7 +290,7 @@ fn a_query_after_shutdown_reports_rather_than_panics() {
             .all(|slot| slot.state().label() == "not started"),
         "every slot is cold again"
     );
-    let error = workspace.select(None).unwrap_err().to_string();
+    let error = workspace.select(None, None).unwrap_err().to_string();
     assert!(error.contains("no language server is running"), "{error}");
 }
 
@@ -352,7 +354,7 @@ fn releasing_one_agent_leaves_another_working() {
         assert_eq!(remaining.running().count(), launched.len());
         assert!(
             !remaining
-                .select(Some(&workspace.source()))
+                .select(Some(&workspace.source()), None)
                 .unwrap()
                 .is_empty(),
             "the remaining agent still routes a .rs file to a server"
@@ -406,7 +408,11 @@ fn a_broken_config_file_is_reported_not_fatal() {
 
     // The workspace still binds — the MCP surface must come up — and every
     // call says why it cannot answer.
-    let error = session.workspace().select(None).unwrap_err().to_string();
+    let error = session
+        .workspace()
+        .select(None, None)
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("structural.toml"), "{error}");
     assert!(error.contains("cmd"), "{error}");
     host.shutdown();
@@ -427,7 +433,12 @@ fn a_released_agent_leaves_a_live_session_its_servers() {
     // lifecycle policy of unit 2.)
     let held = session.workspace();
     assert_eq!(held.running().count(), launched.len());
-    assert!(!held.select(Some(&workspace.source())).unwrap().is_empty());
+    assert!(
+        !held
+            .select(Some(&workspace.source()), None)
+            .unwrap()
+            .is_empty()
+    );
     drop(held);
     drop(session);
     host.shutdown();

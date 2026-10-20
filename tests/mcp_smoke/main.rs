@@ -14,6 +14,7 @@ mod operator;
 mod outline;
 mod rename;
 mod responsive;
+mod routing;
 mod servers;
 mod shutdown;
 mod staleness;
@@ -70,6 +71,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .expect("show choose succeeds");
@@ -100,6 +103,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .expect("scoped show succeeds");
@@ -115,6 +120,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .expect("show Config succeeds");
@@ -136,6 +143,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .unwrap();
@@ -152,6 +161,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .expect("show Config::new succeeds");
@@ -166,6 +177,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         within: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .expect("uses choose succeeds");
@@ -193,6 +206,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         within: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .expect("uses Config succeeds");
@@ -239,6 +254,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         within: Some("src/lib.rs".to_string()),
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state)
     .expect("uses Config within lib.rs succeeds");
@@ -255,6 +272,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         within: None,
         page: Some(2),
+        workspace: None,
+        language: None,
     }
     .run(&state);
     assert!(
@@ -268,6 +287,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         within: Some("no-such-dir".to_string()),
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state);
     assert!(
@@ -283,6 +304,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         focus: None,
         view: None,
         page: None,
+        workspace: None,
+        language: None,
     }
     .run(&state);
     assert!(escaping.is_err(), "an out-of-root scope must be rejected");
@@ -598,6 +621,8 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
             focus: None,
             view: None,
             page: None,
+            workspace: None,
+            language: None,
         }
         .run(state)
     };

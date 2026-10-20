@@ -34,7 +34,8 @@ pub const APPLY: &str = "apply";
 /// write it. Follows identity rather than text, so re-exports and method
 /// calls move and same-named strangers do not. Target as `definition` does:
 /// by name (`symbol`, bare or qualified) or by quoting source text
-/// (`anchor` in the file `path`, `focus` naming the token).
+/// (`anchor` in the file `path`, `focus` naming the token);
+/// `workspace` and `language` work as they do there.
 ///
 /// `mode = "preview"` (default) shows every changed line and file rename
 /// with a `digest`; `mode = "apply"` with that digest recomputes the edit
@@ -88,6 +89,20 @@ pub struct Rename {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub digest: Option<String>,
+
+    /// Another project to answer about for this call: a directory, absolute
+    /// or relative to the workspace root, whose project's servers answer;
+    /// `path` and the paths in the answer are then relative to it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub workspace: Option<String>,
+
+    /// Ask only the servers for one language, named by id or extension
+    /// (`rust`, `python`, `ts`); without it a name is looked up in every
+    /// language here and same-named definitions in several are listed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub language: Option<String>,
 }
 
 impl ToolMeta for Rename {
@@ -107,6 +122,8 @@ impl ToolMeta for Rename {
                     new_name: Some("pick".to_string()),
                     mode: None,
                     digest: None,
+                    workspace: None,
+                    language: None,
                 },
             },
             Example {
@@ -119,6 +136,8 @@ impl ToolMeta for Rename {
                     new_name: Some("pick".to_string()),
                     mode: Some("apply".to_string()),
                     digest: Some("DIGEST_FROM_PREVIEW".to_string()),
+                    workspace: None,
+                    language: None,
                 },
             },
             Example {
@@ -131,6 +150,8 @@ impl ToolMeta for Rename {
                     new_name: Some("pick".to_string()),
                     mode: None,
                     digest: None,
+                    workspace: None,
+                    language: None,
                 },
             },
         ]
@@ -167,7 +188,9 @@ impl Tool<Session> for Rename {
 
 impl Rename {
     pub fn run(self, session: &Session) -> Result<String> {
-        let mut state = session.acquire(self.path.as_deref())?;
+        let session = session.elsewhere(self.workspace.as_deref())?;
+        let language = crate::tools::given(self.language.as_deref());
+        let mut state = session.acquire(self.path.as_deref(), language)?;
         let mode = match self.mode.as_deref().map(str::trim) {
             None | Some("") | Some(PREVIEW) => Mode::Preview,
             Some(APPLY) => Mode::Apply,
@@ -180,6 +203,7 @@ impl Rename {
             path: self.path.as_deref(),
             anchor: self.anchor.as_deref(),
             focus: self.focus.as_deref(),
+            language,
         };
         let Some(new_name) = self.new_name.as_deref().map(str::trim) else {
             bail!("`rename` needs `new_name`");

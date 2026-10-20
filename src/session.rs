@@ -19,9 +19,17 @@
 //! paths are displayed relative to it. The key and the filter used to be
 //! the same field; separating them is what lets sharing widen without
 //! answers widening (`docs/discovery.md`).
+//!
+//! A call that names another directory in `workspace` runs in a session
+//! of its own for that call ([`Session::elsewhere`]): bound through the
+//! same host as the same agent when this session was bound through one,
+//! otherwise a fresh [`Session::new`]. Nothing about this session changes,
+//! so another caller's default — and this caller's next call — is
+//! untouched (`docs/ownership.md`).
 
-use crate::host::Entry;
+use crate::host::{Entry, Rebind};
 use crate::workspace::{Workspace, canonical_root};
+use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, MutexGuard};
 
@@ -32,6 +40,10 @@ pub struct Session {
     /// answers are filtered against, and what paths are shown relative
     /// to. Always inside the workspace root, or equal to it.
     view: PathBuf,
+    /// How to bind this caller elsewhere through the host it was bound
+    /// through; `None` for a session built by [`Session::new`], which has
+    /// no host.
+    rebind: Option<Rebind>,
 }
 
 impl Session {
@@ -74,7 +86,61 @@ impl Session {
     }
 
     pub(crate) fn bind(workspace: Arc<Entry>, view: PathBuf) -> Self {
-        Self { workspace, view }
+        Self {
+            workspace,
+            view,
+            rebind: None,
+        }
+    }
+
+    /// This session, able to bind its caller elsewhere through a host.
+    pub(crate) fn rebinding(mut self, rebind: Rebind) -> Self {
+        self.rebind = Some(rebind);
+        self
+    }
+
+    /// The session one call runs in: this one, or — when the call names a
+    /// `workspace` — the caller bound to the project that directory
+    /// belongs to, with that directory as its view.
+    ///
+    /// `workspace` is absolute or relative to this session's view, and must
+    /// be a directory. Its workspace is keyed exactly as at binding
+    /// ([`crate::host::workspace_key`]), so a subdirectory of a project
+    /// lands on that project's servers and answers about the
+    /// subdirectory. A directory under this session's own key reuses this
+    /// session's workspace with the new view. Otherwise a session bound
+    /// through a host binds again through it as the same agent — sharing
+    /// that root's servers with every other caller on it, its interest
+    /// lasting until the agent ends — and one built by [`Session::new`]
+    /// gets a fresh `Session::new` for the call.
+    pub fn elsewhere(&self, workspace: Option<&str>) -> Result<Session> {
+        let Some(named) = workspace.map(str::trim).filter(|named| !named.is_empty()) else {
+            return Ok(self.clone());
+        };
+        let joined = self.view.join(named);
+        let Ok(dir) = std::fs::canonicalize(&joined) else {
+            bail!(
+                "`workspace` names `{named}`, which does not exist (from {})",
+                self.view.display()
+            );
+        };
+        if !dir.is_dir() {
+            bail!("`workspace` names `{named}`, which is a file, not a directory");
+        }
+        if dir == self.view {
+            return Ok(self.clone());
+        }
+        if crate::host::workspace_key(&dir) == self.workspace.root() {
+            return Ok(Self {
+                workspace: Arc::clone(&self.workspace),
+                view: dir,
+                rebind: self.rebind.clone(),
+            });
+        }
+        match &self.rebind {
+            Some(rebind) => rebind.bind(&dir),
+            None => Ok(Session::new(dir)),
+        }
     }
 
     /// The caller's working directory. Every user-facing path — a `path`
@@ -91,7 +157,7 @@ impl Session {
     /// and the call goes on to ask for what is available. What is missing is
     /// reported by the query, which knows the scope.
     pub fn activate(&self, scope: Option<&Path>) {
-        self.workspace.activate(scope)
+        self.workspace.activate(scope, None)
     }
 
     /// Start the servers that would answer for `scope` without waiting for
@@ -99,25 +165,31 @@ impl Session {
     /// [`Session::activate`] — which every query goes through — is what
     /// waits (`docs/ownership.md`).
     pub fn warm(&self, scope: Option<&Path>) {
-        self.workspace.warm(scope);
+        self.workspace.warm(scope, None);
     }
 
     /// Take the workspace for one call, starting whatever this call's scope
-    /// needs first.
+    /// and language need first.
     ///
-    /// `path` is a tool's own relative scope, resolved against the root here
-    /// so that starting servers and querying them agree about which servers a
-    /// scope needs. Keeping the ordering inside one function is the point: a
-    /// launch publishes *under* the workspace lock, so a call that took the
-    /// lock and then waited for a launch would be waiting for itself.
-    pub fn acquire(&self, path: Option<&str>) -> anyhow::Result<Operation<'_>> {
+    /// `path` is a tool's own relative scope, resolved against the view
+    /// here, and `language` the tool's narrowing, so that starting servers
+    /// and querying them route through the same rule
+    /// ([`crate::workspace::serving`]). Keeping the ordering inside one
+    /// function is the point: a launch publishes *under* the workspace
+    /// lock, so a call that took the lock and then waited for a launch
+    /// would be waiting for itself. A `language` that no server here
+    /// speaks, or that a file `path` contradicts, is an error before
+    /// anything is asked ([`Workspace::check_language`]).
+    pub fn acquire(&self, path: Option<&str>, language: Option<&str>) -> Result<Operation<'_>> {
         let admission = self.workspace.admit()?;
         // Against the view, not the workspace root: an agent in
         // `crates/alpha` asking for `path: "src"` means its own `src`.
         let scope = path.map(|path| self.view.join(path));
-        self.activate(scope.as_deref());
+        self.workspace.activate(scope.as_deref(), language);
+        let workspace = self.workspace();
+        workspace.check_language(scope.as_deref(), language)?;
         Ok(Operation {
-            workspace: self.workspace(),
+            workspace,
             view: self.view.clone(),
             _admission: admission,
         })
