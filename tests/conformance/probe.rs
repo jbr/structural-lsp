@@ -110,6 +110,8 @@ pub fn uses(state: &structural::session::Session, symbol: &str) -> anyhow::Resul
         path: None,
         anchor: None,
         focus: None,
+        within: None,
+        page: None,
     }
     .run(state)
 }

@@ -129,6 +129,8 @@ fn uses(
         path: path.map(str::to_string),
         anchor: None,
         focus: None,
+        within: None,
+        page: None,
     }
     .run(state)
 }

@@ -33,6 +33,8 @@ fn uses(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
         path: path.map(str::to_string),
         anchor: None,
         focus: None,
+        within: None,
+        page: None,
     }
     .run(state)
     .unwrap_or_else(|error| panic!("uses {symbol} {path:?}: {error:#}"))

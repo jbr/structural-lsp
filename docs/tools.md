@@ -71,10 +71,28 @@ of that file was stale and the call is an **error**, never a listing built on
 it. Hits outside the root are counted, not listed.
 
 References follow **symbol identity, not text**, so renames, re-exports and
-method calls are found and same-named strangers are not. Cap: 100 hits, with
-the remainder reported as a count; ordering is alphabetical by path and there
-is no pagination or reference-side scope yet
-(`../backlog/references-scope-and-paging.md`).
+method calls are found and same-named strangers are not.
+
+Two arguments shape the listing without changing what is found. `within`
+names a file or directory under the root and lists only the references
+inside it; the header counts against the whole (`12 of 271 references · 4
+files within src/agent/`), and a `within` that names nothing on disk is an
+error about `within`. `path` stays the lookup scope, because it also picks
+the server and the candidates — one argument with both meanings could not
+say "find the `Config` in `lib.rs`, list its uses in `src/agent/`".
+
+Files are listed in path order, production before tests, and a listing
+stops at 100 references a page. A capped listing does not end in a bare
+count: the header says which page is shown (`· page 1 of 3`), and the
+remainder is summarized by directory, largest first, one line each
+(`src/agent/ · 120 in 40 files`), at most twelve before the rest is folded
+into one line. Each of those lines is a value for `within`, and the closing
+note names the `page` that continues — counted from 1, as `outline`'s pages
+are, and a page past the end is an error rather than an empty answer. Path order rather than a
+relevance ranking keeps truncation explicable: nothing is dropped by a
+judgment the caller cannot see, and the summary says where the rest is.
+Every file's hits are still read and checked before the window is applied,
+so the test split and the counts cover the whole listing, not the page.
 
 ## `rename`
 

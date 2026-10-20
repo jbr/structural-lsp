@@ -202,8 +202,10 @@ listing; the happy path for `definition` is one header line and the body; notes
 appear only when something is degraded, one line each; caveats live once, in
 the tool descriptions and the server's instructions, not in every result.
 Current bounds: `definition` body 12,000 bytes, listings 200 lines, `references` 100
-hits. Pagination does not exist yet
-(`../backlog/references-scope-and-paging.md`, `../backlog/outline-limits.md`).
+hits. A capped `references`
+listing summarizes its remainder by directory and names the `page` that
+continues it ([tools.md](tools.md)); outline pagination does not exist yet
+(`../backlog/outline-limits.md`).
 
 ## Mutation is the server's edit, applied faithfully
 

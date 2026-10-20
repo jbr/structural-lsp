@@ -70,6 +70,8 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         path: None,
         anchor: None,
         focus: None,
+        within: None,
+        page: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("uses Greet: {error:#}"));

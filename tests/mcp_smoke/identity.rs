@@ -68,6 +68,8 @@ fn exact_hits_are_deduplicated_by_definition_target() {
         path: None,
         anchor: None,
         focus: None,
+        within: None,
+        page: None,
     }
     .run(&state)
     .unwrap_or_else(|error| panic!("uses group_by_target: {error:#}"));

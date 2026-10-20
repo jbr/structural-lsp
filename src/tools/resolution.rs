@@ -577,7 +577,7 @@ pub fn candidate_path_of(target: &DefinitionTarget) -> Result<PathBuf> {
 
 /// Canonicalize a user scope under the fixed root: it must exist and stay
 /// inside the root. Never changes a server's root.
-fn resolve_scope(root: &Path, user_path: &str) -> Result<PathBuf> {
+pub fn resolve_scope(root: &Path, user_path: &str) -> Result<PathBuf> {
     let joined = root.join(user_path);
     let canonical = joined.canonicalize().with_context(|| {
         format!("scope path `{user_path}` does not exist under the workspace root")

@@ -46,6 +46,8 @@ fn uses(
         path: path.map(str::to_string),
         anchor: anchor.map(str::to_string),
         focus: focus.map(str::to_string),
+        within: None,
+        page: None,
     }
     .run(state)
 }

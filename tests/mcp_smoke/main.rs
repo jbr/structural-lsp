@@ -156,6 +156,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         path: None,
         anchor: None,
         focus: None,
+        within: None,
+        page: None,
     }
     .run(&state)
     .expect("uses choose succeeds");
@@ -181,6 +183,8 @@ fn in_process_show_resolves_the_fixture_struct() {
         path: None,
         anchor: None,
         focus: None,
+        within: None,
+        page: None,
     }
     .run(&state)
     .expect("uses Config succeeds");
@@ -208,6 +212,59 @@ fn in_process_show_resolves_the_fixture_struct() {
     assert!(
         !config_uses.contains("pub struct Config"),
         "the declaration is not a reference: {config_uses}"
+    );
+
+    // `within` lists only the references inside it and counts against the
+    // whole; `page` past the end is refused rather than answered empty.
+    // Neither changes which `Config` is found.
+    let config_total: usize = config_uses
+        .lines()
+        .next()
+        .and_then(|header| header.split(" · ").nth(2))
+        .and_then(|counts| counts.split(' ').next())
+        .and_then(|count| count.parse().ok())
+        .unwrap_or_else(|| panic!("a count in the header: {config_uses}"));
+    let scoped = structural::tools::References {
+        symbol: Some("Config".to_string()),
+        path: None,
+        anchor: None,
+        focus: None,
+        within: Some("src/lib.rs".to_string()),
+        page: None,
+    }
+    .run(&state)
+    .expect("uses Config within lib.rs succeeds");
+    assert!(
+        scoped.contains(&format!(
+            "of {config_total} references · 1 file within src/lib.rs\n"
+        )),
+        "{scoped}"
+    );
+    let continued = structural::tools::References {
+        symbol: Some("Config".to_string()),
+        path: None,
+        anchor: None,
+        focus: None,
+        within: None,
+        page: Some(2),
+    }
+    .run(&state);
+    assert!(
+        format!("{:#}", continued.unwrap_err()).contains("`page: 2` is past the end"),
+        "a page past a one-page listing is an error"
+    );
+    let missing = structural::tools::References {
+        symbol: Some("Config".to_string()),
+        path: None,
+        anchor: None,
+        focus: None,
+        within: Some("no-such-dir".to_string()),
+        page: None,
+    }
+    .run(&state);
+    assert!(
+        format!("{:#}", missing.unwrap_err()).contains("`within` names `no-such-dir`"),
+        "a `within` that names nothing is an error about `within`"
     );
 
     // A scope escaping the root is rejected.

@@ -15,10 +15,10 @@ use crate::lsp::references::{group_by_file, parse_references_result};
 use crate::session::Session;
 use crate::tools::listing::{header, location_line, relative_display};
 use crate::tools::resolution::{
-    Found, Resolved, Target, describe, resolve_target, server_named, sync_target,
+    Found, Resolved, Target, describe, resolve_scope, resolve_target, server_named, sync_target,
 };
 use crate::workspace::Workspace;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use mcplease::{
     traits::{Tool, ToolMeta},
     types::{Example, RequestContext, ToolAnnotations},
@@ -29,7 +29,7 @@ use std::path::Path;
 
 mod render;
 use crate::tools::hits::{FileGroup, HitLine, OutlineGap, lines_for};
-use render::render_references;
+use render::{Listing, render_references};
 
 /// Hits listed before the rest is reported as a count.
 const MAX_HITS: usize = 100;
@@ -47,10 +47,12 @@ const MAX_HITS: usize = 100;
 /// Target as `definition` does: by name (`symbol`, bare like `choose` or
 /// qualified like `Config::new`) or by quoting source text (`anchor` in the
 /// file `path`, `focus` naming the token), which reaches locals and
-/// parameters. `path` scopes where the symbol is looked up, not where
-/// references are listed (docs/resolution.md). Tests are split out by a
-/// filename/module heuristic; an inline `#[cfg(test)]` block elsewhere
-/// stays with production code.
+/// parameters. `path` scopes where the symbol is looked up; `within` scopes
+/// which references are listed (docs/tools.md). Files are in path order and
+/// a listing stops at 100 references: what is left is summarized by
+/// directory, largest first, ready to name in `within`, and `page`
+/// continues past it. Tests are split out by a filename/module heuristic;
+/// an inline `#[cfg(test)]` block elsewhere stays with production code.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "references")]
 #[group(skip)]
@@ -83,6 +85,19 @@ pub struct References {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub focus: Option<String>,
+
+    /// A file or directory under the workspace root, relative to it: list
+    /// only the references inside it. Counts say how many there are in all.
+    /// Unlike `path`, it does not change which symbol is found.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub within: Option<String>,
+
+    /// Which page of a listing past 100 references, counting from 1: the
+    /// note at the end of a page names the next.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub page: Option<usize>,
 }
 
 impl ToolMeta for References {
@@ -99,6 +114,19 @@ impl ToolMeta for References {
                     path: None,
                     anchor: None,
                     focus: None,
+                    within: None,
+                    page: None,
+                },
+            },
+            Example {
+                description: "List only the uses inside one directory (Rust)",
+                item: Self {
+                    symbol: Some("Config::new".to_string()),
+                    path: None,
+                    anchor: None,
+                    focus: None,
+                    within: Some("src/agent".to_string()),
+                    page: None,
                 },
             },
             Example {
@@ -108,6 +136,8 @@ impl ToolMeta for References {
                     path: Some("helper.py".to_string()),
                     anchor: None,
                     focus: None,
+                    within: None,
+                    page: None,
                 },
             },
             Example {
@@ -117,6 +147,8 @@ impl ToolMeta for References {
                     path: Some("main.ts".to_string()),
                     anchor: Some("count = identity(count);".to_string()),
                     focus: Some("identity".to_string()),
+                    within: None,
+                    page: None,
                 },
             },
         ]
@@ -152,15 +184,47 @@ impl References {
             anchor: self.anchor.as_deref(),
             focus: self.focus.as_deref(),
         };
+        // Checked before resolution, so a mistyped scope is reported as
+        // itself rather than after a query it could not narrow.
+        let within = self
+            .within
+            .as_deref()
+            .map(|within| {
+                resolve_scope(&root, within).with_context(|| {
+                    format!("`within` names `{within}`, which is not a file or directory under the workspace root")
+                })
+            })
+            .transpose()?;
+        let page = self.page.unwrap_or(1);
+        if page == 0 {
+            bail!("`page` counts from 1");
+        }
+        let window = Window {
+            within: within.as_deref(),
+            page,
+        };
         match resolve_target(&mut state, target)? {
             Resolved::Listed(listing) => Ok(listing),
-            Resolved::One(found) => references_of(&mut state, &root, &found),
+            Resolved::One(found) => references_of(&mut state, &root, &found, window),
         }
     }
 }
 
+/// Which of an identity's references are listed: those inside `within`,
+/// one page of them.
+#[derive(Clone, Copy)]
+struct Window<'a> {
+    within: Option<&'a Path>,
+    page: usize,
+}
+
 /// The references of one identity, rendered.
-fn references_of(state: &mut Workspace, root: &Path, found: &Found) -> Result<String> {
+fn references_of(
+    state: &mut Workspace,
+    root: &Path,
+    found: &Found,
+    window: Window<'_>,
+) -> Result<String> {
     let (_, synced) = sync_target(state, root, found)?;
     let server = server_named(state, &found.identity.server)?;
     let target = &found.target;
@@ -184,9 +248,17 @@ fn references_of(state: &mut Workspace, root: &Path, found: &Found) -> Result<St
             server.name()
         )
     })?;
-    let grouped = group_by_file(hits, root, &target.uri, target.selection_range);
+    let mut grouped = group_by_file(hits, root, &target.uri, target.selection_range);
+    let overall = grouped.total();
+    if let Some(within) = window.within {
+        grouped.files.retain(|file| file.path.starts_with(within));
+    }
     let total = grouped.total();
     let file_count = grouped.files.len();
+    let pages = total.div_ceil(MAX_HITS).max(1);
+    if window.page > pages {
+        bail!("`page: {}` is past the end: this listing has {pages} page(s)", window.page);
+    }
 
     let mut production = Vec::new();
     let mut tests = Vec::new();
@@ -232,15 +304,32 @@ fn references_of(state: &mut Workspace, root: &Path, found: &Found) -> Result<St
             grouped.out_of_root
         ));
     }
-    Ok(render_references(
-        &header,
+    let within_display = window.within.map(|within| scope_display(root, within));
+    Ok(render_references(&Listing {
+        header: &header,
         total,
-        file_count,
-        &production,
-        &tests,
-        MAX_HITS,
-        &notes,
-    ))
+        files: file_count,
+        within: within_display
+            .as_deref()
+            .map(|display| (display, overall)),
+        production: &production,
+        tests: &tests,
+        page: window.page,
+        cap: MAX_HITS,
+        notes: &notes,
+    }))
+}
+
+/// A scope as the caller would type it back: root-relative, a directory
+/// ending in `/`.
+fn scope_display(root: &Path, scope: &Path) -> String {
+    let relative = relative_display(root, scope);
+    let relative = if relative.is_empty() { ".".to_string() } else { relative };
+    if scope.is_dir() && !relative.ends_with('/') {
+        format!("{relative}/")
+    } else {
+        relative
+    }
 }
 
 #[cfg(test)]
