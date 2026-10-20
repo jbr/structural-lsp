@@ -36,9 +36,13 @@ use std::path::{Path, PathBuf};
 /// than a project anyone meant.
 const ANCESTOR_LIMIT: usize = 64;
 
-/// Directories whose presence marks a version-control root. The **nearest**
+/// Entries whose presence marks a version-control root. The **nearest**
 /// one wins, so a submodule or a nested checkout is its own span rather
-/// than its parent's.
+/// than its parent's. Present as a file or a directory: a git worktree and
+/// a submodule hold a `.git` *file* naming the real repository, and a
+/// worktree nested inside its own repository — where Claude Code puts an
+/// isolated one, under `.claude/worktrees/` — would otherwise be read as
+/// part of the outer checkout and keyed to its root.
 const VCS_DIRECTORIES: &[(&str, &str)] = &[
     (".git", "git"),
     (".hg", "mercurial"),
@@ -169,7 +173,7 @@ impl Ancestry {
             if vcs.is_none()
                 && let Some((_, kind)) = VCS_DIRECTORIES
                     .iter()
-                    .find(|(name, _)| directory.join(name).is_dir())
+                    .find(|(name, _)| directory.join(name).exists())
             {
                 vcs = Some(Vcs {
                     path: directory.to_path_buf(),

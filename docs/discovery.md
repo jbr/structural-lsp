@@ -73,7 +73,12 @@ working directory is its own root.
   its own has two project roots. Answering with the repository would fuse
   unrelated projects into one server told to index everything.
 - **The nearest repository wins,** so a submodule or nested checkout is
-  its own span.
+  its own span. A repository is a `.git` (or `.hg`, `.svn`, `.jj`) entry of
+  either kind: a git worktree and a submodule hold a `.git` *file*, and a
+  worktree nested inside its own repository — Claude Code's isolated
+  worktrees live under `.claude/worktrees/` — read only directories as
+  repositories would be keyed to the outer checkout's root, where its
+  servers index the outer tree and never its own files.
 
 `Root::reason` carries which of these applied, and `explain()` renders it
 as a line. `host::workspace_key` is what calls it.

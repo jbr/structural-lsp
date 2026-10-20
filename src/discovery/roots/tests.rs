@@ -148,6 +148,36 @@ fn the_nearest_repository_wins_so_a_submodule_is_its_own_span() {
 }
 
 #[test]
+fn a_worktree_nested_in_its_own_repository_is_its_own_span() {
+    // The outer checkout's `.git` is a directory; the worktree's is a file
+    // naming it, as `git worktree add` writes it.
+    let root = tree(
+        "worktree",
+        &[".git", ".claude/worktrees/agent/src"],
+        &["Cargo.toml", ".claude/worktrees/agent/Cargo.toml"],
+    );
+    std::fs::write(
+        root.join(".claude/worktrees/agent/.git"),
+        "gitdir: ../../../.git/worktrees/agent\n",
+    )
+    .unwrap();
+
+    let worktree = root.join(".claude/worktrees/agent");
+    let chosen = Ancestry::gather(&worktree.join("src")).root();
+    assert_eq!(chosen.path, worktree);
+    assert_eq!(
+        chosen.reason,
+        RootReason::Marker {
+            file: "Cargo.toml",
+            bounded_by: Some(worktree.clone()),
+        },
+        "a `.git` file bounds the worktree's span as a `.git` directory would"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn a_directory_of_scripts_is_its_own_root() {
     let root = tree("scripts", &["bin"], &["bin/deploy.sh", "bin/backup.sh"]);
 
