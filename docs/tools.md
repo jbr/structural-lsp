@@ -10,7 +10,7 @@ resolution pipeline ([resolution.md](resolution.md)), so a target that
 
 | argument | meaning |
 | --- | --- |
-| `symbol` | the name, bare (`choose`) or qualified by its container (`Config::new`, `Config.doubled`). Exact match on the name. |
+| `symbol` | the name, bare (`choose`) or qualified by its container or module (`Config::new`, `Config.doubled`, `listing::render`). Exact match on the name; the qualifier ends a container or the file's path ([resolution.md](resolution.md#qualified-names)). |
 | `path` | a file or directory under the root, relative to it. A file nominates `symbol` from that file's own outline rather than the workspace index, and picks its language server; a directory narrows the index. With `anchor`, the file the quoted text is in. |
 | `anchor` | source text quoted verbatim from `path`, occurring exactly once in it — the way to reach a local, a call site, an expression. |
 | `focus` | the token within `anchor` that is meant, occurring once in the anchor as a whole identifier; the whole anchor when absent. |

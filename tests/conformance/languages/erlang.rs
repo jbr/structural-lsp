@@ -16,10 +16,10 @@
 //! separator, so `helper:choose` parses as a single bare name containing a
 //! colon, which no index entry can match exactly. The probes therefore ask
 //! `helper::choose`: the only spelling that reaches the qualifier filter at
-//! all, and one whose qualifier — a module rather than a type — is the shape
-//! `backlog/module-path-qualifiers.md` records as unable to resolve when the
-//! server reports no `containerName`. Whether erlang_ls reports the module
-//! as the container is what these two probes measure; a `no` here is the
+//! all, and one whose qualifier — a module rather than a type — the
+//! candidate's file path confirms when the server reports no
+//! `containerName` (`docs/resolution.md`). Whether a candidate reaches the
+//! qualifier at all is what these two probes measure; a `no` here is the
 //! finding, not a harness fault.
 //!
 //! The same splitting rules out asking by arity. Erlang names a function

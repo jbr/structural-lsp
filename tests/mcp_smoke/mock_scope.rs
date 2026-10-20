@@ -294,7 +294,8 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     assert_eq!(
         wrong,
         "no 'new' is in a container ending in `Missing`; the 'new' candidates:\n\
-         function new · src/tool.rs:7 · in Tool\n"
+         function new · src/tool.rs:7 · in Tool\n\
+         note: a qualifier matches the end of a candidate's container (the type, class or module enclosing it) or of its file's path, directories then file name (`tools::listing::render`); segments are names, so `crate`, `self` and `super` match nothing\n"
     );
 
     // A flat outline carries no range that names each symbol, so its
@@ -311,7 +312,8 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     assert_eq!(
         flat_wrong,
         "no 'new' is in a container ending in `Other`; the 'new' candidates:\n\
-         function new · src/flat.rs:7 · in Tool\n"
+         function new · src/flat.rs:7 · in Tool\n\
+         note: a qualifier matches the end of a candidate's container (the type, class or module enclosing it) or of its file's path, directories then file name (`tools::listing::render`); segments are names, so `crate`, `self` and `super` match nothing\n"
     );
 
     // A stale outline — the queried name advertised over a range that holds

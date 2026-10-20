@@ -188,15 +188,13 @@ candidates.
 
 ## Qualified names
 
-`Config::new`, `Config.doubled`, `pkg/Greet`. The **last** segment is the
-bare name sent to the index; the earlier segments are a *filter* over the
-exact candidates by the container the server reported — the `containerName`
-of an index candidate, or the enclosing symbols a file's own outline names
-([Nomination](#nomination)) — not language-level path resolution. rust-analyzer and pyright report the impl or
-class type as a method's container (`new` → `Config`) and report **nothing**
-for a free function, so a module-path qualifier (`project::project_with`)
-cannot resolve (`../backlog/module-path-qualifiers.md`). A qualifier matches
-when the container's own segments end with it.
+`Config::new`, `Config.doubled`, `pkg/Greet`, `tools::listing::render`. The
+**last** segment is the bare name sent to the index; the earlier segments
+are a *filter* over the exact candidates by where each one is said to be —
+not language-level path resolution. Implemented in
+`src/tools/resolution/qualify.rs` (+ `qualify/placed.rs`,
+`qualify/nesting.rs`). A qualifier matches a place when that place's own
+segments end with it; `::`, `.` and `/` all separate segments.
 
 Because the qualifier filters the pool it was given, a common method name
 whose pool is the bounded `workspace/symbol` response can fail to resolve
@@ -204,29 +202,90 @@ even though the symbol exists — in a bare-name or directory scope. A `path`
 naming a file nominates from that file's own outline instead (see
 [Nomination](#nomination)), so the qualifier narrows the file's own symbols.
 
-A container has **more than one source**, and either confirming the
+### Where a candidate is said to be
+
+A container has **more than one source**, and any one confirming the
 qualifier is enough — they are alternative places for a server to say the
 same thing, not claims that have to agree:
 
 - `containerName` on the index candidate, or the enclosing symbols a file's
-  own outline names;
+  own outline names. rust-analyzer and pyright report the impl or class
+  type as a method's container (`new` → `Config`) and report **nothing**
+  for a free function, even one inside `mod tests`;
 - the **name the server advertised**, when that name's last segment is the
   one being resolved. `SymbolInformation.name` is not specified to be a
   bare identifier and gopls puts the receiver in it — `Config.Doubled` from
   the index, `(Config).Doubled` from an outline — so the earlier segments
   are that server's spelling of the container. Only the ends of a segment
   are trimmed of punctuation, never the middle, and a name with no
-  separator in it is never reinterpreted.
+  separator in it is never reinterpreted;
+- the **outline of the candidate's file**, for an index candidate whose
+  server reported no container: the file is synced, its `documentSymbol`
+  read the way a file scope reads it, the candidate's own range checked
+  against the text just read (a mismatch is an error, as in the navigate
+  step), and the outline symbol whose range starts at the candidate's name
+  says what encloses it — `tests` for a helper in `mod tests`. This makes a
+  qualifier mean the same thing with and without a `path` naming the file.
+  It is asked only when it could change the answer: the qualifier already
+  reaches the candidate's file or directory and the outline says whether
+  the candidate is at its top, or the file's text contains the qualifier's
+  last segment, which every container an outline contributes is read from.
+  A candidate whose server reported a container is asked only when that
+  container ends the way the qualifier does and the qualifier is longer;
+- the **file the symbol is in**: its directories under the caller's view,
+  then its stem — `listing::render` and `tools::listing::render` for
+  `src/tools/listing.rs`, `helper.choose` for `src/helper.gleam`,
+  `Config.doubled` for `Config.qml` — alone, or followed by a container
+  from the sources above (`config::Config::new`, `listing.Table.render`).
+  gleam and qmlls report no container from any other source, because the
+  module is the file and there is no enclosing node to report. The path is
+  read from the candidate's own location, so it is a fact about where the
+  symbol is rather than a guess about what it is called; a file outside the
+  view contributes its stem only;
+- the **directory the file is in**, the same way: the module of a `mod.rs`,
+  an `__init__.py` or a Go package, and the place a parent module
+  re-exports from (`host::reduce` for `src/host/mod.rs`, `pkg.setup` for
+  `pkg/__init__.py`).
 
-- the **file the symbol is in**, for languages whose module is a file:
-  `helper.choose` in `src/helper.gleam`, `Config.doubled` in `Config.qml`.
-  gleam and qmlls nominate a symbol and report no container from any other
-  source, because there is no enclosing node to report. The stem is read
-  from the candidate's own path, so it is a fact about where the symbol is
-  rather than a guess about what it is called, and it is one source among
-  several that never overrides another.
+### Closest match wins
 
-That second source also decides what counts as an **exact** candidate: a
+Not every match names the candidate equally. In order:
+
+1. the qualifier ends the candidate's **place** — its file path followed by
+   its container, or its file path when nothing in the file encloses it
+   (a reported container alone counts: it is a suffix of that);
+2. the qualifier ends the **file**, and the candidate is inside something
+   there (`listing::new` for a method in `listing.rs`);
+3. the qualifier ends the **directory** followed by the container, or the
+   directory when nothing encloses the candidate;
+4. the qualifier ends the directory, and the candidate is inside something.
+
+Only the candidates in the closest rank present are kept; several in that
+rank are listed as ambiguous, never picked among. So `tools::listing::render`
+names the function at the top of `listing.rs` and not a same-named helper
+in its `mod tests` (`listing::tests::render` names that one), and
+`views::run` names the `run` in `views.rs` rather than those in
+`views/*.rs`.
+
+What this costs, measured on this repository's own tree (every free
+function, asked by its last one and two module segments, under a static
+model of the rules above): every function asked by its own module path
+resolves, except ten one-segment `tests::<helper>` queries where several
+test modules define the same helper — listed, and resolved by one more
+segment. The directory rank is the loose one: a qualifier naming a
+function's **parent** directory instead of its file
+(`tools::render_not_found` for `tools/listing.rs`) answers with that
+function when nothing is named more closely — 460 of 502 such queries
+resolve that way, 34 list several candidates, and 8 are answered by a
+closer match in another file. The answer's header shows the file, so the
+caller sees which module answered.
+
+A qualifier that matches nothing lists the candidates with the container
+each was found in — the outline's, when it was asked — and a `note:` saying
+what a qualifier is matched against. Segments are names: a path keyword
+(`crate::`, `self::`, `super::`) matches nothing.
+
+The advertised name also decides what counts as an **exact** candidate: a
 name matches when its last segment is the name asked for. The identity that
 results carries the name being resolved rather than the one advertised,
 because that is what the file's own text holds at the range and what a

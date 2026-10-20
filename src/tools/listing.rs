@@ -210,8 +210,19 @@ pub fn render_unqualified(
     if candidates.len() > MAX_LISTED {
         text.push_str(&format!("… {} more\n", candidates.len() - MAX_LISTED));
     }
+    text.push_str(QUALIFIER_RULE);
     text
 }
+
+/// What a qualifier is matched against, for the listing where it matched
+/// nothing: the caller sees each candidate's file and container and can
+/// rewrite the qualifier from them (`docs/resolution.md`). Path keywords are
+/// named because a qualifier copied from a `use` line starts with one, and
+/// matching is by name.
+const QUALIFIER_RULE: &str = "note: a qualifier matches the end of a candidate's container (the \
+     type, class or module enclosing it) or of its file's path, directories then file name \
+     (`tools::listing::render`); segments are names, so `crate`, `self` and `super` match \
+     nothing\n";
 
 /// One line per distinct definition, with its signature when the server's
 /// outline gave one. Nothing is picked. The server is named only when the

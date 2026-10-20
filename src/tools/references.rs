@@ -57,8 +57,8 @@ const MAX_HITS: usize = 100;
 #[serde(rename = "references")]
 #[group(skip)]
 pub struct References {
-    /// The symbol's name: bare (`choose`) or qualified by its container
-    /// (`Config::new`). Exact match. Start here:
+    /// The symbol's name: bare (`choose`) or qualified by its container or
+    /// module (`Config::new`, `listing::render`). Exact match. Start here:
     /// `{"symbol": "Config::new"}`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,

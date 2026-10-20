@@ -9,6 +9,7 @@ mod doc_links;
 mod file_scope;
 mod identity;
 mod mock_scope;
+mod module_paths;
 mod outline;
 mod rename;
 mod responsive;

@@ -52,7 +52,7 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// `related-tests` (rust-analyzer, with the cargo command for each).
 ///
 /// Target by name (`symbol`, bare like `choose` or qualified by its
-/// container like `Config::new`) or by quoting source text (`anchor` in the
+/// container or module like `Config::new` or `listing::render`) or by quoting source text (`anchor` in the
 /// file `path`, `focus` naming the token meant), which reaches anything a
 /// name cannot: locals, call sites, expressions. `anchor` takes quoted
 /// source instead of a line number because the model's snapshot of a file
@@ -68,9 +68,9 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 #[serde(rename = "definition")]
 #[group(skip)]
 pub struct Definition {
-    /// The symbol's name: bare (`choose`) or qualified by its container
-    /// (`Config::new`). Exact match. Start here: `{"symbol": "Config::new"}`
-    /// is the whole happy path.
+    /// The symbol's name: bare (`choose`) or qualified by its container or
+    /// module (`Config::new`, `listing::render`). Exact match. Start here:
+    /// `{"symbol": "Config::new"}` is the whole happy path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
 

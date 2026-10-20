@@ -1,13 +1,23 @@
-//! Qualified names: `Config::new`, `Config.doubled`, `pkg/Greet`. The last
-//! segment is the bare name the symbol index is asked for; the earlier
-//! segments are a *filter* over the exact candidates by `containerName`,
-//! not language-level path resolution. rust-analyzer and pyright report
-//! the impl or class type as the container of a method (`new` → `Config`)
-//! and nothing for free functions; a qualifier matches when the
-//! container's own segments end with it.
+//! Qualified names: `Config::new`, `Config.doubled`, `pkg/Greet`,
+//! `listing::render`. The last segment is the bare name the symbol index is
+//! asked for; the earlier segments are a *filter* over the exact candidates,
+//! not language-level path resolution. A qualifier matches when it ends one
+//! of the places a candidate is said to be: the container its server
+//! reported, the items its file's outline encloses it in, its file's path,
+//! or the directory its file is in. Only the candidates it names most
+//! closely are kept ([`Closeness`]), so a qualifier that names a file's
+//! top-level function is not shared with a same-named method or test helper
+//! inside that file (`docs/resolution.md`).
 
 use crate::lsp::definition::Candidate;
+use crate::workspace::Workspace;
 use anyhow::{Result, bail};
+use std::path::Path;
+
+mod nesting;
+mod placed;
+
+pub use placed::{Closeness, Placed};
 
 /// A parsed `symbol` argument.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,221 +118,70 @@ pub fn container_matches(container: Option<&str>, qualifiers: &[String]) -> bool
             .all(|(part, qualifier)| part == qualifier)
 }
 
-/// Split exact candidates into those whose container matches the
-/// qualifiers and those whose does not.
+/// Split exact candidates into those the qualifier selects and those it
+/// does not.
 ///
-/// A container has more than one possible source and servers disagree about
-/// which they use (`docs/resolution.md`): the `containerName` field, or the
-/// server's own spelling of the symbol's name. Either confirming the
-/// qualifier is enough — they are alternative places to say the same thing,
-/// not claims that have to agree — and a candidate no source confirms is
-/// listed rather than silently dropped, as before.
+/// rust-analyzer reports no container for a free function, even one inside
+/// `mod tests`, so for such a candidate the file's outline is asked what
+/// encloses it (the `nesting` module) whenever that could change the
+/// answer: the qualifier already ends its file or directory and the outline
+/// says whether it sits at the top of that file or inside something there,
+/// or the file's text holds the qualifier's last segment and the outline
+/// could place it under that name. A candidate whose server reported a
+/// container is asked only when that container ends the way the qualifier
+/// does and the qualifier is longer ([`Placed::asks_outline`]). A `path`
+/// naming a file nominated from that outline already (`outlined`), so its
+/// candidates carry their nesting.
 pub fn filter(
+    state: &mut Workspace,
+    root: &Path,
     candidates: Vec<Candidate>,
     qualified: &Qualified,
-) -> (Vec<Candidate>, Vec<Candidate>) {
-    candidates.into_iter().partition(|candidate| {
-        let sources = [
-            candidate.info.container_name.clone(),
-            advertised_container(&candidate.info.name, &qualified.name),
-            file_container(candidate),
-        ];
-        sources
-            .iter()
-            .any(|source| container_matches(source.as_deref(), &qualified.qualifiers))
-    })
+    outlined: bool,
+) -> Result<(Vec<Candidate>, Vec<Candidate>)> {
+    if qualified.qualifiers.is_empty() {
+        return Ok((candidates, Vec::new()));
+    }
+    let mut placed = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        let mut place = Placed::new(root, candidate);
+        if !outlined
+            && place.asks_outline(qualified, || {
+                nesting::mentioned(&place.candidate, qualified)
+            })
+        {
+            let found = nesting::nesting_of(state, root, &place.candidate, &qualified.name)?;
+            place.set_nesting(found);
+        }
+        placed.push(place);
+    }
+    Ok(partition(placed, qualified))
 }
 
-/// The container a symbol's **file** gives it, for languages whose module
-/// is a file: `helper.choose` in `src/helper.gleam`, `Config.doubled` in
-/// `Config.qml`.
+/// Keep the candidates the qualifier names most closely ([`Closeness`]); the
+/// rest are the unqualified listing.
 ///
-/// gleam and qmlls nominate a symbol from a file's outline and report no
-/// container from any other source, because there is no enclosing node to
-/// report — the module is the file, and the file name is not in the reply.
-/// The stem is read from the candidate's own path rather than inferred, so
-/// this is a fact about where the symbol is, not a guess about what it is
-/// called.
-///
-/// It is offered as one source among several and never overrides another.
-/// A language whose files are not modules gains a qualifier that happens to
-/// work; a query where a file and a type share a name matches both and is
-/// listed as ambiguous, which is the contract everywhere else
-/// (`docs/correctness.md`).
-fn file_container(candidate: &Candidate) -> Option<String> {
-    candidate
-        .canonical_path
-        .as_ref()?
-        .file_stem()?
-        .to_str()
-        .map(str::to_string)
+/// A closer match settles the query rather than sharing a listing with a
+/// looser one: `listing::render` means the function at the top of
+/// `listing.rs`, not a same-named method or test helper inside it, and
+/// `views::run` means the one in `views.rs`, not those in `views/*.rs` —
+/// measured on this repository, keeping every match together turned
+/// `views::run` from one answer into four (`docs/resolution.md`). Several
+/// candidates equally close are all kept and listed as ambiguous
+/// downstream; nothing here picks among them.
+pub fn partition(placed: Vec<Placed>, qualified: &Qualified) -> (Vec<Candidate>, Vec<Candidate>) {
+    let closest = placed
+        .iter()
+        .filter_map(|place| place.closeness(qualified))
+        .min();
+    let (kept, rest): (Vec<Placed>, Vec<Placed>) = placed
+        .into_iter()
+        .partition(|place| closest.is_some() && place.closeness(qualified) == closest);
+    (
+        kept.into_iter().map(|place| place.candidate).collect(),
+        rest.into_iter().map(|place| place.candidate).collect(),
+    )
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn names_split_on_any_qualifier_separator() {
-        let parsed = parse("Config::new").unwrap();
-        assert_eq!(parsed.name, "new");
-        assert_eq!(parsed.qualifiers, ["Config"]);
-        assert_eq!(parse("Config.doubled").unwrap().qualifiers, ["Config"]);
-        assert_eq!(parse("a::b.c/d").unwrap().qualifiers, ["a", "b", "c"]);
-        assert_eq!(
-            parse("  choose ").unwrap(),
-            Qualified {
-                name: "choose".into(),
-                qualifiers: vec![]
-            }
-        );
-        assert_eq!(parse("Config::new").unwrap().display(), "Config::new");
-        assert!(parse("").is_err());
-        assert!(parse("Config::").is_err());
-        assert!(parse("::new").is_err());
-    }
-
-    /// gopls spells the receiver into the name: `Config.Doubled` from the
-    /// index, `(Config).Doubled` from an outline. Both name `Doubled` and
-    /// both say its container is `Config`.
-    #[test]
-    fn a_server_may_spell_the_container_into_the_name() {
-        for advertised in ["Config.Doubled", "(Config).Doubled", "Config::Doubled"] {
-            assert!(advertises(advertised, "Doubled"), "{advertised}");
-            assert_eq!(
-                advertised_container(advertised, "Doubled").as_deref(),
-                Some("Config"),
-                "{advertised}"
-            );
-        }
-        // Several segments are kept in order, so a module path qualifies
-        // the same way a type does.
-        assert_eq!(
-            advertised_container("pkg/inner.Doubled", "Doubled").as_deref(),
-            Some("pkg::inner")
-        );
-    }
-
-    /// The last segment must be the name asked for, and a name with no
-    /// separator is never reinterpreted.
-    #[test]
-    fn only_the_last_segment_resolves_and_a_plain_name_is_untouched() {
-        assert!(advertises("Doubled", "Doubled"));
-        assert_eq!(advertised_container("Doubled", "Doubled"), None);
-        // The name is the container's, not the symbol's.
-        assert!(!advertises("Config.Doubled", "Config"));
-        // A different trailing segment is a different symbol.
-        assert!(!advertises("Config.Other", "Doubled"));
-        // Interior punctuation is left alone: only the ends are trimmed.
-        assert_eq!(
-            advertised_container("a-b.Doubled", "Doubled").as_deref(),
-            Some("a-b")
-        );
-    }
-
-    /// Either source confirming the qualifier is enough, because they are
-    /// alternative places to say the same thing: ty reports no container at
-    /// all, gopls reports the package in `containerName` and the type in
-    /// the name.
-    #[test]
-    fn either_container_source_satisfies_the_qualifier() {
-        // From JSON, as the rest of the crate builds these: the struct
-        // literal would name a deprecated field.
-        let candidate = |name: &str, container: Option<&str>| Candidate {
-            server: "s".into(),
-            info: serde_json::from_value(serde_json::json!({
-                "name": name,
-                "kind": 6,
-                "location": {
-                    "uri": "file:///x",
-                    "range": {
-                        "start": { "line": 0, "character": 0 },
-                        "end": { "line": 0, "character": 0 }
-                    }
-                },
-                "containerName": container,
-            }))
-            .expect("a SymbolInformation"),
-            canonical_path: None,
-            exact: true,
-        };
-        let asked = parse("Config::Doubled").unwrap();
-
-        // The field says it (pyright's shape).
-        let (kept, _) = filter(vec![candidate("Doubled", Some("Config"))], &asked);
-        assert_eq!(kept.len(), 1, "containerName confirms it");
-
-        // The name says it and the field names the package (gopls's shape).
-        let (kept, _) = filter(
-            vec![candidate("Config.Doubled", Some("example.com/scratch"))],
-            &asked,
-        );
-        assert_eq!(kept.len(), 1, "the advertised name confirms it");
-
-        // Neither says it: listed, not silently dropped.
-        let (kept, unqualified) = filter(vec![candidate("Doubled", Some("Other"))], &asked);
-        assert!(kept.is_empty());
-        assert_eq!(unqualified.len(), 1);
-    }
-
-    /// gleam and qmlls report no container at all: the module is the file,
-    /// and the file name is not in the reply.
-    #[test]
-    fn a_module_that_is_a_file_qualifies_from_the_path() {
-        let candidate = |name: &str, path: &str| Candidate {
-            server: "s".into(),
-            info: serde_json::from_value(serde_json::json!({
-                "name": name,
-                "kind": 12,
-                "location": {
-                    "uri": "file:///x",
-                    "range": {
-                        "start": { "line": 0, "character": 0 },
-                        "end": { "line": 0, "character": 0 }
-                    }
-                },
-            }))
-            .expect("a SymbolInformation"),
-            canonical_path: Some(std::path::PathBuf::from(path)),
-            exact: true,
-        };
-
-        let (kept, _) = filter(
-            vec![candidate("choose", "/ws/src/helper.gleam")],
-            &parse("helper.choose").unwrap(),
-        );
-        assert_eq!(kept.len(), 1, "the module is the file");
-
-        let (kept, _) = filter(
-            vec![candidate("doubled", "/ws/Config.qml")],
-            &parse("Config.doubled").unwrap(),
-        );
-        assert_eq!(kept.len(), 1, "the component is the file");
-
-        // Another file's symbol is not in this module.
-        let (kept, unqualified) = filter(
-            vec![candidate("choose", "/ws/src/other.gleam")],
-            &parse("helper.choose").unwrap(),
-        );
-        assert!(kept.is_empty());
-        assert_eq!(unqualified.len(), 1);
-    }
-
-    #[test]
-    fn a_qualifier_is_a_suffix_of_the_container() {
-        let q = |parts: &[&str]| parts.iter().map(|p| p.to_string()).collect::<Vec<_>>();
-        assert!(container_matches(Some("Config"), &q(&["Config"])));
-        assert!(container_matches(
-            Some("crate::config::Config"),
-            &q(&["Config"])
-        ));
-        assert!(container_matches(
-            Some("config::Config"),
-            &q(&["config", "Config"])
-        ));
-        assert!(!container_matches(Some("Other"), &q(&["Config"])));
-        assert!(!container_matches(None, &q(&["Config"])));
-        assert!(container_matches(None, &q(&[])));
-        assert!(!container_matches(Some("Config"), &q(&["mod", "Config"])));
-    }
-}
+mod tests;

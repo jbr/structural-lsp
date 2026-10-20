@@ -15,9 +15,10 @@
 //! server also answers `textDocument/declaration`, agreement between the
 //! two keeps the answer at a candidate that is the definition, instead of
 //! following the hop to the declaration's bare signature (the
-//! `definition_site` rule, below).
-//! qualified name (`Config::new`) filters the exact candidates by the
-//! container the server reported ([`qualify`]); an anchor skips the index
+//! `definition_site` rule, below). A
+//! qualified name (`Config::new`, `listing::render`) filters the exact
+//! candidates by the container the server reported, the items the file's
+//! outline encloses them in, or the file's path ([`qualify`]); an anchor skips the index
 //! and asks `definition` at the focus (the `anchored` module).
 //!
 //! Correctness order: every owned document is synced from disk, then the
@@ -145,7 +146,10 @@ fn resolve_symbol(
         exclusions,
         unindexed,
     } = nominate(state, &selected, &qualified.name, root, scope.as_deref())?;
-    let (exact, unqualified) = qualify::filter(exact, &qualified);
+    // A `path` naming a file nominated from that file's outline, so its
+    // candidates already carry what the outline encloses them in.
+    let outlined = scope.as_deref().is_some_and(Path::is_file);
+    let (exact, unqualified) = qualify::filter(state, root, exact, &qualified, outlined)?;
     if exact.is_empty() {
         let labels = |server: &str, kind: SymbolKind| kind_label(state, server, kind);
         let mut listed = if !unqualified.is_empty() {

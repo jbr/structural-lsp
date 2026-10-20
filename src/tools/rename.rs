@@ -45,8 +45,8 @@ pub const APPLY: &str = "apply";
 #[serde(rename = "rename")]
 #[group(skip)]
 pub struct Rename {
-    /// The symbol's name: bare (`choose`) or qualified by its container
-    /// (`Config::new`). Exact match. `{"symbol": "choose", "path":
+    /// The symbol's name: bare (`choose`) or qualified by its container or
+    /// module (`Config::new`, `listing::render`). Exact match. `{"symbol": "choose", "path":
     /// "main.ts", "new_name": "pick"}` previews the rename.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]

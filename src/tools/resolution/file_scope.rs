@@ -83,12 +83,23 @@ pub fn nominate(
 /// One server's outline of `file`, turned into candidates for `symbol`. The
 /// file is synced first, so the outline is of the text on disk now.
 fn from_server(server: &mut LspServer, file: &Path, symbol: &str) -> Result<Vec<Candidate>> {
+    outline_of(server, file, symbol).map(|(_, candidates)| candidates)
+}
+
+/// [`from_server`], with the text the outline was read against: a qualifier
+/// that asks an index candidate's outline what encloses it checks the
+/// candidate's own range against the same text (`qualify`).
+pub(super) fn outline_of(
+    server: &mut LspServer,
+    file: &Path,
+    symbol: &str,
+) -> Result<(String, Vec<Candidate>)> {
     let synced = server.sync(file)?;
     // The sync precedes this request on the wire, so the outline is the
     // server's answer for the text just read; wait in case it started work.
     server.wait_ready()?;
     let Some(outline) = server.document_symbol(&synced.uri)? else {
-        return Ok(Vec::new());
+        return Ok((synced.text, Vec::new()));
     };
     let uri: Uri =
         serde_json::from_value(Value::String(synced.uri.clone())).with_context(|| {
@@ -114,7 +125,7 @@ fn from_server(server: &mut LspServer, file: &Path, symbol: &str) -> Result<Vec<
     if !found.is_empty() {
         server.mark_answered();
     }
-    Ok(found)
+    Ok((synced.text, found))
 }
 
 /// The pure part: an outline result and the file it was read from, to the
