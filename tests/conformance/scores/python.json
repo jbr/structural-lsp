@@ -1,5 +1,5 @@
 {
-  "date": 1791422839,
+  "date": 1792531697,
   "fixture_revision": "196fedea",
   "language": "python",
   "machine": "quad-3.local",
@@ -161,9 +161,7 @@
           "probe_answered": true
         },
         {
-          "detail": "no 'doubled' is in a container ending in `Config`; the 'dou…",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "probe_answered": true
@@ -272,44 +270,28 @@
       "candidate": "ruff-lsp",
       "outcomes": [
         {
-          "detail": "no language server is running.",
-          "kind": "failed",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
-          "detail": "  ruff-lsp: failed: 2 candidates were tried and none started:",
-          "kind": "failed",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
-          "detail": "no language server is running.",
-          "kind": "failed",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
-          "detail": "  ruff-lsp: failed: 2 candidates were tried and none started:",
-          "kind": "failed",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
-          "detail": "no language server is running.",
-          "kind": "failed",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
-          "detail": "  ruff-lsp: failed: 2 candidates were tried and none started:",
-          "kind": "failed",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
-          "detail": "no language server is running.",
-          "kind": "failed",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
-          "detail": "no language server is running.",
-          "kind": "failed",
-          "probe_answered": false
+          "probe_answered": true
         }
       ],
       "version": "Traceback (most recent call last):"
@@ -391,5 +373,5 @@
       "version": "pylyzer 0.0.82"
     }
   ],
-  "structural_revision": "2e72de70323fdf173f19eaa4f59110d17a67a307-dirty"
+  "structural_revision": "24ce6e50633051459695a0a91ec6b02e3f4ffe53-dirty"
 }

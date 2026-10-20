@@ -1,5 +1,5 @@
 {
-  "date": 1791422948,
+  "date": 1792531686,
   "fixture_revision": "4119e30e",
   "language": "typescript",
   "machine": "quad-3.local",
@@ -25,9 +25,7 @@
           "probe_answered": true
         },
         {
-          "detail": "no 'doubled' is in a container ending in `Config`; the 'dou…",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
         },
         {
           "probe_answered": true
@@ -206,5 +204,5 @@
       "version": null
     }
   ],
-  "structural_revision": "2e72de70323fdf173f19eaa4f59110d17a67a307-dirty"
+  "structural_revision": "24ce6e50633051459695a0a91ec6b02e3f4ffe53-dirty"
 }

@@ -1,5 +1,5 @@
 {
-  "date": 1789872306,
+  "date": 1792531688,
   "fixture_revision": "b1b8a964",
   "language": "rust",
   "machine": "quad-3.local",
@@ -43,8 +43,8 @@
           "probe_answered": true
         }
       ],
-      "version": "rust-analyzer 1.100.0-nightly (215a8af4b 2026-09-15)"
+      "version": "rust-analyzer 1.101.0-nightly (e9bbadf68 2026-10-12)"
     }
   ],
-  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
+  "structural_revision": "24ce6e50633051459695a0a91ec6b02e3f4ffe53-dirty"
 }

@@ -1,5 +1,5 @@
 {
-  "date": 1789870038,
+  "date": 1792531685,
   "fixture_revision": "514a0226",
   "language": "swift",
   "machine": "quad-3.local",
@@ -19,27 +19,7 @@
       "candidate": "sourcekit-lsp",
       "outcomes": [
         {
-          "detail": "no exact match for 'choose'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
-          "detail": "no exact match for 'identity'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
-          "detail": "no exact match for 'Config::doubled'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
-          "detail": "no exact match for 'Config::doubled'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
-          "detail": "no exact match for 'choose'; similar:",
+          "detail": "no symbol named 'choose'",
           "kind": "unmet",
           "probe_answered": false
         },
@@ -47,18 +27,28 @@
           "probe_answered": true
         },
         {
-          "detail": "no exact match for 'choose'; similar:",
-          "kind": "unmet",
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "sourcekit-lsp's reference to 'choose' at Sources/Scratch/Caller.swift:5 does not match the file on disk; the server's view was stale — retry after it re-indexes: expected `choose` at 5:18, found ``",
+          "kind": "failed",
           "probe_answered": false
         },
         {
-          "detail": "no exact match for 'choose'; similar:",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
         }
       ],
       "version": null
     }
   ],
-  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772"
+  "structural_revision": "24ce6e50633051459695a0a91ec6b02e3f4ffe53-dirty"
 }

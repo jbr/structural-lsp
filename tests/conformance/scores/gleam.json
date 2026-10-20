@@ -1,5 +1,5 @@
 {
-  "date": 1789870013,
+  "date": 1792531672,
   "fixture_revision": "a529ce36",
   "language": "gleam",
   "machine": "quad-3.local",
@@ -32,7 +32,9 @@
           "probe_answered": false
         },
         {
-          "probe_answered": true
+          "detail": "no symbol named 'helper::choose'",
+          "kind": "unmet",
+          "probe_answered": false
         },
         {
           "detail": "no symbol named 'choose'",
@@ -56,5 +58,5 @@
       "version": "gleam 1.18.1"
     }
   ],
-  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772"
+  "structural_revision": "24ce6e50633051459695a0a91ec6b02e3f4ffe53"
 }

@@ -1,5 +1,5 @@
 {
-  "date": 1789872311,
+  "date": 1792531691,
   "fixture_revision": "3eb9b00c",
   "language": "erlang",
   "machine": "quad-3.local",
@@ -19,8 +19,8 @@
       "candidate": "elp",
       "outcomes": [
         {
-          "detail": "elp is still loading (code -32801)",
-          "kind": "failed",
+          "detail": "no symbol named 'choose'",
+          "kind": "unmet",
           "probe_answered": false
         },
         {
@@ -97,5 +97,5 @@
       "version": "Version: 0.0.0"
     }
   ],
-  "structural_revision": "73199aae1bc8c4cd3787057e7a8bdbc16b4cd772-dirty"
+  "structural_revision": "24ce6e50633051459695a0a91ec6b02e3f4ffe53-dirty"
 }

@@ -1,5 +1,5 @@
 {
-  "date": 1791320915,
+  "date": 1792531675,
   "fixture_revision": "8d13f1b1",
   "language": "cpp",
   "machine": "quad-3.local",
@@ -19,11 +19,6 @@
       "candidate": "clangd",
       "outcomes": [
         {
-          "detail": "function choose · helper.hpp:10",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
           "probe_answered": true
         },
         {
@@ -42,9 +37,10 @@
           "probe_answered": true
         },
         {
-          "detail": "function choose · helper.hpp:10",
-          "kind": "unmet",
-          "probe_answered": false
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
         }
       ],
       "version": "Apple clangd version 17.0.0 (clang-1700.6.4.2)"
@@ -54,7 +50,19 @@
       "candidate": "ccls",
       "outcomes": [
         {
-          "detail": "function choose · helper.hpp:10",
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "probe_answered": true
+        },
+        {
+          "detail": "function choose · helper.cpp:7 · no references",
           "kind": "unmet",
           "probe_answered": false
         },
@@ -66,26 +74,10 @@
         },
         {
           "probe_answered": true
-        },
-        {
-          "detail": "function choose · helper.hpp:10 · no references",
-          "kind": "unmet",
-          "probe_answered": false
-        },
-        {
-          "probe_answered": true
-        },
-        {
-          "probe_answered": true
-        },
-        {
-          "detail": "function choose · helper.hpp:10",
-          "kind": "unmet",
-          "probe_answered": false
         }
       ],
       "version": "Homebrew ccls version <unknown>"
     }
   ],
-  "structural_revision": "eb17ceb72a05e6dccf163eb9c987d68b33a91a21-dirty"
+  "structural_revision": "24ce6e50633051459695a0a91ec6b02e3f4ffe53-dirty"
 }

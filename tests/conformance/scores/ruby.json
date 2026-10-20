@@ -1,5 +1,5 @@
 {
-  "date": 1791422938,
+  "date": 1792531709,
   "fixture_revision": "8bbb9eea",
   "language": "ruby",
   "machine": "quad-3.local",
@@ -236,5 +236,5 @@
       "version": "2.1.0"
     }
   ],
-  "structural_revision": "2e72de70323fdf173f19eaa4f59110d17a67a307-dirty"
+  "structural_revision": "24ce6e50633051459695a0a91ec6b02e3f4ffe53-dirty"
 }
