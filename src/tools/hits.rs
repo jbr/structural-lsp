@@ -138,7 +138,6 @@ pub fn source_line(text: &str, position: Position, encoding: Encoding) -> String
     }
 }
 
-/// Print groups while the budget lasts; returns how many hits went unshown.
 /// Collapse rows that are the same line of the same file, returning how
 /// many were removed.
 ///
@@ -167,6 +166,56 @@ pub fn collapse_identical(groups: &mut [FileGroup]) -> usize {
     collapsed
 }
 
+/// File `lines` of the file at `path` (shown as `display`) into the
+/// production and test groups of a listing: a hit is a test when its file
+/// is a test file or its enclosing chain is a test module
+/// (docs/resolution.md). Every listing that sets tests apart splits through
+/// here, so `references` and the location views agree on what a test is.
+pub fn split_tests(
+    path: &Path,
+    display: &str,
+    lines: Vec<HitLine>,
+    production: &mut Vec<FileGroup>,
+    tests: &mut Vec<FileGroup>,
+) {
+    let path_is_test = classify::path_is_test(path);
+    let (test_hits, other_hits): (Vec<HitLine>, Vec<HitLine>) = lines
+        .into_iter()
+        .partition(|line| path_is_test || line.is_test);
+    for (bucket, hits) in [(production, other_hits), (tests, test_hits)] {
+        if !hits.is_empty() {
+            bucket.push(FileGroup {
+                path: display.to_string(),
+                hits,
+            });
+        }
+    }
+}
+
+/// The line that opens a listing's tests section: `tests (heuristic) · 3
+/// references`. `noun` is singular.
+pub fn tests_heading(count: usize, noun: &str) -> String {
+    format!(
+        "tests (heuristic) · {count} {noun}{}\n",
+        if count == 1 { "" } else { "s" }
+    )
+}
+
+/// The note for a listing whose hits carry no enclosing item for `gap`'s
+/// reason; without the outline, tests are known by their path alone.
+pub fn gap_note(server: &str, gap: &OutlineGap) -> String {
+    match gap {
+        OutlineGap::Unsupported => {
+            format!("{server} does not support documentSymbol; hits carry no enclosing item")
+        }
+        OutlineGap::Refused(why) => format!(
+            "{server} would not outline every file with hits ({why}); those hits carry no \
+             enclosing item"
+        ),
+    }
+}
+
+/// Print groups while the budget lasts; returns how many hits went unshown.
 pub fn render_groups(text: &mut String, groups: &[FileGroup], budget: &mut usize) -> usize {
     let mut omitted = 0;
     for group in groups {
@@ -192,72 +241,4 @@ pub fn render_groups(text: &mut String, groups: &[FileGroup], budget: &mut usize
 }
 
 #[cfg(test)]
-mod collapse_tests {
-    use super::*;
-
-    fn hit(line: u32, text: &str) -> HitLine {
-        HitLine {
-            line,
-            item: Some("ToolOutcome".to_string()),
-            is_test: false,
-            text: text.to_string(),
-        }
-    }
-
-    /// rust-analyzer's shape: five derived traits, five results, one line.
-    #[test]
-    fn identical_rows_of_one_line_become_one() {
-        let derive = "#[derive(Clone, Copy, Debug, PartialEq, Eq)]";
-        let mut groups = vec![FileGroup {
-            path: "src/log.rs".to_string(),
-            hits: vec![hit(940, derive), hit(940, derive), hit(940, derive)],
-        }];
-        assert_eq!(collapse_identical(&mut groups), 2);
-        assert_eq!(groups[0].hits, vec![hit(940, derive)]);
-    }
-
-    /// Real implementations at their own lines are untouched, and so is a
-    /// derive beside them — the case that already rendered one row, which
-    /// is why the two disagreed.
-    #[test]
-    fn distinct_lines_are_kept() {
-        let mut groups = vec![FileGroup {
-            path: "src/log.rs".to_string(),
-            hits: vec![
-                hit(940, "#[derive(Debug)]"),
-                hit(950, "impl Display for Notify {"),
-                hit(970, "impl Clone for Notify {"),
-            ],
-        }];
-        assert_eq!(collapse_identical(&mut groups), 0);
-        assert_eq!(groups[0].hits.len(), 3);
-    }
-
-    /// The same text on different lines is two hits, not a duplicate.
-    #[test]
-    fn the_same_text_at_another_line_is_not_a_duplicate() {
-        let mut groups = vec![FileGroup {
-            path: "src/log.rs".to_string(),
-            hits: vec![hit(10, "#[derive(Debug)]"), hit(20, "#[derive(Debug)]")],
-        }];
-        assert_eq!(collapse_identical(&mut groups), 0);
-    }
-
-    /// Files are collapsed independently, and the count is the total.
-    #[test]
-    fn each_file_collapses_on_its_own() {
-        let mut groups = vec![
-            FileGroup {
-                path: "a.rs".to_string(),
-                hits: vec![hit(1, "#[derive(Debug)]"), hit(1, "#[derive(Debug)]")],
-            },
-            FileGroup {
-                path: "b.rs".to_string(),
-                hits: vec![hit(1, "#[derive(Debug)]")],
-            },
-        ];
-        assert_eq!(collapse_identical(&mut groups), 1);
-        assert_eq!(groups[0].hits.len(), 1);
-        assert_eq!(groups[1].hits.len(), 1);
-    }
-}
+mod tests;

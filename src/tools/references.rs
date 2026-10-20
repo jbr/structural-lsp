@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 mod render;
-use crate::tools::hits::{FileGroup, HitLine, OutlineGap, lines_for};
+use crate::tools::hits::{OutlineGap, gap_note, lines_for, split_tests};
 use render::{Listing, render_references};
 
 /// Hits listed before the rest is reported as a count.
@@ -274,30 +274,10 @@ fn references_of(
         // hits the query was asked for.
         outline_gap = outline_gap.or(gap);
         let display = relative_display(root, &file.path);
-        let path_is_test = crate::tools::classify::path_is_test(&file.path);
-        let (test_hits, other_hits): (Vec<HitLine>, Vec<HitLine>) = lines
-            .into_iter()
-            .partition(|line| path_is_test || line.is_test);
-        for (bucket, hits) in [(&mut production, other_hits), (&mut tests, test_hits)] {
-            if !hits.is_empty() {
-                bucket.push(FileGroup {
-                    path: display.clone(),
-                    hits,
-                });
-            }
-        }
+        split_tests(&file.path, &display, lines, &mut production, &mut tests);
     }
-    match &outline_gap {
-        Some(OutlineGap::Unsupported) => notes.push(format!(
-            "{} does not support documentSymbol; hits carry no enclosing item",
-            server.name()
-        )),
-        Some(OutlineGap::Refused(why)) => notes.push(format!(
-            "{} would not outline every file with hits ({why}); those hits carry no \
-             enclosing item",
-            server.name()
-        )),
-        None => {}
+    if let Some(gap) = &outline_gap {
+        notes.push(gap_note(server.name(), gap));
     }
     if grouped.out_of_root > 0 {
         notes.push(format!(

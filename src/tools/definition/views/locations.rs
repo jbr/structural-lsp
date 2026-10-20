@@ -1,11 +1,14 @@
 //! `view = "implementations"`: `textDocument/implementation` at the target,
-//! rendered as `uses` renders hits (file, `line · item · source`).
+//! rendered as `references` renders hits (file, `line · item · source`),
+//! tests set apart under the same heading.
 
 use super::unsupported;
 use crate::lsp::definition::{DefinitionSet, parse_definition_result};
 use crate::lsp::references::{Hit, group_by_file};
 use crate::workspace::Workspace;
-use crate::tools::hits::{FileGroup, collapse_identical, lines_for, render_groups};
+use crate::tools::hits::{
+    collapse_identical, gap_note, lines_for, render_groups, split_tests, tests_heading,
+};
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
 use anyhow::{Context, Result};
@@ -45,13 +48,16 @@ pub(super) fn implementations(state: &mut Workspace, root: &Path, target: Target
     }
     let mut files = grouped.files;
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    let mut groups = Vec::with_capacity(files.len());
+    // Tests are set apart as `references` sets them apart, by the same
+    // classifier (crate::tools::hits).
+    let mut production = Vec::new();
+    let mut tests = Vec::new();
+    let mut outline_gap = None;
     for file in &files {
-        let (hits, _) = lines_for(server, root, file, None)?;
-        groups.push(FileGroup {
-            path: relative_display(root, &file.path),
-            hits,
-        });
+        let (hits, gap) = lines_for(server, root, file, None)?;
+        outline_gap = outline_gap.or(gap);
+        let display = relative_display(root, &file.path);
+        split_tests(&file.path, &display, hits, &mut production, &mut tests);
     }
     let mut text = format!(
         "{header} · {total} implementation{} · {} file{}\n",
@@ -63,9 +69,14 @@ pub(super) fn implementations(state: &mut Workspace, root: &Path, target: Target
     // says nothing about which is which, so the identical rows are folded
     // into the one that carries the `#[derive(…)]` line naming them. The
     // header keeps the server's count (crate::tools::hits).
-    let collapsed = collapse_identical(&mut groups);
+    let collapsed = collapse_identical(&mut production) + collapse_identical(&mut tests);
     let mut budget = super::MAX_LINES;
-    let omitted = render_groups(&mut text, &groups, &mut budget);
+    let mut omitted = render_groups(&mut text, &production, &mut budget);
+    let test_count: usize = tests.iter().map(|group| group.hits.len()).sum();
+    if test_count > 0 {
+        text.push_str(&tests_heading(test_count, "implementation"));
+        omitted += render_groups(&mut text, &tests, &mut budget);
+    }
     if collapsed > 0 {
         text.push_str(&format!(
             "note: {collapsed} more reported at a line already shown, with nothing \
@@ -77,6 +88,9 @@ pub(super) fn implementations(state: &mut Workspace, root: &Path, target: Target
             "note: {omitted} more not shown (listing cap {})\n",
             super::MAX_LINES
         ));
+    }
+    if let Some(gap) = &outline_gap {
+        text.push_str(&format!("note: {}\n", gap_note(server.name(), gap)));
     }
     if grouped.out_of_root > 0 {
         text.push_str(&format!(

@@ -384,6 +384,9 @@ explicitly rather than guessing.
 
 `src/tools/classify.rs` decides whether a hit is test code, from the outline
 chain and the path: a file or directory named for tests, or a module named
-`tests`. It is a **heuristic and says so** — an inline `#[cfg(test)]` block
-under another name is listed as production. It also produces the enclosing
-item label every hit line carries.
+`tests` or `test`. It is a **heuristic and says so** — an inline
+`#[cfg(test)]` block under another name is listed as production. Every
+listing that sets tests apart — `references`, `implementations`,
+`incoming-calls`, `outgoing-calls` — classifies through it and heads the
+section `tests (heuristic)` ([tools.md](tools.md)). It also produces the
+enclosing item label every hit line carries.

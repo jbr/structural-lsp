@@ -35,8 +35,8 @@ silent.
 | --- | --- |
 | `definition` (default) | the decorated source |
 | `outline` | the target's children; with only `path`, a file's symbols, or a directory's files with their top-level items (below) |
-| `implementations` | `textDocument/implementation`, rendered as `references` renders hits, with results at one line folded into one row |
-| `incoming-calls` / `outgoing-calls` | the call hierarchy, one line per caller/callee with its call sites under it |
+| `implementations` | `textDocument/implementation`, rendered as `references` renders hits — tests set apart — with results at one line folded into one row |
+| `incoming-calls` / `outgoing-calls` | the call hierarchy, one line per caller/callee with its call sites under it, tests and code outside the root in their own sections (below) |
 | `type` | `textDocument/hover` reduced to its code blocks. With an anchor, rust-analyzer answers with the type of the expression the focus spans (`hoverRange`); other servers answer at its start. |
 | `expanded` | rust-analyzer only: macro expansion at the focus. A proc-macro derive expands with the focus on its name in `#[derive(…)]`; the builtin derives and the `derive` keyword have no expansion, and the answer says so ([servers.md](servers.md)). |
 | `related-tests` | rust-analyzer only: the tests related to the target, each with a runnable cargo command |
@@ -51,10 +51,47 @@ how many folded. The header keeps the server's count, because that is the
 server's answer to "how many implementations", and nothing is inferred
 about which result was which.
 
+**Tests are set apart in every location listing.** `implementations`,
+`incoming-calls` and `outgoing-calls` split their entries as `references`
+does, through the same classifier (`hits::split_tests`, the heuristic in
+[resolution.md](resolution.md)): production first, then a
+`tests (heuristic) · N implementations` (or `callers`, `callees`) heading
+and the test entries in the same shape. An implementation is classified by
+its hit's file and enclosing chain; a caller or callee by its file and the
+chain enclosing its name, from that file's `documentSymbol`. A server that
+gives no outline for a file leaves its entries classified by path alone,
+and a note says so.
+
 An unavailable view gets one of three distinct answers: the view name is
 unknown (and the known ones are listed), no running server supports it, or it
 does not apply to this target. Listings cap at 200 lines with the remainder
 reported as a count — except `outline`, which pages.
+
+### The call views
+
+In `src/tools/definition/views/calls.rs`, rendering in `calls/render.rs`.
+An entry is `kind name · path:line`, its call sites under it as
+`line · source`. Entries are in three sections: the workspace's, sorted by
+path; its tests; and those whose file is outside the workspace root
+(symlinks resolved first, as `references` resolves them), under
+`outside the workspace · N callees`. The root is the only boundary used —
+no server says which callees are a dependency's or the standard library's,
+and a root narrower than the server's project puts the project's other
+packages outside it too.
+
+A callee outside the root is one line, `fn unwrap_or · called at 21, 24`,
+in the order the target's body first calls each. Its call sites are lines
+of the target, which is what was asked about, and its location is a path
+into a toolchain or a dependency — measured on rust-analyzer, pyright and
+gopls, a standard-library callee's absolute path ran 55 to 150 bytes, and
+the same source line was repeated under every callee it calls (a chain
+like `guard.first().copied().unwrap_or(0)` three times). Without the location two entries can print
+the same (pyright reports each overload of `print` as its own callee); such
+rows are one row ending `· 2 definitions`, and the header keeps the
+server's count. A caller outside the root keeps the full shape: its call
+sites are in its own file, and the path is how to reach them. The listing
+caps at 200 lines across all three sections; the closing note counts the
+entries it did not reach.
 
 ### `outline`
 

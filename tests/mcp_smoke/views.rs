@@ -7,6 +7,16 @@ fn scratch_root() -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-views-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     crate::fixtures_in(&root, &["rust", "python"]);
+    // A test-only implementation of `Label`, after every line the cases
+    // below cite, so `implementations` has a test to set apart.
+    let lib = root.join("rust/src/lib.rs");
+    let mut text = std::fs::read_to_string(&lib).unwrap();
+    text.push_str(
+        "\n#[cfg(test)]\nmod test {\n    struct Table;\n\n    \
+         impl super::Label for Table {\n        fn label(&self) -> String {\n            \
+         String::new()\n        }\n    }\n}\n",
+    );
+    std::fs::write(&lib, text).unwrap();
     std::fs::canonicalize(root).unwrap()
 }
 
@@ -77,7 +87,8 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     let leaf = show(&state, "outline", Some("choose"), Some("rust"), None, None);
     assert!(leaf.ends_with("no children in the outline\n"), "{leaf}");
 
-    // Implementations of a trait: the impl, with its line.
+    // Implementations of a trait: the impl, with its line, and the
+    // test-only impl set apart as `references` sets tests apart.
     let impls = show(
         &state,
         "implementations",
@@ -87,11 +98,12 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
         None,
     );
     assert!(
-        impls.starts_with("trait Label · rust/src/lib.rs:17 · 1 implementation · 1 file\n"),
-        "{impls}"
-    );
-    assert!(
-        impls.contains("rust/src/lib.rs\n  34 · impl Label for Config · impl Label for Config {\n"),
+        impls.starts_with(
+            "trait Label · rust/src/lib.rs:17 · 2 implementations · 1 file\n\
+             rust/src/lib.rs\n  34 · impl Label for Config · impl Label for Config {\n\
+             tests (heuristic) · 1 implementation\n\
+             rust/src/lib.rs\n  94 · test::impl super::Label for Table · impl super::Label for Table {\n"
+        ),
         "{impls}"
     );
 
@@ -139,6 +151,22 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
         incoming.contains("fn run · rust/src/lib.rs:54\n  62 · let offset = choose(Mode::Fast);\n"),
         "{incoming}"
     );
+    // A caller in a test module is set apart under the heading
+    // `references` uses.
+    let test_callers = show(
+        &state,
+        "incoming-calls",
+        Some("run"),
+        Some("rust"),
+        None,
+        None,
+    );
+    assert!(
+        test_callers.ends_with(
+            "tests (heuristic) · 1 caller\nfn smoke · rust/src/lib.rs:84\n  86 · assert!(!run().is_empty());\n"
+        ),
+        "{test_callers}"
+    );
     let outgoing = show(
         &state,
         "outgoing-calls",
@@ -160,6 +188,17 @@ fn views_answer_from_the_outline_hover_and_call_hierarchy() {
             .contains("fn choose · rust/src/lib.rs:43\n  62 · let offset = choose(Mode::Fast);\n"),
         "{outgoing}"
     );
+    // The standard library's callees follow the project's, one line each,
+    // with no toolchain path.
+    let (project, outside) = outgoing
+        .split_once("outside the workspace · ")
+        .unwrap_or_else(|| panic!("an outside section\n{outgoing}"));
+    assert!(project.contains("fn choose · "), "{outgoing}");
+    assert!(
+        outside.contains("\nfn collect · called at 66\n"),
+        "{outgoing}"
+    );
+    assert!(!outgoing.contains("rustlib"), "{outgoing}");
     let not_callable = show(
         &state,
         "incoming-calls",

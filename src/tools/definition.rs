@@ -46,7 +46,10 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// target's children; with only `path`, a file's symbols, or for a
 /// directory every file under it with its top-level items; a function's
 /// parameters and locals only in that function's own outline; 200 lines a
-/// page, `page` for the next), `implementations`, `incoming-calls`, `outgoing-calls`, `type` (the hover
+/// page, `page` for the next), `implementations`, `incoming-calls`,
+/// `outgoing-calls` (these three set tests apart as `references` does, and
+/// list callees outside the workspace last, one line each with the lines
+/// calling them), `type` (the hover
 /// signature; with an anchor, the type of the focused expression), and per
 /// server `expanded` (rust-analyzer macro expansion at the focus) and
 /// `related-tests` (rust-analyzer, with the cargo command for each).

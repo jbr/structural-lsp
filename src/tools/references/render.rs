@@ -9,7 +9,7 @@
 //! where the rest is and can ask for it with `within` or `page`
 //! (docs/tools.md).
 
-use crate::tools::hits::{FileGroup, HitLine, render_groups};
+use crate::tools::hits::{FileGroup, HitLine, render_groups, tests_heading};
 use std::collections::BTreeMap;
 
 /// Directories listed in a remainder summary before the rest is a count.
@@ -50,10 +50,7 @@ pub(super) fn render_references(listing: &Listing<'_>) -> String {
     render_groups(&mut text, &production, &mut unlimited);
     let test_total: usize = listing.tests.iter().map(|group| group.hits.len()).sum();
     if test_total > 0 {
-        text.push_str(&format!(
-            "tests (heuristic) · {test_total} reference{}\n",
-            plural(test_total)
-        ));
+        text.push_str(&tests_heading(test_total, "reference"));
         render_groups(&mut text, &tests, &mut unlimited);
     }
     if !rest.is_empty() {
