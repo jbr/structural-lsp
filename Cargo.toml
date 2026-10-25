@@ -14,22 +14,19 @@ pending-acceptance = []
 anyhow = "1"
 clap = "4.6"
 lsp-types = "0.97"
-mcplease = "0.4.2"
-notify = "8.2.0"
+mcplease = "0.5.0"
+notify = "8.2.1"
 schemars = "1.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 smol = "2"
-swansong = "0.3.6"
-toml = "0.8"
+swansong = "0.3.7"
+toml = "1.1"
 tree-sitter = "0.27"
 tree-sitter-python = "0.25"
 tree-sitter-rust = "0.24"
 url = "2"
 
-[patch.crates-io]
-mcplease = { path = "../mcplease" }
-
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
-signal-hook = "0.3"
+signal-hook = "0.4"
