@@ -16,7 +16,7 @@ too, which is conservative beyond the protocol and is what a server that
 reserves a token it never reports through opts out of
 ([servers.md](servers.md)) — without that opt-out such a connection is never
 idle and this wait never ends. Work unrelated to this query counts — another
-file's re-index, a `cargo check` — because an index that is still settling
+file's re-index, a build-script run — because an index that is still settling
 answers differently from one that has settled, and nothing in the protocol
 distinguishes the two.
 
@@ -88,7 +88,7 @@ server that ends its request-scoped progress *after* sending the answer
 would be asked again each time; none measured here does. It costs nothing for a server that stays idle: one integer
 compared per response. For one that does start work in the window, the
 cost is the wait a query issued a moment later would have paid, plus
-one more request — including for unrelated work, a `cargo check` that
+one more request — including for unrelated work, a build-script run that
 begins as the answer is being written, which is the same rule the wait
 already follows. The responses set aside are kept in the event log, and
 the count is in the connection's `Snapshot`.

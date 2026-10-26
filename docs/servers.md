@@ -104,7 +104,23 @@ answer with nothing to report is `[]` (measured on 1.101.0-nightly, at a
 keyword and at whitespace): `null_is_unloaded` names those three, so such
 a `null` with no work reported is an error rather than no results.
 `references` is left out, because its settled answer away from a name is
-`null` as well. It advertises `serverStatusNotification`, which
+`null` as well.
+
+Its initialization options also keep its cargo runs off the project's
+build. `cargo.targetDir = true` puts the build scripts and proc macros it
+builds on load and on every reload under `target/rust-analyzer`, which has
+a lock of its own: in the project's `target/` those builds held the build
+directory lock while agents' cargo commands printed `Blocking waiting for
+file lock on build directory`. The cost is building those once more per
+project, in time and disk. `checkOnSave = false` stops the `cargo check`
+it otherwise starts each time it becomes quiescent — at the end of the
+initial load and of every reload, with no `didSave` sent. Nothing here
+reads its diagnostics, and the check's progress token is outstanding work
+every query waits behind ([correctness.md](correctness.md)). Both measured
+on 1.101.0-nightly against a crate with a build script: with them, all
+output lands under `target/rust-analyzer` and no check runs.
+
+It advertises `serverStatusNotification`, which
 the `Quiescence` policy observes, and `hoverRange`, which is what lets
 `view = "type"` answer with the type of a whole expression rather than the
 thing under one position. Its extra views are `expanded` (macro expansion at
@@ -224,6 +240,15 @@ The same value answers every item whatever `section` it names. No server
 measured here wants different settings per section, and a per-section table
 would be a shape invented ahead of a case for it; `section` is in the
 request when one turns up.
+
+rust-analyzer asks for `workspace/configuration` only after a
+`workspace/didChangeConfiguration`, which structural does not send, so
+`settings` in a `[servers.rust-analyzer]` entry is never read. When it does
+ask, the reply replaces its initialization options rather than merging
+with them: measured on 1.101.0-nightly, a reply of `{"cargo": {}}` dropped
+`cargo.targetDir` and its builds went back to the project's `target/`.
+Sending that notification would make `settings` replace every option the
+built-in sets.
 
 An entry named for a built-in **overrides** its command, languages or
 backstop and keeps everything else — readiness policy, capabilities,

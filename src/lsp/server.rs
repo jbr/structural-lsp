@@ -365,8 +365,8 @@ impl LspServer {
                     }),
                 )?;
                 // `textDocument/didSave` belongs here once a diagnostics view
-                // exists: it triggers rust-analyzer's check-on-save, which
-                // nothing in this slice consumes.
+                // exists, with rust-analyzer's `checkOnSave` turned back on
+                // (docs/servers.md); nothing in this slice consumes diagnostics.
                 self.opened.insert(
                     uri.clone(),
                     OpenedDoc {

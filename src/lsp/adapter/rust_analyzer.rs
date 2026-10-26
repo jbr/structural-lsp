@@ -48,6 +48,16 @@ impl Adapter for RustAnalyzer {
     /// which makes every re-exported name ambiguous.
     ///
     /// The limit replaces the default of 128 ([`SYMBOL_SEARCH_LIMIT`]).
+    ///
+    /// `cargo.targetDir` puts the builds rust-analyzer runs — build scripts
+    /// and proc macros, on load and on every reload — under
+    /// `target/rust-analyzer`, so they hold that directory's lock and not
+    /// the project's: in the project's own `target/`, an agent's `cargo
+    /// test` waited on `Blocking waiting for file lock on build directory`
+    /// behind two structural servers. `checkOnSave` off stops the `cargo
+    /// check` rust-analyzer starts each time it becomes quiescent, with no
+    /// `didSave` sent; nothing here reads its diagnostics, and its progress
+    /// token is outstanding work every query waits behind (docs/servers.md).
     fn initialization_options(&self) -> Value {
         json!({
             "workspace": {
@@ -58,7 +68,9 @@ impl Adapter for RustAnalyzer {
                         "limit": SYMBOL_SEARCH_LIMIT,
                     }
                 }
-            }
+            },
+            "cargo": { "targetDir": true },
+            "checkOnSave": false,
         })
     }
 
@@ -181,8 +193,8 @@ impl Adapter for RustAnalyzer {
 ///
 /// Before the first status arrives the server is not ready: a cold start
 /// blocks until rust-analyzer has finished its initial load, which is the
-/// point. A later `quiescent: false` (re-indexing after an edit, a
-/// `cargo check`) makes it not ready again until the next `true`.
+/// point. A later `quiescent: false` (re-indexing after an edit, a reload
+/// after a manifest change) makes it not ready again until the next `true`.
 #[derive(Debug, Default)]
 pub struct Quiescence {
     quiescent: Option<bool>,
@@ -306,6 +318,15 @@ mod tests {
             Some(&json!(SYMBOL_SEARCH_LIMIT))
         );
         assert_eq!(adapter.symbol_result_cap(), Some(SYMBOL_SEARCH_LIMIT));
+    }
+
+    /// Its builds stay out of the project's `target/` and its lock, and it
+    /// runs no `cargo check` of its own (docs/servers.md).
+    #[test]
+    fn the_adapter_builds_apart_and_never_checks() {
+        let options = RustAnalyzer.initialization_options();
+        assert_eq!(options.pointer("/cargo/targetDir"), Some(&json!(true)));
+        assert_eq!(options.pointer("/checkOnSave"), Some(&json!(false)));
     }
 
     /// Only the methods measured to answer `[]` when settled read `null` as
