@@ -122,8 +122,15 @@ In the public repository:
 - **crates.io trusted publishing:** add a trusted publisher for
   `release-plz.yml` with environment `release`, and create a `release`
   environment under Settings → Environments.
-- **GitHub App:** install the release App on the repository and set the
-  `APP_ID` and `APP_PRIVATE_KEY` secrets, which `release-plz.yml` mints its
-  token from.
+- **GitHub App:** `release-plz.yml` mints its token from the
+  `structural-lsp-release` App (`APP_ID` and `APP_PRIVATE_KEY` secrets).
+  Recreating it: at github.com/settings/apps/new set a name and homepage,
+  untick the webhook's Active box, give Repository permissions → Contents
+  read and write, and install only on this account; generate a private key
+  (Credentials → Key pairs), which must exist before the App can be
+  installed; store the App ID and the key as the two secrets
+  (`gh secret set APP_PRIVATE_KEY -R jbr/structural-lsp < key.pem`); then
+  Install App → only `jbr/structural-lsp`, never the development
+  repository.
 - **No Renovate:** a dependency pull request on the public side is an
   outside contribution like any other. Dependency updates are made here.
