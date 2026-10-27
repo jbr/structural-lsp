@@ -1,11 +1,18 @@
 # Changelog
 
 All notable changes to structural. Format follows
-[keep-a-changelog](https://keepachangelog.com); one line per feature. The
-project is unreleased, so everything lives under *Unreleased* for now. For
-how the system works, see [`docs/`](docs/).
+[keep-a-changelog](https://keepachangelog.com); one line per feature,
+newest release first, and what has landed since the last release under
+*Unreleased*. For how the system works, see [`docs/`](docs/).
 
 ## [Unreleased]
+
+## [0.1.1] - 2026-10-27
+
+### Changed
+- **The first release built by the release pipeline** (process/publishing.md): prebuilt binaries for macOS and Linux on x86_64 and aarch64, and a shell installer, attached to the GitHub release; no change to the program since 0.1.0.
+
+## [0.1.0] - 2026-10-27
 
 ### Changed
 - **The crate and binary are `structural-lsp`** (process/publishing.md): `cargo install structural-lsp` installs one program, `structural-lsp`, and the library is `structural_lsp`; `structural.toml`, the `STRUCTURAL_*` variables and the MCP logger name keep their spelling. The development binaries stay out of the package.
