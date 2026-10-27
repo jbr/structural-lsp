@@ -7,6 +7,14 @@ newest release first, and what has landed since the last release under
 
 ## [Unreleased]
 
+### Fixed
+- **A module renamed from its `mod` line** (docs/resolution.md): an anchor whose definition is the module's whole file took the file's text as the old name, so every edit was refused as stale; the focus is now the name, and the plan matches the one the symbol gives. A refused edit names the two texts, elided, and no cause.
+- **An apply survives edits elsewhere in the files it touches** (docs/tools.md): the digest covers each edit's old and new text and each changed line as it reads now, not whole files and not line numbers, so a concurrent edit away from the sites no longer bounces the apply, and a new site or an edited changed line still does.
+- **`move` lines are relative to the workspace**, as every other path in a rename preview and applied summary is.
+
+### Added
+- **An ambiguous listing names each entry's container** (docs/resolution.md): `fn new · src/rt/reactor.rs:80 · in Reactor · …`, the qualifier that picks it.
+
 ## [0.1.2] - 2026-10-27
 
 ### Fixed

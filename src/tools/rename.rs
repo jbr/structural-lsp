@@ -2,9 +2,9 @@
 //!
 //! Two identities, kept apart: the *intent* (target plus new name) is
 //! re-resolved on every call; the *prepared edit* is what the server
-//! returns for it now, shown as a preview with a digest over the files it
-//! touches. `mode = "apply"` recomputes the edit and applies it only when
-//! the digest still matches; otherwise it answers with a fresh preview and
+//! returns for it now, shown as a preview with a digest over what the
+//! preview shows. `mode = "apply"` recomputes the edit and applies it only
+//! when the digest still matches; otherwise it answers with a fresh preview and
 //! changes nothing. Edits are results the server hands back, applied here
 //! to disk; a server's own `workspace/applyEdit` is declined as always.
 
@@ -39,8 +39,9 @@ pub const APPLY: &str = "apply";
 ///
 /// `mode = "preview"` (default) shows every changed line and file rename
 /// with a `digest`; `mode = "apply"` with that digest recomputes the edit
-/// and writes it only if nothing it touches changed since the preview,
-/// otherwise it returns a fresh preview and writes nothing. The servers are
+/// and writes it only if the edit and the lines it changes are as
+/// previewed (edits elsewhere in those files do not matter), otherwise it
+/// returns a fresh preview and writes nothing. The servers are
 /// re-synced after an apply, so the next query sees the new names.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "rename")]

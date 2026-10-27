@@ -2,6 +2,7 @@
 //! rename, the digest) and the applied summary.
 
 use crate::lsp::edits::{FileRename, LineChange};
+use crate::tools::listing::relative_display;
 use std::path::PathBuf;
 
 /// One file's prepared change.
@@ -17,6 +18,8 @@ pub(super) struct FileChange {
 
 /// The whole prepared edit, computed against disk and not yet written.
 pub(super) struct Prepared {
+    /// What the moves are shown relative to, as each file's `display` is.
+    pub root: PathBuf,
     pub files: Vec<FileChange>,
     pub renames: Vec<FileRename>,
     pub digest: String,
@@ -68,8 +71,8 @@ pub(super) fn render_preview(title: &str, prepared: &Prepared) -> String {
     for rename in &prepared.renames {
         text.push_str(&format!(
             "move {} → {}\n",
-            rename.from.display(),
-            rename.to.display()
+            relative_display(&prepared.root, &rename.from),
+            relative_display(&prepared.root, &rename.to)
         ));
     }
     if let Some(note) = &prepared.note {
@@ -103,8 +106,8 @@ pub(super) fn render_applied(title: &str, prepared: &Prepared) -> String {
     for rename in &prepared.renames {
         text.push_str(&format!(
             "moved {} → {}\n",
-            rename.from.display(),
-            rename.to.display()
+            relative_display(&prepared.root, &rename.from),
+            relative_display(&prepared.root, &rename.to)
         ));
     }
     if let Some(note) = &prepared.note {
@@ -120,6 +123,7 @@ mod tests {
     #[test]
     fn the_preview_shows_each_changed_line_twice_and_ends_with_the_digest() {
         let prepared = Prepared {
+            root: "/r".into(),
             files: vec![FileChange {
                 path: "/r/src/lib.rs".into(),
                 display: "src/lib.rs".into(),
@@ -156,7 +160,7 @@ mod tests {
              \x20     pub fn pick(mode: Mode) -> usize {\n\
              \x20 62:     let offset = choose(Mode::Fast);\n\
              \x20     (the edit spans lines)\n\
-             move /r/src/util.rs → /r/src/helper.rs\n\
+             move src/util.rs → src/helper.rs\n\
              digest: 0123456789abcdef\n"
         );
         assert_eq!(
@@ -166,7 +170,7 @@ mod tests {
             ),
             "applied: rename choose → pick · fn choose · src/lib.rs:43 · 2 edits · 1 file\n\
              src/lib.rs · 2 edits\n\
-             moved /r/src/util.rs → /r/src/helper.rs\n"
+             moved src/util.rs → src/helper.rs\n"
         );
     }
     #[test]
@@ -177,6 +181,7 @@ mod tests {
                 check doc comments for `choose`."
             .to_string();
         let prepared = Prepared {
+            root: "/r".into(),
             files: vec![FileChange {
                 path: "/r/src/lib.rs".into(),
                 display: "src/lib.rs".into(),
@@ -221,6 +226,7 @@ mod tests {
     #[test]
     fn a_server_without_a_caveat_adds_no_note_line() {
         let prepared = Prepared {
+            root: "/r".into(),
             files: vec![FileChange {
                 path: "/r/src/lib.rs".into(),
                 display: "src/lib.rs".into(),

@@ -6,7 +6,8 @@
 use super::{Exclusions, Resolved, finish};
 use crate::lsp::anchor;
 use crate::lsp::definition::{
-    DefinitionSet, DefinitionTarget, Identity, Origin, candidate_path, parse_definition_result,
+    DefinitionSet, DefinitionTarget, Identity, Origin, candidate_path, is_whole_file,
+    parse_definition_result,
 };
 use crate::lsp::positions::{Encoding, offset_to_position, position_to_offset};
 use crate::tools::listing::relative_display;
@@ -141,6 +142,7 @@ pub(super) fn from_anchor(
                 Origin {
                     name: name.clone(),
                     kind: None,
+                    container: None,
                     location: origin_location.clone(),
                 },
                 Some(target),
@@ -177,9 +179,14 @@ pub(super) fn from_anchor(
 
 /// The text at the target's own range, read from disk: what the focus
 /// resolved to is named by its definition, not by how it was spelled at
-/// the anchor (`config.doubled()` resolves to `doubled`).
+/// the anchor (`config.doubled()` resolves to `doubled`). A range that is
+/// the whole file — a module whose definition is its file — names no
+/// token, and the focus is the name.
 fn name_at(target: &DefinitionTarget, encoding: Encoding) -> Option<String> {
     let text = std::fs::read_to_string(candidate_path(&target.uri)?).ok()?;
+    if is_whole_file(&text, target.selection_range, encoding) {
+        return None;
+    }
     let start = position_to_offset(&text, target.selection_range.start, encoding).ok()?;
     let end = position_to_offset(&text, target.selection_range.end, encoding).ok()?;
     (start < end).then(|| text[start..end].to_string())

@@ -277,6 +277,10 @@ pub struct Origin {
     /// The symbol index's kind for a candidate; `None` for an anchor, whose
     /// focus has no kind until the outline confirms one.
     pub kind: Option<lsp_types::SymbolKind>,
+    /// The container the symbol index reported for a candidate (`Reactor`
+    /// for a `new` in `impl Reactor`); `None` for an anchor, or when the
+    /// server reported none.
+    pub container: Option<String>,
     /// The candidate's own location, or the focus's.
     pub location: Location,
 }
@@ -286,6 +290,11 @@ impl Origin {
         Self {
             name: candidate.info.name.clone(),
             kind: Some(candidate.info.kind),
+            container: candidate
+                .info
+                .container_name
+                .clone()
+                .filter(|container| !container.is_empty()),
             location: candidate.info.location.clone(),
         }
     }

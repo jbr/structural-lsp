@@ -377,9 +377,12 @@ The two differ whenever the anchor is wider than the token it resolves —
 target's range and what a rename would replace. Carrying the quoted text
 there instead would make the check compare two different things and then
 report the server's target as not naming it in the file on disk —
-accusing the server of a mismatch this client constructed. An ambiguous
-result is still rendered from the quoted text, which is what the caller
-wrote.
+accusing the server of a mismatch this client constructed. A target whose
+range is the whole file — a module whose definition is its file, reached
+from its `mod` line — carries no name in its range, so the focus is the
+name; reading the range would make the whole file the old name a rename
+checks its edits against. An ambiguous result is still rendered from the
+quoted text, which is what the caller wrote.
 
 ## The listings
 
@@ -391,7 +394,9 @@ rendering for every tool (`src/tools/listing.rs`), one line per entry:
   pick;
 - **unqualified** — the name resolved but no candidate sits in a container
   matching the qualifier, and the bare candidates are listed;
-- **ambiguous** — several distinct definitions with kind, path and signature;
+- **ambiguous** — several distinct definitions with kind, path, the
+  container the index reported (`in Reactor`, the qualifier that picks
+  one) and signature;
 - **null definition** — the index nominated something the server will not
   navigate to.
 

@@ -71,6 +71,12 @@ fn qualified_names_and_anchors_target_what_bare_names_cannot() {
         bare.starts_with("ambiguous: 2 definitions of 'new'"),
         "{bare}"
     );
+    // Each line names its container, which is the qualifier that picks it.
+    assert!(
+        bare.contains("fn new · rust/src/lib.rs:23 · in Config · "),
+        "{bare}"
+    );
+    assert!(bare.contains(" · in Other · "), "{bare}");
     let config_new = ok(show(&state, Some("Config::new"), Some("rust"), None, None));
     assert!(
         config_new.starts_with("fn new · rust/src/lib.rs:23\n"),

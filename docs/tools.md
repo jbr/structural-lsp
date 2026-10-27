@@ -205,12 +205,21 @@ A rename at a target, previewed before it is applied.
 Two identities are kept apart. The **intent** — target plus new name —
 is re-resolved on every call. The **prepared edit** is what the server
 returns for that intent *now*, shown as a preview of every changed line and
-every file rename, with a `digest` over the files it touches.
+every file rename, with a `digest` over what the preview shows.
 
 - `mode = "preview"` (default) changes nothing and returns that digest.
 - `mode = "apply"` requires the digest, **recomputes** the edit, and writes
   only if the digest still matches. Otherwise it returns a fresh preview and
   writes nothing.
+
+The digest covers, per file in order, its path, each edit's replaced and
+replacing text, and each changed line as it reads now; then the file
+renames. Line numbers and the rest of each file are left out, so an edit
+elsewhere in a touched file — a person editing the same file while an agent
+works — or one that only moves the changed lines leaves the digest as it
+was, while a new call site, a different edit or an edit to a changed line
+does not. A digest over whole files would bounce an apply on any edit anywhere
+in them.
 
 After an apply, the servers are re-synced, so the next query sees the new
 names. The edit is the server's: structural normalizes a `WorkspaceEdit` into

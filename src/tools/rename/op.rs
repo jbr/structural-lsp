@@ -3,6 +3,7 @@
 
 use super::Mode;
 use super::render::{FileChange, Prepared, render_applied, render_preview};
+use crate::lsp::definition::elided;
 use crate::lsp::edits::{self, FileRename, Located, Plan};
 use crate::tools::listing::relative_display;
 use crate::tools::resolution::{Resolved, Target, resolve_target, server_named, sync_target};
@@ -123,7 +124,7 @@ fn prepare(
     note: Option<String>,
 ) -> Result<Prepared> {
     let mut files = Vec::with_capacity(plan.files.len());
-    let mut digest_inputs: Vec<(&std::path::PathBuf, String, &[lsp_types::TextEdit])> = Vec::new();
+    let mut digest_inputs: Vec<(&Path, String, Vec<Located>)> = Vec::new();
     for file in &plan.files {
         let text = std::fs::read_to_string(&file.path)
             .with_context(|| format!("reading {} for the rename", file.path.display()))?;
@@ -137,12 +138,16 @@ fn prepare(
             })?;
         for edit in &located {
             let current = &text[edit.start..edit.end];
+            // What was expected and what was read, and no cause: a stale
+            // index and a misread name arrive here alike (docs/correctness.md).
             if !current.is_empty() && current != old_name {
                 bail!(
-                    "{server}'s rename edit at {}:{} would replace `{current}`, not `{old_name}`; \
-                     the server's view was stale — retry after it re-indexes",
+                    "{server}'s rename edit at {}:{} would replace `{}`, not `{}`: the edit and \
+                     the file on disk disagree, so nothing was written",
                     relative_display(root, &file.path),
-                    text[..edit.start].matches('\n').count() + 1
+                    text[..edit.start].matches('\n').count() + 1,
+                    elided(current),
+                    elided(old_name),
                 );
             }
         }
@@ -155,7 +160,7 @@ fn prepare(
             changes,
             after,
         });
-        digest_inputs.push((&file.path, text, &file.edits));
+        digest_inputs.push((&file.path, text, located));
     }
     for rename in &plan.renames {
         if !rename.from.exists() {
@@ -175,11 +180,12 @@ fn prepare(
     let digest = edits::digest(
         &digest_inputs
             .iter()
-            .map(|(path, text, edits)| (*path, text.as_str(), *edits))
+            .map(|(path, text, located)| (*path, text.as_str(), located.as_slice()))
             .collect::<Vec<_>>(),
         &plan.renames,
     );
     Ok(Prepared {
+        root: root.to_path_buf(),
         files,
         renames: plan.renames.clone(),
         digest,

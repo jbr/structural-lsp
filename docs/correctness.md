@@ -290,8 +290,9 @@ remainder by directory; each names the `page` that continues it
 ## Mutation is the server's edit, applied faithfully
 
 `rename` never composes an edit itself: it asks the server for one, shows it
-as a preview with a digest over the files it touches, and applies it only
-when a later call presents that digest and nothing has changed underneath.
+as a preview with a digest over what the preview shows, and applies it only
+when a later call presents that digest and the recomputed edit, and the
+lines it changes, are still the ones previewed ([tools.md](tools.md)).
 A server's own `workspace/applyEdit` is always declined (`{"applied":
 false}`) — structural writes files, the server does not. There is no textual
 post-pass over a semantic edit; if the server does not rewrite something, the

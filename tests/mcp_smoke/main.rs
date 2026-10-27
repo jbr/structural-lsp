@@ -425,7 +425,7 @@ fn stdio_mcp_initialize_tools_list_and_show_round_trip() {
     );
     assert_eq!(
         result.pointer("/serverInfo/name").and_then(Value::as_str),
-        Some("structural"),
+        Some("structural-lsp"),
         "{initialize}"
     );
     server.notify("notifications/initialized", json!({}));

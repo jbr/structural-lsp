@@ -197,6 +197,12 @@ fn rename_previews_then_applies_with_a_matching_digest() {
             .contains("pub fn choose")
     );
 
+    // An edit elsewhere in a file the rename touches leaves the preview
+    // standing: the digest covers the sites and their lines, not the file.
+    let mut edited = std::fs::read_to_string(&lib).unwrap();
+    edited.push_str("\n// an edit away from every site\n");
+    std::fs::write(&lib, edited).unwrap();
+
     // Apply with the digest: written, and the servers see it.
     let applied = action(
         &state,
@@ -285,13 +291,27 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     );
     assert!(module.contains("util::helper(x)"), "{module}");
     assert!(
-        module.contains(&format!(
-            "move {} → {}\n",
-            root.join("rust/src/util.rs").display(),
-            root.join("rust/src/helpers.rs").display()
-        )),
+        module.contains("move rust/src/util.rs → rust/src/helpers.rs\n"),
         "{module}"
     );
+    // The same module reached from its `mod` line: a definition that is
+    // the whole file names no token, so the focus is the old name, and the
+    // plan is the one the name gave.
+    let anchored = structural_lsp::tools::Rename {
+        symbol: None,
+        path: Some("rust/src/lib.rs".to_string()),
+        anchor: Some("mod util;".to_string()),
+        focus: Some("util".to_string()),
+        new_name: Some("helpers".to_string()),
+        mode: None,
+        digest: None,
+        workspace: None,
+        language: None,
+    }
+    .run(&state)
+    .unwrap_or_else(|error| panic!("rename at `mod util;`: {error:#}"));
+    assert!(anchored.starts_with("rename util → helpers"), "{anchored}");
+    assert_eq!(digest_of(&anchored), digest_of(&module), "{anchored}");
     let module_applied = action(
         &state,
         "util",

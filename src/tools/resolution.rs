@@ -477,6 +477,7 @@ fn ambiguous_entries(state: &mut Workspace, identities: &[Identity]) -> Vec<Ambi
                     .kind
                     .map(|kind| kind_label(state, &identity.server, kind)),
                 name: origin.name.clone(),
+                container: origin.container.clone(),
                 server: identity.server.clone(),
                 location,
                 signature,

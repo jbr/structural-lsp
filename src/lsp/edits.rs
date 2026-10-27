@@ -9,7 +9,7 @@ use lsp_types::{
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The text edits one file receives, in the server's order.
 #[derive(Debug, Clone, PartialEq)]
@@ -227,17 +227,29 @@ pub fn line_changes(text: &str, located: &[Located]) -> Vec<LineChange> {
     changes
 }
 
-/// A confirmation token over the ordered files, their on-disk text and
-/// their edits, plus the renames: the same inputs give the same digest, a
-/// changed file or a different edit does not.
-pub fn digest(files: &[(&PathBuf, &str, &[TextEdit])], renames: &[FileRename]) -> String {
+/// A confirmation token over what a preview shows: per file, in order, its
+/// path, each edit's replaced and replacing text, and each changed line as
+/// it reads now; then the renames. Where those lines sit is left out, and
+/// so is the rest of each file: an edit elsewhere in a touched file, or one
+/// that moves the changed lines, leaves the digest as it was, while a new
+/// site, a different edit or an edited changed line does not
+/// (docs/tools.md).
+pub fn digest(files: &[(&Path, &str, &[Located])], renames: &[FileRename]) -> String {
     let mut hasher = DefaultHasher::new();
-    for (path, text, edits) in files {
+    for (path, text, located) in files {
         path.hash(&mut hasher);
-        text.hash(&mut hasher);
-        serde_json::to_string(edits)
-            .unwrap_or_default()
-            .hash(&mut hasher);
+        let mut sites: Vec<&Located> = located.iter().collect();
+        sites.sort_by_key(|edit| (edit.start, edit.end));
+        sites.len().hash(&mut hasher);
+        for edit in sites {
+            text[edit.start..edit.end].hash(&mut hasher);
+            edit.new_text.hash(&mut hasher);
+        }
+        let changes = line_changes(text, located);
+        changes.len().hash(&mut hasher);
+        for change in changes {
+            change.before.hash(&mut hasher);
+        }
     }
     for rename in renames {
         rename.from.hash(&mut hasher);
@@ -342,26 +354,55 @@ mod tests {
     }
 
     #[test]
-    fn the_digest_follows_its_inputs() {
+    fn the_digest_follows_what_the_preview_shows() {
         let path = PathBuf::from("/r/a.rs");
-        let edits = [edit(0, 0, 0, 1, "x")];
-        let one = digest(&[(&path, "text", &edits)], &[]);
-        assert_eq!(one, digest(&[(&path, "text", &edits)], &[]));
-        assert_ne!(one, digest(&[(&path, "text2", &edits)], &[]));
+        let text = "fn choose() {}\n// a note\nlet a = choose();\n";
+        let sites = [edit(0, 3, 0, 9, "pick"), edit(2, 8, 2, 14, "pick")];
+        let of = |text: &str, edits: &[TextEdit], renames: &[FileRename]| {
+            let located = locate(text, edits, Encoding::Utf8).unwrap();
+            digest(&[(&path, text, &located)], renames)
+        };
+        let one = of(text, &sites, &[]);
+        assert_eq!(one, of(text, &sites, &[]));
+        assert_eq!(one.len(), 16);
+
+        // An edit away from the changed lines, even one that moves them,
+        // leaves the digest as it was.
+        let elsewhere = "fn choose() {}\n// a longer note\nlet a = choose();\n";
+        assert_eq!(one, of(elsewhere, &sites, &[]));
+        let moved = "fn choose() {}\n\n// a note\nlet a = choose();\n";
+        let moved_sites = [edit(0, 3, 0, 9, "pick"), edit(3, 8, 3, 14, "pick")];
+        assert_eq!(one, of(moved, &moved_sites, &[]));
+
+        // A changed line edited, a new site, a different replacement, or a
+        // rename changes it.
+        let line_edited = "fn choose() {}\n// a note\nlet b = choose();\n";
+        assert_ne!(one, of(line_edited, &sites, &[]));
+        let new_site = "fn choose() {}\nchoose();\nlet a = choose();\n";
+        let new_sites = [
+            edit(0, 3, 0, 9, "pick"),
+            edit(1, 0, 1, 6, "pick"),
+            edit(2, 8, 2, 14, "pick"),
+        ];
+        assert_ne!(one, of(new_site, &new_sites, &[]));
         assert_ne!(
             one,
-            digest(&[(&path, "text", &[edit(0, 0, 0, 1, "y")])], &[])
+            of(
+                text,
+                &[edit(0, 3, 0, 9, "pick"), edit(2, 8, 2, 14, "pock")],
+                &[]
+            )
         );
         assert_ne!(
             one,
-            digest(
-                &[(&path, "text", &edits)],
+            of(
+                text,
+                &sites,
                 &[FileRename {
                     from: "/a".into(),
                     to: "/b".into()
                 }]
             )
         );
-        assert_eq!(one.len(), 16);
     }
 }

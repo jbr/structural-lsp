@@ -75,6 +75,9 @@ pub fn render_capped_one(
             &location_line(root, &entry.location.uri, entry.location.range.start),
         )
     );
+    if let Some(container) = &entry.container {
+        text.push_str(&format!(" · in {container}"));
+    }
     if let Some(signature) = &entry.signature {
         text.push_str(&format!(" · {signature}"));
     }
@@ -309,6 +312,9 @@ pub fn render_ambiguous(
             &entry.name,
             &location_line(root, &entry.location.uri, entry.location.range.start),
         ));
+        if let Some(container) = &entry.container {
+            text.push_str(&format!(" · in {container}"));
+        }
         if let Some(signature) = &entry.signature {
             text.push_str(&format!(" · {signature}"));
         }
@@ -329,6 +335,9 @@ pub struct AmbiguousEntry {
     /// `None` for an anchored origin whose kind no outline confirmed.
     pub kind_label: Option<&'static str>,
     pub name: String,
+    /// The container the index reported, shown so two same-named entries
+    /// can be told apart and re-asked qualified.
+    pub container: Option<String>,
     pub server: String,
     /// The definition target, or the symbol's own location when the server
     /// reported no definition.
@@ -392,3 +401,6 @@ pub fn exclusion_notes(exclusions: Exclusions) -> String {
     }
     note
 }
+
+#[cfg(test)]
+mod tests;
