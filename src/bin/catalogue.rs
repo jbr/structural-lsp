@@ -8,9 +8,9 @@
 //!
 //! Inputs: every `tests/conformance/scores/<language>.json` — the
 //! per-probe evidence, with its provenance on every row — and
-//! `reference/servers-list/by_executable.json`, the dataset's
-//! per-executable reduction, from which the consensus tiebreak is counted:
-//! every source recording the executable for any language, minus
+//! `tests/conformance/consensus.json`, which editor inventories configure
+//! each executable, from which the consensus tiebreak is counted: every
+//! source recording the executable for any language, minus
 //! `mason-registry`, an installer index rather than a selector
 //! (`docs/catalogue.md`). The output is
 //! `src/discovery/catalogue/generated.rs`, checked in, so a change to the
@@ -29,18 +29,18 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// An installer index, not a selector: it says a server can be installed,
-/// not that an editor ships it (`reference/servers-list/README.md`).
+/// not that an editor ships it (`docs/catalogue.md`).
 const NOT_A_SELECTOR: &str = "mason-registry";
 
 /// The consensus count for `executable`: sources that record it, for any
 /// language, minus [`NOT_A_SELECTOR`].
 fn consensus(by_executable: &BTreeMap<String, Value>, executable: &str) -> Result<u16> {
-    let record = by_executable.get(executable).with_context(|| {
-        format!("consensus for {executable} has no provenance: not named by the dataset (reference/servers-list/by_executable.json)")
+    let sources = by_executable.get(executable).with_context(|| {
+        format!("consensus for {executable} has no provenance: not named by tests/conformance/consensus.json")
     })?;
-    let sources = record["sources"]
+    let sources = sources
         .as_array()
-        .with_context(|| format!("`sources` is not an array for {executable}"))?;
+        .with_context(|| format!("the sources for {executable} are not an array"))?;
     Ok(sources
         .iter()
         .filter_map(|s| s.as_str())
@@ -164,13 +164,16 @@ struct Provenance {
 fn main() -> Result<()> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let scores = root.join("tests/conformance/scores");
-    let dataset = root.join("reference/servers-list/by_executable.json");
+    let dataset = root.join("tests/conformance/consensus.json");
     let output = root.join("src/discovery/catalogue/generated.rs");
 
-    let by_executable: BTreeMap<String, Value> = serde_json::from_str(
+    let consensus_file: Value = serde_json::from_str(
         &std::fs::read_to_string(&dataset).with_context(|| dataset.display().to_string())?,
     )
     .with_context(|| dataset.display().to_string())?;
+    let by_executable: BTreeMap<String, Value> =
+        serde_json::from_value(consensus_file["executables"].clone())
+            .with_context(|| format!("{} has no `executables` object", dataset.display()))?;
 
     let mut files = Vec::new();
     collect(&scores, &mut files)?;
@@ -210,7 +213,7 @@ fn main() -> Result<()> {
             fixture_revision,
             date,
             source: format!(
-                "tests/conformance/scores/{language}.json + reference/servers-list/by_executable.json"
+                "tests/conformance/scores/{language}.json + tests/conformance/consensus.json"
             ),
         };
         let rows = file["rows"]
@@ -237,7 +240,7 @@ fn main() -> Result<()> {
          //!\n\
          //! Inputs: `tests/conformance/scores/<language>.json` (the per-probe\n\
          //! evidence, one run per language, provenance on every row) and\n\
-         //! `reference/servers-list/by_executable.json` (the consensus\n\
+         //! `tests/conformance/consensus.json` (the consensus\n\
          //! tiebreak: sources minus `mason-registry`). The rules this\n\
          //! implements, and the cuts this set rests on, are\n\
          //! `docs/catalogue.md`.\n\n\
@@ -245,6 +248,7 @@ fn main() -> Result<()> {
          /// Every measured server of every language the harness covers, in\n\
          /// name order — the name order is not the rank order; [`Entry::rank`]\n\
          /// supplies that.\n\
+         #[rustfmt::skip]\n\
          pub(crate) fn entries() -> Vec<Entry> {{\n\
          \x20   vec![\n\
          {entries}\

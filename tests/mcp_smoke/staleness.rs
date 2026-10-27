@@ -119,8 +119,8 @@ impl Drop for Scratch {
     }
 }
 
-fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) -> String {
-    structural::tools::Definition {
+fn show(state: &structural_lsp::session::Session, symbol: &str, path: Option<&str>) -> String {
+    structural_lsp::tools::Definition {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
         anchor: None,
@@ -137,7 +137,7 @@ fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
 /// The one query that runs before any edit: it starts the server and waits
 /// out its initial indexing. Its success is asserted, so a failed warmup
 /// cannot vacuously set a case up.
-fn warmup(state: &structural::session::Session) {
+fn warmup(state: &structural_lsp::session::Session) {
     let out = show(state, "anchored_base", None);
     assert!(
         out.contains("anchored_base ·"),
@@ -149,7 +149,7 @@ fn warmup(state: &structural::session::Session) {
 fn bare_name_sees_an_unopened_files_edit(language: Language, tag: &str) {
     let root = scratch_root(language, tag);
     let _scratch = Scratch(root.clone());
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     warmup(&state);
 
     let file = root.join(language.edited());
@@ -176,7 +176,7 @@ fn bare_name_sees_an_unopened_files_edit(language: Language, tag: &str) {
 fn bare_name_sees_a_newly_created_file(language: Language, tag: &str) {
     let root = scratch_root(language, tag);
     let _scratch = Scratch(root.clone());
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     warmup(&state);
 
     std::fs::write(
@@ -235,7 +235,7 @@ fn python_bare_name_sees_a_newly_created_file() {
 fn rust_bare_name_forgets_a_deleted_file() {
     let root = scratch_root(Language::Rust, "rust-delete");
     let _scratch = Scratch(root.clone());
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     warmup(&state);
     let found = show(&state, "util_helper", None);
     assert!(

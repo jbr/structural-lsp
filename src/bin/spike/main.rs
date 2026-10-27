@@ -19,8 +19,8 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use structural::lsp::adapter::{Adapter, pyright::Pyright, rust_analyzer::RustAnalyzer};
-use structural::lsp::handle::{ServerHandle, Settings};
+use structural_lsp::lsp::adapter::{Adapter, pyright::Pyright, rust_analyzer::RustAnalyzer};
+use structural_lsp::lsp::handle::{ServerHandle, Settings};
 
 mod annotations;
 mod cli;
@@ -127,7 +127,7 @@ fn run_one(server: Server, options: &Options) -> Result<Report> {
     let fixture = server.fixture_dir(&options.out);
     let _ = fs::remove_dir_all(&fixture);
     fs::create_dir_all(&fixture)?;
-    structural::fixtures::get(server.slug())
+    structural_lsp::fixtures::get(server.slug())
         .ok_or_else(|| anyhow!("no fixture for {}", server.slug()))?
         .materialize(&fixture)?;
 

@@ -230,11 +230,11 @@ fn scratch_root(name: &str) -> PathBuf {
 }
 
 fn show(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
-    structural::tools::Definition {
+    structural_lsp::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: None,
@@ -250,7 +250,7 @@ fn show(
 #[test]
 fn a_file_scope_resolves_without_the_symbol_index() {
     let root = scratch_root("file-scope");
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // The index answered nothing at all; the file's own outline resolved the
@@ -349,7 +349,7 @@ fn a_file_scope_resolves_without_the_symbol_index() {
 #[test]
 fn a_directory_scope_over_unserved_languages_names_them() {
     let root = scratch_root("dir-scope");
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // `web/` holds only TypeScript and Python, and the only running server
@@ -411,7 +411,7 @@ fn empty_py() -> String {
 fn a_server_that_answers_nothing_is_named_on_the_miss() {
     let root = scratch_root("silent");
     std::fs::write(root.join("mock.py"), empty_py()).unwrap();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // The mock advertises an index and answers it empty, so there is no
@@ -498,7 +498,7 @@ fn toggle_py() -> String {
 fn a_server_that_answered_once_is_not_named() {
     let root = scratch_root("answered");
     std::fs::write(root.join("mock.py"), empty_py()).unwrap();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // The file's own outline resolved through this server, so it has shown
@@ -520,7 +520,7 @@ fn a_server_that_answered_once_is_not_named() {
 fn a_bare_name_answers_the_definition_site() {
     let root = scratch_root("toggle");
     std::fs::write(root.join("mock.py"), toggle_py()).unwrap();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // File-scoped first: the outline resolves, and the mock learns

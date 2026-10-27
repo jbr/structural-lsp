@@ -75,7 +75,7 @@ impl Serves {
 /// Carried so a heuristic cannot silently become a fact: the Emacs
 /// inventories' extensions were largely matched by name against another
 /// editor's table, and a plan that chose a server on such an extension
-/// says so (`reference/servers-list/`).
+/// says so (`reference/editor-inventories.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Confidence {
     /// The source stated it.
@@ -130,8 +130,9 @@ pub struct Entry {
     /// **unmeasured**, which is not the same as measured badly — see
     /// [`Entry::rank`] for how the order treats the difference.
     pub score: Option<Score>,
-    /// How many of the editor inventories in `reference/servers-list/`
-    /// ship this server. The tiebreak, never the order.
+    /// How many of the editor inventories in
+    /// `tests/conformance/consensus.json` ship this server. The tiebreak,
+    /// never the order (`docs/catalogue.md`).
     pub consensus: u16,
     pub provenance: Provenance,
 }

@@ -114,7 +114,7 @@ pub struct Scorecard {
     language: String,
     probes: Vec<&'static str>,
     /// The fixture tree the probes ran against
-    /// (`structural::fixtures::Fixture::revision`). The trees are
+    /// (`structural_lsp::fixtures::Fixture::revision`). The trees are
     /// materialized rather than resident, so a score names the tree it
     /// measured the same way it names the server version.
     fixture: String,

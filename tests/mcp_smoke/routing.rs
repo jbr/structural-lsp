@@ -7,8 +7,8 @@ use crate::Server;
 use crate::mock_scope::{MOCK_PY, TOOL_RS, python, quoted};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
-use structural::session::Session;
-use structural::tools::{Definition, References};
+use structural_lsp::session::Session;
+use structural_lsp::tools::{Definition, References};
 
 /// Both fixtures in sibling directories of one scratch root.
 fn siblings(tag: &str) -> PathBuf {

@@ -18,13 +18,13 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<&str>,
     focus: Option<&str>,
 ) -> anyhow::Result<String> {
-    structural::tools::Definition {
+    structural_lsp::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: anchor.map(str::to_string),
@@ -38,13 +38,13 @@ fn show(
 }
 
 fn uses(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<&str>,
     focus: Option<&str>,
 ) -> anyhow::Result<String> {
-    structural::tools::References {
+    structural_lsp::tools::References {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: anchor.map(str::to_string),
@@ -61,7 +61,7 @@ fn uses(
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn qualified_names_and_anchors_target_what_bare_names_cannot() {
     let root = scratch_root();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // The bare name is two things; each qualifier picks one; a wrong

@@ -40,6 +40,13 @@ Each record has one job; keep them distinct.
 - **[`reference/`](reference/) — external findings.** Surveys, datasets, the
   original design draft. True whether or not this repository exists.
 
+**`journal/`, `backlog/` and `efference.toml` are not published.** The
+public repository is generated from this one by `scripts/publish`, which
+a workflow runs on every push to `main` and which filters them out of
+every commit
+([`process/publishing.md`](process/publishing.md)); everything else,
+commit messages included, is public.
+
 When a unit of work ships: delete its `backlog/` file, add a `CHANGELOG.md`
 line, update the affected `docs/`, and add a `journal/` entry if anything
 non-obvious came up.

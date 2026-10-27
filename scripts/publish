@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Generate the public repository from this one and fast-forward its `main`
+# (process/publishing.md). Never force-pushes: a refused push means the
+# public side has a commit this repository lacks.
+#
+#   scripts/publish            filter, check, push
+#   scripts/publish --dry-run  filter and check; print what would be pushed
+set -euo pipefail
+
+# The private paths, removed from every commit. Adding one rewrites every
+# published commit that contained it (process/publishing.md).
+filter=':exclude[::backlog/,::journal/,::efference.toml,::reference/servers-list/]'
+private='^(backlog/|journal/|efference\.toml$|reference/servers-list/)'
+
+remote="${STRUCTURAL_PUBLIC_REMOTE:-git@github.com:jbr/structural-lsp.git}"
+source=refs/heads/main
+target=refs/publish/main
+
+dry_run=false
+case "${1:-}" in
+  --dry-run) dry_run=true ;;
+  "") ;;
+  *) echo "usage: scripts/publish [--dry-run]" >&2; exit 2 ;;
+esac
+
+if ! command -v josh-filter >/dev/null; then
+  # +stable: on a nightly toolchain the `allocative` dependency adds an
+  # `impl Allocative for !` that conflicts with its `Infallible` impl.
+  echo "josh-filter is not on PATH: cargo +stable install --locked --git https://github.com/josh-project/josh --tag r26.08.28 josh-cli --bin josh-filter" >&2
+  exit 1
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+josh-filter "$filter" "$source" --update "$target" >/dev/null
+
+# Every path any filtered commit touched, so a private path in any commit
+# of the history fails the publish, not only one at the tip.
+if leaked=$(git log --format= --name-only "$target" | sort -u | grep -E "$private"); then
+  echo "the filtered history still contains private paths:" >&2
+  echo "$leaked" >&2
+  exit 1
+fi
+
+published=$(git ls-remote "$remote" refs/heads/main | cut -f1)
+if [ -n "$published" ] && ! git merge-base --is-ancestor "$published" "$target" 2>/dev/null; then
+  echo "public main ($published) is not an ancestor of the filtered history; fetch it and see process/publishing.md" >&2
+  exit 1
+fi
+
+range="$target"
+[ -n "$published" ] && range="$published..$target"
+echo "$(git rev-list --count "$range") commits to publish, $(git rev-parse --short "$target") at the tip"
+
+if $dry_run; then
+  git log --oneline --format='%h %<(72,trunc)%s' "$range" | head -20
+  exit 0
+fi
+git push "$remote" "$target:refs/heads/main"

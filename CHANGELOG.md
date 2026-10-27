@@ -3,13 +3,16 @@
 All notable changes to structural. Format follows
 [keep-a-changelog](https://keepachangelog.com); one line per feature. The
 project is unreleased, so everything lives under *Unreleased* for now. For
-how the system works, see [`docs/`](docs/); for the narrative behind a
-change, see [`journal/`](journal/); for what is left, see
-[`backlog/`](backlog/).
+how the system works, see [`docs/`](docs/).
 
 ## [Unreleased]
 
+### Changed
+- **The crate and binary are `structural-lsp`** (process/publishing.md): `cargo install structural-lsp` installs one program, `structural-lsp`, and the library is `structural_lsp`; `structural.toml`, the `STRUCTURAL_*` variables and the MCP logger name keep their spelling. The development binaries stay out of the package.
+- **The catalogue's consensus comes from `tests/conformance/consensus.json`** (docs/catalogue.md): which editor inventories configure each executable, derived from the extracted inventories, which are no longer in the tree; their analysis is `reference/editor-inventories.md`.
+
 ### Added
+- **A public repository generated from this one** (process/publishing.md): `scripts/publish`, run on every push to `main`, filters `journal/`, `backlog/`, `efference.toml` and the extracted inventories out of every commit and fast-forwards the public `main`; a README, MIT OR Apache-2.0 licensing, CI, and a release that publishes to crates.io and attaches prebuilt macOS and Linux binaries and a shell installer built by dist, all from the public side without committing there.
 - **Workspaces re-run discovery on filesystem events** (docs/observation.md): every workspace watches its own root, and a batch — including an overflow — reduces to a full evidence re-gather and re-select, so a tree that grows a language gets its server slot without a restart. Append-only, warms nothing; not a freshness claim.
 - **Signal policy over the watcher** (docs/observation.md): binding and queries are strong signals that start servers; filesystem batches are weak — they refresh evidence and warm only a newly appeared language's server, and only while an agent is attached, so build output and background churn launch nothing. A new slot is reachable by demand in the same breath: the refresh grows the entry's slot copy under the workspace lock.
 - **Idle eviction** (docs/observation.md): a server no strong signal has addressed for the interval — default 30 minutes, `idle-eviction-secs` in `structural.toml` — stops while observation goes on; the next query reacquires what it needs, and a failed ladder retries on the same clock. A launch superseded by a stop cannot publish over its slot: slot generations are compared at publish.

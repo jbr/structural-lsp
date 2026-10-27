@@ -30,14 +30,14 @@ fn scratch_root(tag: &str) -> PathBuf {
 }
 
 fn action(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: &str,
     path: &str,
     new_name: &str,
     mode: Option<&str>,
     digest: Option<&str>,
 ) -> String {
-    structural::tools::Rename {
+    structural_lsp::tools::Rename {
         symbol: Some(symbol.to_string()),
         path: Some(path.to_string()),
         anchor: None,
@@ -52,8 +52,8 @@ fn action(
     .unwrap_or_else(|error| panic!("rename {symbol} → {new_name} ({mode:?}): {error:#}"))
 }
 
-fn show(state: &structural::session::Session, symbol: &str, path: &str) -> String {
-    structural::tools::Definition {
+fn show(state: &structural_lsp::session::Session, symbol: &str, path: &str) -> String {
+    structural_lsp::tools::Definition {
         symbol: Some(symbol.to_string()),
         path: Some(path.to_string()),
         anchor: None,
@@ -96,7 +96,7 @@ fn the_rename_answer_carries_the_server_caveat() {
         ),
     )
     .unwrap();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
 
     let preview = action(&state, "choose", "rust", "pick", None, None);
     assert!(
@@ -140,7 +140,7 @@ fn the_rename_answer_carries_the_server_caveat() {
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn rename_previews_then_applies_with_a_matching_digest() {
     let root = scratch_root("digest");
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
 
     // Preview: the definition and the call, both lines shown, nothing
     // written.
@@ -346,7 +346,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     );
 
     // Argument errors.
-    let same = structural::tools::Rename {
+    let same = structural_lsp::tools::Rename {
         symbol: Some("pick".to_string()),
         path: Some("rust".to_string()),
         anchor: None,
@@ -359,7 +359,7 @@ fn rename_previews_then_applies_with_a_matching_digest() {
     }
     .run(&state);
     assert!(same.unwrap_err().to_string().contains("already the name"));
-    let missing = structural::tools::Rename {
+    let missing = structural_lsp::tools::Rename {
         symbol: Some("pick".to_string()),
         path: None,
         anchor: None,

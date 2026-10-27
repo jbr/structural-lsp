@@ -155,8 +155,8 @@ fn scratch(name: &str, rust: &str, python: &str) -> PathBuf {
 }
 
 fn definition(root: &std::path::Path, symbol: &str) -> anyhow::Result<String> {
-    let state = structural::session::Session::new(root.to_path_buf());
-    let tool: structural::tools::Definition =
+    let state = structural_lsp::session::Session::new(root.to_path_buf());
+    let tool: structural_lsp::tools::Definition =
         serde_json::from_value(json!({ "symbol": symbol })).unwrap();
     tool.run(&state)
 }

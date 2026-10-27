@@ -54,7 +54,7 @@ nearest.** From `crates/alpha`, the nearest `Cargo.toml` is the member's;
 the workspace it actually loaded is the outermost one. That agrees with
 Helix's documented rule (topmost marker between the file and the workspace)
 and disagrees with nvim-lspconfig's (nearest ancestor carrying the
-highest-priority marker) — see [`servers-list/`](servers-list/) for the six
+highest-priority marker) — see [`editor-inventories.md`](editor-inventories.md) for the six
 conventions and how they differ.
 
 ## Limits

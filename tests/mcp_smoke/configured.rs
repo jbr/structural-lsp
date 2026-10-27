@@ -8,7 +8,7 @@ fn scratch_module() -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-gopls-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
-    structural::fixtures::get("go")
+    structural_lsp::fixtures::get("go")
         .expect("the go fixture")
         .materialize(&root)
         .unwrap();
@@ -24,7 +24,7 @@ fn scratch_module() -> PathBuf {
 #[ignore = "spawns gopls (and the built-ins); run explicitly with -- --ignored"]
 fn a_configured_server_resolves_through_the_generic_adapter() {
     let root = scratch_module();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     // Binding only starts the servers (`docs/ownership.md`); wait for them,
     // as a query would, before asking which are running.
     state.activate(None);
@@ -42,7 +42,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         );
     }
 
-    let output = structural::tools::Definition {
+    let output = structural_lsp::tools::Definition {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,
@@ -68,7 +68,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
 
     // `uses` through the generic adapter: the call in `Run`, and the test
     // file's call set apart by its `_test.go` name.
-    let uses = structural::tools::References {
+    let uses = structural_lsp::tools::References {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,
@@ -91,7 +91,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
 
     // An anchor in the caller resolves to the same definition through
     // gopls; the header is the outline's kind and name.
-    let anchored = structural::tools::Definition {
+    let anchored = structural_lsp::tools::Definition {
         symbol: None,
         path: Some("main.go".to_string()),
         anchor: Some("return Greet(\"world\")".to_string()),
@@ -109,7 +109,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     );
 
     // The hover signature through the generic adapter.
-    let signature = structural::tools::Definition {
+    let signature = structural_lsp::tools::Definition {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,
@@ -131,7 +131,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
     );
 
     // Rename through the generic adapter: both files change.
-    let preview = structural::tools::Rename {
+    let preview = structural_lsp::tools::Rename {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,
@@ -160,7 +160,7 @@ fn a_configured_server_resolves_through_the_generic_adapter() {
         .find_map(|line| line.strip_prefix("digest: "))
         .expect("a digest")
         .to_string();
-    let applied = structural::tools::Rename {
+    let applied = structural_lsp::tools::Rename {
         symbol: Some("Greet".to_string()),
         path: None,
         anchor: None,

@@ -21,14 +21,14 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     view: &str,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<&str>,
     focus: Option<&str>,
 ) -> String {
-    structural::tools::Definition {
+    structural_lsp::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: anchor.map(str::to_string),
@@ -46,7 +46,7 @@ fn show(
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn views_answer_from_the_outline_hover_and_call_hierarchy() {
     let root = scratch_root();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
 
     // A file outline: every item in order, methods under their impls.
     let outline = show(&state, "outline", None, Some("rust/src/lib.rs"), None, None);
@@ -355,7 +355,7 @@ fn derive_tree() -> PathBuf {
 #[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
 fn expanded_reaches_a_proc_macro_derive_and_explains_the_rest() {
     let root = derive_tree();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let anchor = Some("#[derive(Debug, Clone, pm::Hello)]\npub struct ToolCall {");
     let at = |focus: &str| {
         show(

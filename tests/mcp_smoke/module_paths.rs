@@ -43,8 +43,8 @@ fn scratch_root() -> PathBuf {
     std::fs::canonicalize(root).unwrap()
 }
 
-fn show(state: &structural::session::Session, symbol: &str, path: &str) -> String {
-    structural::tools::Definition {
+fn show(state: &structural_lsp::session::Session, symbol: &str, path: &str) -> String {
+    structural_lsp::tools::Definition {
         symbol: Some(symbol.to_string()),
         path: Some(path.to_string()),
         anchor: None,
@@ -68,7 +68,7 @@ fn head(text: &str) -> &str {
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn module_paths_resolve_from_the_file_its_outline_and_its_directory() {
     let root = scratch_root();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let rust = |symbol| show(&state, symbol, "rust");
     let python = |symbol| show(&state, symbol, "python");
 

@@ -133,7 +133,7 @@ descriptor together, which separates two things that look alike:
   escalation: a cleanup thread ends input once admitted work has finished, and
   the serve loop drains its responses and returns naturally.
 
-One-shot CLI dispatch (`structural definition choose`) keeps its behaviour: the
+One-shot CLI dispatch (`structural-lsp definition choose`) keeps its behaviour: the
 same `host.shutdown()` runs on the way out, and a failed run forces first.
 
 ## Limits, stated rather than fixed

@@ -194,12 +194,12 @@ fn scratch_root(tag: &str, mock_body: &str, builtin: bool) -> PathBuf {
 }
 
 fn action(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     new_name: &str,
     mode: Option<&str>,
     digest: Option<&str>,
 ) -> String {
-    structural::tools::Rename {
+    structural_lsp::tools::Rename {
         symbol: Some("greet".to_string()),
         path: Some("src/doc.rs".to_string()),
         anchor: None,
@@ -225,7 +225,7 @@ fn digest_of(preview: &str) -> String {
 #[test]
 fn a_mock_under_the_rust_analyzer_adapter_applies_its_doc_link_edit_and_carries_the_note() {
     let root = scratch_root("ra", RA_MOCK_BODY, true);
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
 
     let preview = action(&state, "salute", None, None);
     let note = "note: rust-analyzer rename may leave intra-doc links unchanged; \
@@ -289,7 +289,7 @@ fn a_mock_under_the_rust_analyzer_adapter_applies_its_doc_link_edit_and_carries_
 #[test]
 fn a_generic_server_gets_no_note_line_and_its_answer_is_applied_as_is() {
     let root = scratch_root("generic", GENERIC_MOCK_BODY, false);
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
 
     let preview = action(&state, "salute", None, None);
     assert!(

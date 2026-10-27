@@ -1,6 +1,7 @@
-//! The `structural` binary: an MCP server over stdio (`structural serve`) or a
-//! tool run directly from argv (`structural show choose`), parsed by mcplease's
-//! [`Cli`] and run on smol. Every tool call is spawned, so a call waiting on a
+//! The `structural-lsp` binary: an MCP server over stdio
+//! (`structural-lsp serve`) or a tool run directly from argv
+//! (`structural-lsp definition choose`), parsed by mcplease's [`Cli`] and
+//! run on smol. Every tool call is spawned, so a call waiting on a
 //! cold index never holds up another, nor `ping`.
 //!
 //! The workspace root is the current directory, or `STRUCTURAL_ROOT` when
@@ -34,9 +35,9 @@ use mcplease::{Cli, clap::Parser, traits::Dispatch, types::RequestContext};
 use smol::{Executor, Unblock};
 use std::path::PathBuf;
 use std::sync::Arc;
-use structural::host::{AgentId, Host};
-use structural::operator::mcp::Mcp;
-use structural::tools;
+use structural_lsp::host::{AgentId, Host};
+use structural_lsp::operator::mcp::Mcp;
+use structural_lsp::tools;
 
 fn main() -> anyhow::Result<()> {
     let operator = Arc::new(Mcp::new());

@@ -20,8 +20,8 @@ are [`../reference/`](../reference/).
 
 ## What this is
 
-One Rust binary. `structural serve` speaks MCP over stdio and exposes three
-tools; `structural definition choose` runs the same tool once from argv. Behind
+One Rust binary. `structural-lsp serve` speaks MCP over stdio and exposes three
+tools; `structural-lsp definition choose` runs the same tool once from argv. Behind
 either front end sits a **host**: a process's workspaces, keyed by canonical
 root, each owning the language-server processes for that root and shared by
 every caller bound to it. The MCP front end is one such caller

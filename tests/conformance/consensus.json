@@ -1,0 +1,3495 @@
+{
+  "about": "Which editor inventories configure each language-server executable, for any language: the consensus tiebreak in docs/catalogue.md. Derived from inventories extracted from each editor's source on 2026-09-15; `revisions` names the source revision read for each.",
+  "revisions": {
+    "eglot": "joaotavora/eglot 52dddcb (2026-08-17)",
+    "lsp-mode": "emacs-lsp/lsp-mode d083538 (2026-09-05), plus 18 lsp-client-packages repos at HEAD on 2026-09-15",
+    "lsp-bridge": "manateelazycat/lsp-bridge 4459343 (2026-08-26)",
+    "nvim-lspconfig": "neovim/nvim-lspconfig ac9d2f7 (2026-09-10)",
+    "helix": "helix-editor/helix master languages.toml (2026-09-15)",
+    "vim-lsp-settings": "mattn/vim-lsp-settings c61a46e (2026-09-05)",
+    "kakoune-lsp": "kakoune-lsp/kakoune-lsp 274740e (2026-09-12)",
+    "kate": "KDE/kate master addons/lspclient/settings.json (2026-09-15)",
+    "opencode": "sst/opencode dev packages/opencode/src/lsp/server.ts (2026-09-15)",
+    "zed-builtin": "zed-industries/zed f092e5e (2026-09-15)",
+    "zed-extension": "zed-industries/extensions fb1bef0 (2026-09-15)",
+    "mason-registry": "mason-org/mason-registry 9ad5f3b (2026-09-15); an installer index, not a selector, and not counted"
+  },
+  "executables": {
+    "%USER_EMACS_DIRECTORY%\\.cache\\omnisharp\\OmniSharp": [
+      "lsp-bridge"
+    ],
+    "Contextive.LanguageServer": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "DaedalusLanguageServer": [
+      "nvim-lspconfig"
+    ],
+    "Microsoft.Python.LanguageServer": [
+      "lsp-bridge"
+    ],
+    "MicrosoftSqlToolsServiceLayer": [
+      "lsp-mode"
+    ],
+    "OmniSharp": [
+      "eglot",
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "zed-extension"
+    ],
+    "R": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "SumatraPDF": [
+      "zed-extension"
+    ],
+    "Swift-MesonLSP": [
+      "nvim-lspconfig"
+    ],
+    "WolframKernel": [
+      "nvim-lspconfig"
+    ],
+    "YarnLanguageServer": [
+      "zed-extension"
+    ],
+    "actions-languageserver": [
+      "helix",
+      "mason-registry"
+    ],
+    "activitywatch-ls": [
+      "zed-extension"
+    ],
+    "ada_language_server": [
+      "eglot",
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "aer": [
+      "zed-extension"
+    ],
+    "agentscript-lsp": [
+      "nvim-lspconfig"
+    ],
+    "aiken": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "air": [
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "alloy": [
+      "nvim-lspconfig"
+    ],
+    "als": [
+      "helix",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "alzed-bridge": [
+      "zed-extension"
+    ],
+    "amber-lsp": [
+      "helix",
+      "mason-registry"
+    ],
+    "ameba-ls": [
+      "helix",
+      "zed-extension"
+    ],
+    "anakinls": [
+      "nvim-lspconfig"
+    ],
+    "analysis-server-dart-snapshot": [
+      "vim-lsp-settings"
+    ],
+    "angular-language-server": [
+      "vim-lsp-settings"
+    ],
+    "ansible-language-server": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "antlersls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "apex-jorje-lsp": [
+      "vim-lsp-settings"
+    ],
+    "apex.jorje.lsp.ApexLanguageServerLauncher": [
+      "nvim-lspconfig"
+    ],
+    "aptos": [
+      "zed-extension"
+    ],
+    "aptos-language-server": [
+      "zed-extension"
+    ],
+    "arduino-cli": [
+      "zed-extension"
+    ],
+    "arduino-language-server": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "asimonim": [
+      "zed-extension"
+    ],
+    "asm-lsp": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "asn1-lsp": [
+      "zed-extension"
+    ],
+    "ast-grep": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "astro-ls": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings"
+    ],
+    "atlas": [
+      "nvim-lspconfig"
+    ],
+    "ato": [
+      "nvim-lspconfig"
+    ],
+    "autohotkey_lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "autoit-lsp": [
+      "zed-extension"
+    ],
+    "autotools-language-server": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "awk-language-server": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "aws-lsp-yaml": [
+      "vim-lsp-settings"
+    ],
+    "awsum": [
+      "zed-extension"
+    ],
+    "azure-pipelines-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "babel-lsp": [
+      "zed-extension"
+    ],
+    "bacon-ls": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "bal": [
+      "lsp-bridge",
+      "nvim-lspconfig"
+    ],
+    "basedpyright": [
+      "mason-registry"
+    ],
+    "basedpyright-langserver": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "bash-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-builtin",
+      "zed-extension"
+    ],
+    "basics-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "bass": [
+      "helix"
+    ],
+    "bazelrc-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "beancount-language-server": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "beast-language-server": [
+      "zed-extension"
+    ],
+    "benten": [
+      "lsp-bridge"
+    ],
+    "bicep-langserver": [
+      "helix"
+    ],
+    "bicep-lsp": [
+      "mason-registry"
+    ],
+    "biome": [
+      "helix",
+      "kakoune-lsp",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "bitbake-language-server": [
+      "helix",
+      "nvim-lspconfig"
+    ],
+    "blueprint-compiler": [
+      "eglot",
+      "helix",
+      "kate",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "bqls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "brioche": [
+      "nvim-lspconfig"
+    ],
+    "bsc": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "bsl-language-server": [
+      "mason-registry"
+    ],
+    "buck2": [
+      "helix",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "buddy-lsp-server": [
+      "nvim-lspconfig"
+    ],
+    "buf": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "bufls": [
+      "lsp-mode"
+    ],
+    "bundle": [
+      "lsp-mode",
+      "zed-extension"
+    ],
+    "bylaws-lsp": [
+      "zed-extension"
+    ],
+    "bzl": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "c3-lsp": [
+      "helix",
+      "zed-extension"
+    ],
+    "c3lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "cairo-language-server": [
+      "helix",
+      "mason-registry"
+    ],
+    "camells": [
+      "lsp-bridge"
+    ],
+    "cartan": [
+      "zed-extension"
+    ],
+    "ccls": [
+      "eglot",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "cds-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "cem": [
+      "zed-extension"
+    ],
+    "cfmleditor-lsp": [
+      "zed-extension"
+    ],
+    "cir-lsp-server": [
+      "nvim-lspconfig"
+    ],
+    "circleci-yaml-language-server": [
+      "mason-registry"
+    ],
+    "circom-lsp": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "citation-langserver": [
+      "lsp-bridge"
+    ],
+    "civet-lsp": [
+      "zed-extension"
+    ],
+    "cl-lsp": [
+      "helix",
+      "vim-lsp-settings"
+    ],
+    "clangd": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-builtin",
+      "zed-extension"
+    ],
+    "clarinet": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "clice": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "clj-kondo-lsp": [
+      "vim-lsp-settings"
+    ],
+    "clojure-lsp": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "clojure-lsp.exe": [
+      "opencode"
+    ],
+    "cmake-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "cobol-language-support": [
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "code-stats-ls": [
+      "zed-extension"
+    ],
+    "codebook-lsp": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "codeql": [
+      "helix",
+      "mason-registry"
+    ],
+    "coffeesense-language-server": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "commit-lsp": [
+      "helix"
+    ],
+    "copilot-language-server": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "coq-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "covhl": [
+      "zed-extension"
+    ],
+    "cql-language-server": [
+      "mason-registry"
+    ],
+    "cqlls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "crates-lsp": [
+      "lsp-mode",
+      "zed-extension"
+    ],
+    "croma-lsp": [
+      "zed-extension"
+    ],
+    "crystalline": [
+      "helix",
+      "kakoune-lsp",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "cs": [
+      "helix",
+      "nvim-lspconfig"
+    ],
+    "csharp-ls": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "cspell-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "css-languageserver": [
+      "eglot",
+      "vim-lsp-settings"
+    ],
+    "css-variable-lsp": [
+      "zed-extension"
+    ],
+    "css-variables-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "csskit": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "cssmodules-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "cst_lsp": [
+      "zed-extension"
+    ],
+    "ctags-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "cucumber-language-server": [
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "cue": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "cuelsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "custom-code-folding-server": [
+      "zed-extension"
+    ],
+    "custom-elements-languageserver": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "cypher-language-server": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "dafny": [
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "daml": [
+      "zed-extension"
+    ],
+    "dart": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "nvim-lspconfig",
+      "opencode",
+      "zed-extension"
+    ],
+    "dbt-language-server": [
+      "zed-extension"
+    ],
+    "dcm": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "debian-lsp": [
+      "helix",
+      "vim-lsp-settings"
+    ],
+    "debputy": [
+      "kate",
+      "nvim-lspconfig"
+    ],
+    "deno": [
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "deps-lsp": [
+      "zed-extension"
+    ],
+    "deputy": [
+      "zed-extension"
+    ],
+    "devsense-php-ls": [
+      "nvim-lspconfig"
+    ],
+    "dexter": [
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "dhall-lsp-server": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "diagnostic-languageserver": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "digestif": [
+      "eglot",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "dingo-lsp": [
+      "mason-registry"
+    ],
+    "discord-presence-lsp": [
+      "zed-extension"
+    ],
+    "displayline": [
+      "zed-extension"
+    ],
+    "djls": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "djlsp": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "dls": [
+      "kakoune-lsp",
+      "vim-lsp-settings"
+    ],
+    "docker-compose-langserver": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "docker-langserver": [
+      "eglot",
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "docker-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "dockerfile-language-server-nodejs": [
+      "opencode"
+    ],
+    "dolmenls": [
+      "nvim-lspconfig"
+    ],
+    "dot-language-server": [
+      "eglot",
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "dotnet": [
+      "nvim-lspconfig",
+      "opencode",
+      "zed-extension"
+    ],
+    "dpm": [
+      "zed-extension"
+    ],
+    "dprint": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "drools-lsp": [
+      "helix"
+    ],
+    "ds-pinyin-lsp": [
+      "lsp-bridge",
+      "nvim-lspconfig"
+    ],
+    "dts-lsp": [
+      "helix",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "dune": [
+      "zed-extension"
+    ],
+    "duper_lsp": [
+      "zed-extension"
+    ],
+    "duso": [
+      "zed-extension"
+    ],
+    "dylan-lsp-server": [
+      "zed-extension"
+    ],
+    "earthlyls": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "eask": [
+      "zed-extension"
+    ],
+    "ebnfer": [
+      "helix"
+    ],
+    "eclipse-jdt-ls": [
+      "vim-lsp-settings"
+    ],
+    "ecsact_lsp_server": [
+      "nvim-lspconfig"
+    ],
+    "efm-langserver": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "eiffel-language-server": [
+      "helix"
+    ],
+    "elixir": [
+      "opencode"
+    ],
+    "elixir-debug-adapter": [
+      "zed-extension"
+    ],
+    "elixir-hex-lens-lsp": [
+      "zed-extension"
+    ],
+    "elixir-ls": [
+      "helix",
+      "kakoune-lsp",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings"
+    ],
+    "elixir-ls-debugger": [
+      "mason-registry"
+    ],
+    "ellec": [
+      "zed-extension"
+    ],
+    "elm-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "elp": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "els": [
+      "mason-registry"
+    ],
+    "elvish": [
+      "helix",
+      "kakoune-lsp"
+    ],
+    "ember-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "emmet-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "emmet-ls": [
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "emmylua": [
+      "zed-extension"
+    ],
+    "emmylua-ls": [
+      "vim-lsp-settings"
+    ],
+    "emmylua_dap": [
+      "zed-extension"
+    ],
+    "emmylua_ls": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "emoji-language-server": [
+      "zed-extension"
+    ],
+    "erg": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "erlang-ls": [
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "erlang_ls": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry"
+    ],
+    "esbonio": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "eslint-language-server": [
+      "kakoune-lsp",
+      "vim-lsp-settings"
+    ],
+    "evince": [
+      "zed-extension"
+    ],
+    "expert": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "facility-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "fallow-lsp": [
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "fastapi-lsp": [
+      "zed-extension"
+    ],
+    "fatou": [
+      "zed-extension"
+    ],
+    "fennel-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "fennel-ls": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "ferret": [
+      "zed-extension"
+    ],
+    "firrtl-source-locator-server": [
+      "zed-extension"
+    ],
+    "fish-lsp": [
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "flatbuffers-language-server": [
+      "zed-extension"
+    ],
+    "flow": [
+      "lsp-mode",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "flux-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "foam-ls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "forc": [
+      "helix"
+    ],
+    "forc-lsp": [
+      "zed-extension"
+    ],
+    "format-cds": [
+      "mason-registry"
+    ],
+    "forth-lsp": [
+      "helix"
+    ],
+    "fortitude": [
+      "lsp-mode",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "fortls": [
+      "eglot",
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "fsautocomplete": [
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings"
+    ],
+    "fsharp-language-server": [
+      "vim-lsp-settings"
+    ],
+    "fstar": [
+      "nvim-lspconfig"
+    ],
+    "fswiki-lsp": [
+      "zed-extension"
+    ],
+    "futhark": [
+      "eglot",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "fuzion_language_server": [
+      "lsp-bridge"
+    ],
+    "fvm": [
+      "zed-extension"
+    ],
+    "gdshader-lsp": [
+      "nvim-lspconfig"
+    ],
+    "gem": [
+      "opencode"
+    ],
+    "gh-actions-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "ghcide": [
+      "nvim-lspconfig"
+    ],
+    "ghdl-ls": [
+      "nvim-lspconfig"
+    ],
+    "ghostty-ls": [
+      "helix"
+    ],
+    "ginko_ls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "gitlab-ci-ls": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "glasgow": [
+      "nvim-lspconfig"
+    ],
+    "gleam": [
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "glint": [
+      "mason-registry"
+    ],
+    "glint-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "glsl_analyzer": [
+      "helix",
+      "kate",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "glsld": [
+      "helix"
+    ],
+    "glslls": [
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "gn-language-server": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "gnls": [
+      "nvim-lspconfig"
+    ],
+    "go": [
+      "opencode",
+      "zed-builtin"
+    ],
+    "godot": [
+      "vim-lsp-settings"
+    ],
+    "golangci-lint-langserver": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "gopls": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "gql-language-server": [
+      "vim-lsp-settings"
+    ],
+    "gradle-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "grammarly-languageserver": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "grammarly-ls": [
+      "lsp-mode"
+    ],
+    "graphql-language-server": [
+      "vim-lsp-settings"
+    ],
+    "graphql-lsp": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "gregorio-lsp": [
+      "zed-extension"
+    ],
+    "groovy-language-server": [
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "guile-lsp-server": [
+      "nvim-lspconfig"
+    ],
+    "hare-lsp": [
+      "helix",
+      "kakoune-lsp",
+      "nvim-lspconfig"
+    ],
+    "harper-ls": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "haskell-language-server-9.10.3": [
+      "mason-registry"
+    ],
+    "haskell-language-server-9.12.2": [
+      "mason-registry"
+    ],
+    "haskell-language-server-9.14.1": [
+      "mason-registry"
+    ],
+    "haskell-language-server-9.6.7": [
+      "mason-registry"
+    ],
+    "haskell-language-server-9.8.4": [
+      "mason-registry"
+    ],
+    "haskell-language-server-wrapper": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "haxe-language-server": [
+      "mason-registry"
+    ],
+    "hdb": [
+      "zed-extension"
+    ],
+    "hdl_checker": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "hdls": [
+      "helix"
+    ],
+    "helm-ls": [
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "helm_ls": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "herb": [
+      "zed-extension"
+    ],
+    "herb-language-server": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "hh_client": [
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "hie-wrapper": [
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "hlasm-language-support": [
+      "lsp-bridge"
+    ],
+    "hlasm_language_server": [
+      "nvim-lspconfig"
+    ],
+    "hledger-lsp": [
+      "zed-extension"
+    ],
+    "hoon-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "html-languageserver": [
+      "eglot",
+      "vim-lsp-settings"
+    ],
+    "htmx-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "hydra-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "hylo-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "hyprls": [
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "hyuga": [
+      "helix",
+      "lsp-mode",
+      "vim-lsp-settings"
+    ],
+    "idris2-lsp": [
+      "helix",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "infracost-ls": [
+      "zed-extension"
+    ],
+    "inklecate": [
+      "zed-extension"
+    ],
+    "intelephense": [
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "intellij-server": [
+      "kakoune-lsp",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "intl-lens": [
+      "zed-extension"
+    ],
+    "iwes": [
+      "zed-extension"
+    ],
+    "janet-lsp": [
+      "nvim-lspconfig"
+    ],
+    "jarl": [
+      "zed-extension"
+    ],
+    "java": [
+      "lsp-mode",
+      "nvim-lspconfig",
+      "opencode",
+      "zed-extension"
+    ],
+    "java-language-server": [
+      "eglot",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "java-language-server-debugger": [
+      "mason-registry"
+    ],
+    "javascript-typescript-stdio": [
+      "lsp-mode",
+      "vim-lsp-settings"
+    ],
+    "jayvee-language-server": [
+      "mason-registry"
+    ],
+    "jdtls": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "jedi-language-server": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "jerry": [
+      "zed-extension"
+    ],
+    "jetls": [
+      "nvim-lspconfig"
+    ],
+    "jinja-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "jj-lsp": [
+      "zed-extension"
+    ],
+    "jls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "jls-debug-adapter": [
+      "mason-registry"
+    ],
+    "jq-lsp": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "json-languageserver": [
+      "eglot",
+      "vim-lsp-settings"
+    ],
+    "json-tool-lsp": [
+      "zed-extension"
+    ],
+    "jsonl-lsp": [
+      "zed-extension"
+    ],
+    "jsonld-language-server": [
+      "mason-registry"
+    ],
+    "jsonnet-language-server": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "julia": [
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "opencode",
+      "zed-extension"
+    ],
+    "julia-language-server": [
+      "vim-lsp-settings"
+    ],
+    "julia-lsp": [
+      "mason-registry"
+    ],
+    "just-lsp": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "k8s-crd-lsp": [
+      "zed-extension"
+    ],
+    "kakehashi": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "kcl": [
+      "mason-registry"
+    ],
+    "kcl-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "kdl-lsp": [
+      "nvim-lspconfig"
+    ],
+    "kls": [
+      "mason-registry"
+    ],
+    "kmp-lsp": [
+      "mason-registry"
+    ],
+    "koka": [
+      "helix",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "kotlin-language-server": [
+      "eglot",
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "kotlin-lsp": [
+      "helix",
+      "vim-lsp-settings"
+    ],
+    "koto-ls": [
+      "helix",
+      "zed-extension"
+    ],
+    "kulala-ls": [
+      "nvim-lspconfig"
+    ],
+    "lake": [
+      "helix",
+      "lsp-bridge",
+      "zed-extension"
+    ],
+    "language-server": [
+      "opencode"
+    ],
+    "language-server-bitbake": [
+      "mason-registry",
+      "zed-extension"
+    ],
+    "language_server": [
+      "lsp-bridge",
+      "lsp-mode"
+    ],
+    "language_server.bat": [
+      "eglot"
+    ],
+    "language_server.sh": [
+      "eglot",
+      "lsp-bridge"
+    ],
+    "laravel-ls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "laravel-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "lean-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "lelwel-ls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "lemminx": [
+      "kate",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "leo-lsp": [
+      "zed-extension"
+    ],
+    "lexical": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "liger": [
+      "zed-extension"
+    ],
+    "lis": [
+      "zed-extension"
+    ],
+    "lldb-dap": [
+      "zed-extension"
+    ],
+    "llm-ls": [
+      "mason-registry"
+    ],
+    "llm-lsp": [
+      "vim-lsp-settings"
+    ],
+    "llw": [
+      "mason-registry"
+    ],
+    "localhost": [
+      "eglot",
+      "lsp-mode"
+    ],
+    "lsp": [
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "lsp-ai": [
+      "nvim-lspconfig"
+    ],
+    "lsp-proxy": [
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "ltex-cli": [
+      "mason-registry"
+    ],
+    "ltex-cli-plus": [
+      "mason-registry"
+    ],
+    "ltex-ls": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "ltex-ls-plus": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "lua-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "zed-extension"
+    ],
+    "lua-lsp": [
+      "eglot",
+      "lsp-bridge",
+      "lsp-mode"
+    ],
+    "luau-lsp": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "lwc-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "m68k-lsp-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "magequery": [
+      "zed-extension"
+    ],
+    "markdoc-ls": [
+      "helix"
+    ],
+    "markdown-oxide": [
+      "helix",
+      "kakoune-lsp",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "marko-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "marksman": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "matlab-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "matlab_ls": [
+      "zed-extension"
+    ],
+    "mdx-language-server": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "mesonlsp": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "metal-analyzer": [
+      "zed-extension"
+    ],
+    "metals": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "metals-emacs": [
+      "eglot"
+    ],
+    "microcad-lsp": [
+      "nvim-lspconfig"
+    ],
+    "millet": [
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "millet-ls": [
+      "eglot",
+      "helix",
+      "lsp-mode",
+      "zed-extension"
+    ],
+    "mint": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "mlir-lsp-server": [
+      "nvim-lspconfig"
+    ],
+    "mlir-pdll-lsp-server": [
+      "nvim-lspconfig"
+    ],
+    "mls": [
+      "zed-extension"
+    ],
+    "mm-lsp-server": [
+      "helix"
+    ],
+    "mm0-rs": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "mojo-lsp-server": [
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "monastery": [
+      "vim-lsp-settings"
+    ],
+    "mono": [
+      "lsp-bridge"
+    ],
+    "moon": [
+      "zed-extension"
+    ],
+    "moon-lsp": [
+      "vim-lsp-settings"
+    ],
+    "moonbit-lsp": [
+      "helix"
+    ],
+    "motoko-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "move-analyzer": [
+      "eglot",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "mozuku-lsp": [
+      "vim-lsp-settings"
+    ],
+    "mpls": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "ms-terraform-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "msc": [
+      "zed-extension"
+    ],
+    "muon": [
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "mutt-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "nargo": [
+      "zed-extension"
+    ],
+    "nc": [
+      "kate",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "ncat": [
+      "helix",
+      "zed-extension"
+    ],
+    "neocmakelsp": [
+      "eglot",
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "neovim": [
+      "nvim-lspconfig"
+    ],
+    "nextflow-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "nextls": [
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "nginx-language-server": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "ngserver": [
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "nil": [
+      "eglot",
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "nimlangserver": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "nimlsp": [
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "nivals": [
+      "zed-extension"
+    ],
+    "nixd": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "nls": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "node": [
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "zed-builtin"
+    ],
+    "nomad-lsp": [
+      "nvim-lspconfig"
+    ],
+    "nomicfoundation-solidity-language-server": [
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "npm": [
+      "lsp-mode"
+    ],
+    "npx": [
+      "nvim-lspconfig"
+    ],
+    "nsis-lsp": [
+      "zed-extension"
+    ],
+    "ntt": [
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "nu": [
+      "eglot",
+      "helix",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "nu-lint": [
+      "helix"
+    ],
+    "nxls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "ocaml-language-server": [
+      "lsp-mode"
+    ],
+    "ocaml-lsp": [
+      "vim-lsp-settings"
+    ],
+    "ocamllsp": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "zed-extension"
+    ],
+    "odinfmt": [
+      "mason-registry"
+    ],
+    "odoo-lsp": [
+      "zed-extension"
+    ],
+    "okular": [
+      "zed-extension"
+    ],
+    "ols": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "omnisharp": [
+      "eglot",
+      "nvim-lspconfig"
+    ],
+    "omnisharp-lsp": [
+      "vim-lsp-settings"
+    ],
+    "omnisharp-mono": [
+      "mason-registry"
+    ],
+    "opam": [
+      "lsp-mode",
+      "zed-extension"
+    ],
+    "opencl-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "openscad-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "openscad-lsp": [
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "oso-cloud": [
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "oxc_language_server": [
+      "opencode"
+    ],
+    "oxfmt": [
+      "helix",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "oxlint": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings"
+    ],
+    "package-swift-lsp": [
+      "zed-extension"
+    ],
+    "package-version-server": [
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "pact": [
+      "zed-extension"
+    ],
+    "pact-lsp": [
+      "nvim-lspconfig"
+    ],
+    "panache": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "papyrus-language-server": [
+      "zed-extension"
+    ],
+    "pasls": [
+      "helix",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "pb": [
+      "helix"
+    ],
+    "pbls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "perl": [
+      "eglot",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "perl-languageserver": [
+      "vim-lsp-settings"
+    ],
+    "perl-lsp": [
+      "zed-extension"
+    ],
+    "perlnavigator": [
+      "helix",
+      "kate",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "pest-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "pgfmt-lsp": [
+      "zed-extension"
+    ],
+    "phan": [
+      "nvim-lspconfig"
+    ],
+    "php": [
+      "eglot",
+      "lsp-mode",
+      "zed-extension"
+    ],
+    "php-lsp": [
+      "nvim-lspconfig"
+    ],
+    "phpactor": [
+      "eglot",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "phpantom_lsp": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "phptools": [
+      "zed-extension"
+    ],
+    "pico8-ls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "pixi": [
+      "helix"
+    ],
+    "pkl-lsp": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "plaintasks-lsp": [
+      "zed-extension"
+    ],
+    "pli_language_server": [
+      "nvim-lspconfig"
+    ],
+    "plpgsql-lsp": [
+      "vim-lsp-settings"
+    ],
+    "pls": [
+      "kakoune-lsp",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "plz": [
+      "nvim-lspconfig"
+    ],
+    "pony-lsp": [
+      "helix",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "poryscript-ls": [
+      "zed-extension"
+    ],
+    "poryscript-pls": [
+      "nvim-lspconfig"
+    ],
+    "postgres-language-server": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "postgrestools": [
+      "zed-extension"
+    ],
+    "powershell-languageserver": [
+      "vim-lsp-settings"
+    ],
+    "prisma": [
+      "opencode"
+    ],
+    "prisma-fmt": [
+      "vim-lsp-settings"
+    ],
+    "prisma-language-server": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "processing": [
+      "zed-extension"
+    ],
+    "prolog-lsp_server": [
+      "vim-lsp-settings"
+    ],
+    "prosemd-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "protols": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "psalm": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "psalm-language-server": [
+      "mason-registry",
+      "vim-lsp-settings"
+    ],
+    "psalm-plugin": [
+      "mason-registry"
+    ],
+    "psalm-refactor": [
+      "mason-registry"
+    ],
+    "psalter": [
+      "mason-registry"
+    ],
+    "pug-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "puppet": [
+      "zed-extension"
+    ],
+    "puppet-debugserver": [
+      "mason-registry"
+    ],
+    "puppet-languageserver": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "puppet-ls": [
+      "vim-lsp-settings"
+    ],
+    "purescript-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "pwsh": [
+      "zed-extension"
+    ],
+    "px-to-rem-lsp": [
+      "zed-extension"
+    ],
+    "pyatlas": [
+      "zed-extension"
+    ],
+    "pyls": [
+      "eglot",
+      "vim-lsp-settings"
+    ],
+    "pyls-all": [
+      "vim-lsp-settings"
+    ],
+    "pyls-ms": [
+      "vim-lsp-settings"
+    ],
+    "pylsp": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-builtin",
+      "zed-extension"
+    ],
+    "pylsp-all": [
+      "vim-lsp-settings"
+    ],
+    "pylyzer": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "pyre": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "pyrefly": [
+      "eglot",
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "pyright": [
+      "lsp-mode",
+      "mason-registry"
+    ],
+    "pyright-langserver": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "pytest-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "python": [
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "python3": [
+      "zed-extension"
+    ],
+    "qmlls": [
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "qpdfview": [
+      "zed-extension"
+    ],
+    "quadlet-lsp": [
+      "zed-extension"
+    ],
+    "quarkdown": [
+      "zed-extension"
+    ],
+    "quick-lint-js": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "quint-language-server": [
+      "helix",
+      "zed-extension"
+    ],
+    "r-languageserver": [
+      "mason-registry",
+      "vim-lsp-settings"
+    ],
+    "racket": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "racket-language-server": [
+      "lsp-mode"
+    ],
+    "racket-lsp": [
+      "vim-lsp-settings"
+    ],
+    "raku-navigator": [
+      "mason-registry"
+    ],
+    "rass": [
+      "eglot",
+      "mason-registry"
+    ],
+    "rcl-lsp": [
+      "zed-extension"
+    ],
+    "reason-language-server": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "red-lsp": [
+      "zed-extension"
+    ],
+    "redscript-ide": [
+      "zed-extension"
+    ],
+    "regal": [
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "regols": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "remark-language-server": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "rescript-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "ripple-language-server": [
+      "helix"
+    ],
+    "rls": [
+      "lsp-mode",
+      "vim-lsp-settings"
+    ],
+    "rlsp-yaml": [
+      "zed-extension"
+    ],
+    "rnix-lsp": [
+      "eglot",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "robotcode": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "robotframework_ls": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "roc_language_server": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "rockide": [
+      "zed-extension"
+    ],
+    "rome": [
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "ron-lsp": [
+      "helix",
+      "lsp-mode"
+    ],
+    "roslyn-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "rovo-lsp": [
+      "zed-extension"
+    ],
+    "rpm_lsp_server": [
+      "kate",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "rshtml-analyzer": [
+      "helix",
+      "mason-registry"
+    ],
+    "rslint-lsp": [
+      "vim-lsp-settings"
+    ],
+    "rubocop": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode"
+    ],
+    "rubocop-lsp-mode": [
+      "vim-lsp-settings"
+    ],
+    "ruby": [
+      "lsp-bridge",
+      "opencode"
+    ],
+    "ruby-lsp": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "ruby_language_server": [
+      "vim-lsp-settings"
+    ],
+    "ruff": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "ruff-lsp": [
+      "eglot",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "rumdl": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "rune-languageserver": [
+      "nvim-lspconfig"
+    ],
+    "rust-analyzer": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "rust-glancer": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "rustup": [
+      "zed-builtin"
+    ],
+    "sagelsp": [
+      "zed-extension"
+    ],
+    "salt_lsp_server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "scarb": [
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "scheme-langserver": [
+      "nvim-lspconfig"
+    ],
+    "scry": [
+      "nvim-lspconfig"
+    ],
+    "selene-3p-language-server": [
+      "nvim-lspconfig"
+    ],
+    "semgrep": [
+      "lsp-mode"
+    ],
+    "serve-d": [
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "sg": [
+      "mason-registry"
+    ],
+    "sh": [
+      "kakoune-lsp"
+    ],
+    "shader-language-server": [
+      "zed-extension"
+    ],
+    "shapels": [
+      "zed-extension"
+    ],
+    "shopify": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "shuck": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "silverstripe-language-server": [
+      "zed-extension"
+    ],
+    "simple-completion-language-server": [
+      "zed-extension"
+    ],
+    "sioyek": [
+      "zed-extension"
+    ],
+    "sith-lsp": [
+      "mason-registry"
+    ],
+    "sixtyfps-lsp": [
+      "nvim-lspconfig"
+    ],
+    "skill-language-server": [
+      "zed-extension"
+    ],
+    "slang-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "slangc": [
+      "mason-registry"
+    ],
+    "slangd": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "slint-lsp": [
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "slp": [
+      "vim-lsp-settings"
+    ],
+    "smalisp": [
+      "helix",
+      "zed-extension"
+    ],
+    "smarty-language-server": [
+      "nvim-lspconfig"
+    ],
+    "smithy-language-server": [
+      "mason-registry"
+    ],
+    "snakeskin-cli": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "snyk": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "snyk-ls": [
+      "mason-registry"
+    ],
+    "solang": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "solargraph": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "solc": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "solidity-ls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "some-sass-language-server": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "sorbet": [
+      "vim-lsp-settings"
+    ],
+    "souls": [
+      "zed-extension"
+    ],
+    "sourcekit-lsp": [
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "sourcepawn-studio": [
+      "helix",
+      "zed-extension"
+    ],
+    "sourcery": [
+      "mason-registry"
+    ],
+    "spade-language-server": [
+      "nvim-lspconfig"
+    ],
+    "spec42": [
+      "zed-extension"
+    ],
+    "spectral-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "spicedb": [
+      "zed-extension"
+    ],
+    "spyglassmc-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "sql-language-server": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "sql-ls": [
+      "lsp-mode"
+    ],
+    "sqlalchemy-lsp": [
+      "zed-extension"
+    ],
+    "sqlmesh_lsp": [
+      "zed-extension"
+    ],
+    "sqls": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "sqruff": [
+      "nvim-lspconfig"
+    ],
+    "squirrel-lsp": [
+      "zed-extension"
+    ],
+    "srb": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "stan-language-server": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "standardrb": [
+      "nvim-lspconfig"
+    ],
+    "starlark": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "starpls": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "start_lexical.sh": [
+      "eglot",
+      "lsp-bridge"
+    ],
+    "static-ls": [
+      "eglot",
+      "kakoune-lsp"
+    ],
+    "statix": [
+      "nvim-lspconfig"
+    ],
+    "steep": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "stimulus-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "stree": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "strz": [
+      "zed-extension"
+    ],
+    "stylelint-language-server": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "stylelint-lsp": [
+      "mason-registry"
+    ],
+    "stylua": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "stylua-3p-language-server": [
+      "nvim-lspconfig"
+    ],
+    "styx": [
+      "helix",
+      "zed-extension"
+    ],
+    "sumneko-lua-language-server": [
+      "vim-lsp-settings"
+    ],
+    "superhtml": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "svelte-effect-runtime-language-server": [
+      "zed-extension"
+    ],
+    "svelte-language-server": [
+      "opencode",
+      "vim-lsp-settings"
+    ],
+    "svelteserver": [
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode"
+    ],
+    "svlangserver": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "svls": [
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "swiftly": [
+      "zed-extension"
+    ],
+    "swim": [
+      "helix"
+    ],
+    "swipl": [
+      "helix",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "symfony-lsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "systemd-lsp": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "tabby-agent": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "tailwindcss-intellisense": [
+      "vim-lsp-settings"
+    ],
+    "tailwindcss-intellisense-css": [
+      "zed-builtin"
+    ],
+    "tailwindcss-language-server": [
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-builtin"
+    ],
+    "taplo": [
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "taplo-lsp": [
+      "vim-lsp-settings"
+    ],
+    "tblgen-lsp-server": [
+      "nvim-lspconfig"
+    ],
+    "tclfmt": [
+      "mason-registry"
+    ],
+    "tclint": [
+      "mason-registry"
+    ],
+    "tclsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "teal-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "templ": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "termux-language-server": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "terraform-ls": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "terraform-lsp": [
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "terragrunt-ls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "texlab": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "textlsp": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "tflint": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "theme-check-language-server": [
+      "nvim-lspconfig"
+    ],
+    "thrift-ls": [
+      "zed-extension"
+    ],
+    "thriftls": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "tilt": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "tinymist": [
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "todo-highlight-lsp": [
+      "zed-extension"
+    ],
+    "tofu-ls": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "tombi": [
+      "eglot",
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "tonel-smalltalk-language-server": [
+      "zed-extension"
+    ],
+    "trunk": [
+      "lsp-mode"
+    ],
+    "ts_query_ls": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "tsc": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "tsgo": [
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "vim-lsp-settings"
+    ],
+    "tsp-server": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "ttags": [
+      "nvim-lspconfig"
+    ],
+    "turbo-language-server": [
+      "nvim-lspconfig"
+    ],
+    "turtle-language-server": [
+      "mason-registry"
+    ],
+    "twiggy-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "ty": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-builtin",
+      "zed-extension"
+    ],
+    "typeprof": [
+      "lsp-mode",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "typescript-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings"
+    ],
+    "typos-lsp": [
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "typst-lsp": [
+      "lsp-bridge",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "uiua": [
+      "eglot",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "ungrammar-languageserver": [
+      "nvim-lspconfig"
+    ],
+    "unicode-ls": [
+      "zed-extension"
+    ],
+    "unified-language-server": [
+      "lsp-mode"
+    ],
+    "unocss-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "uvls": [
+      "nvim-lspconfig"
+    ],
+    "uvx": [
+      "zed-extension"
+    ],
+    "v": [
+      "nvim-lspconfig"
+    ],
+    "v-analyzer": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "vacuum": [
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "vala-language-server": [
+      "eglot",
+      "helix",
+      "kate",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "vale-ls": [
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "varlink-language-server": [
+      "helix"
+    ],
+    "vectorcode": [
+      "mason-registry"
+    ],
+    "vectorcode-mcp-server": [
+      "mason-registry"
+    ],
+    "vectorcode-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "verible-verilog-diff": [
+      "mason-registry"
+    ],
+    "verible-verilog-format": [
+      "mason-registry"
+    ],
+    "verible-verilog-kythe-extractor": [
+      "mason-registry"
+    ],
+    "verible-verilog-lint": [
+      "mason-registry"
+    ],
+    "verible-verilog-ls": [
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "verible-verilog-obfuscate": [
+      "mason-registry"
+    ],
+    "verible-verilog-preprocessor": [
+      "mason-registry"
+    ],
+    "verible-verilog-project": [
+      "mason-registry"
+    ],
+    "verible-verilog-syntax": [
+      "mason-registry"
+    ],
+    "veridian": [
+      "nvim-lspconfig"
+    ],
+    "veryl-ls": [
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "vespa-language-server": [
+      "mason-registry"
+    ],
+    "vhdl-tool": [
+      "lsp-bridge"
+    ],
+    "vhdl_ls": [
+      "helix",
+      "kate",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "vibes": [
+      "zed-extension"
+    ],
+    "view-tree-lsp": [
+      "zed-extension"
+    ],
+    "vim-language-server": [
+      "eglot",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "vimdoc-language-server": [
+      "nvim-lspconfig"
+    ],
+    "vimscript-language-server": [
+      "vim-lsp-settings"
+    ],
+    "visualforce-language-server": [
+      "mason-registry"
+    ],
+    "vlang-vls": [
+      "vim-lsp-settings"
+    ],
+    "vls": [
+      "lsp-mode",
+      "mason-registry",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "volar-server": [
+      "vim-lsp-settings"
+    ],
+    "vscode-css-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-builtin",
+      "zed-extension"
+    ],
+    "vscode-css-languageserver": [
+      "kate"
+    ],
+    "vscode-eslint-language-server": [
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings"
+    ],
+    "vscode-home-assistant": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "vscode-html-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "vscode-html-languageserver": [
+      "kate"
+    ],
+    "vscode-json-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "vscode-json-languageserver": [
+      "eglot",
+      "kate",
+      "lsp-mode"
+    ],
+    "vscode-markdown-language-server": [
+      "eglot"
+    ],
+    "vscode-markdown-languageserver": [
+      "vim-lsp-settings"
+    ],
+    "vscode-solidity-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "vsrocqtop": [
+      "nvim-lspconfig"
+    ],
+    "vtsls": [
+      "helix",
+      "lsp-bridge",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "vue-language-server": [
+      "helix",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode"
+    ],
+    "wat_server": [
+      "eglot",
+      "helix",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "wc-language-server": [
+      "mason-registry",
+      "nvim-lspconfig"
+    ],
+    "wdl-lsp": [
+      "zed-extension"
+    ],
+    "wenls": [
+      "lsp-bridge"
+    ],
+    "wgsl-analyzer": [
+      "helix",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "whim": [
+      "zed-extension"
+    ],
+    "wikitext-lsp": [
+      "helix"
+    ],
+    "wing": [
+      "mason-registry"
+    ],
+    "wit": [
+      "zed-extension"
+    ],
+    "wplabs-lsp": [
+      "zed-extension"
+    ],
+    "wxml-langserver": [
+      "lsp-bridge"
+    ],
+    "xcode-build-server": [
+      "mason-registry"
+    ],
+    "xcrun": [
+      "opencode",
+      "zed-extension"
+    ],
+    "yaml-language-server": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-builtin"
+    ],
+    "yamma-server": [
+      "helix"
+    ],
+    "yang-language-server": [
+      "eglot",
+      "lsp-mode",
+      "nvim-lspconfig"
+    ],
+    "yang-lsp": [
+      "lsp-bridge",
+      "vim-lsp-settings"
+    ],
+    "yls": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "yulang": [
+      "zed-extension"
+    ],
+    "zathura": [
+      "zed-extension"
+    ],
+    "zed": [
+      "zed-extension"
+    ],
+    "zed-editor": [
+      "zed-extension"
+    ],
+    "zed-highlight-lsp": [
+      "zed-extension"
+    ],
+    "zedit": [
+      "zed-extension"
+    ],
+    "zeditor": [
+      "zed-extension"
+    ],
+    "zeek-language-server": [
+      "mason-registry"
+    ],
+    "zig": [
+      "opencode"
+    ],
+    "ziggy": [
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "zizmor": [
+      "helix",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "zk": [
+      "kakoune-lsp",
+      "mason-registry",
+      "nvim-lspconfig",
+      "zed-extension"
+    ],
+    "zls": [
+      "eglot",
+      "helix",
+      "kakoune-lsp",
+      "kate",
+      "lsp-bridge",
+      "lsp-mode",
+      "mason-registry",
+      "nvim-lspconfig",
+      "opencode",
+      "vim-lsp-settings",
+      "zed-extension"
+    ],
+    "zuban": [
+      "helix",
+      "mason-registry",
+      "nvim-lspconfig",
+      "vim-lsp-settings",
+      "zed-extension"
+    ]
+  }
+}

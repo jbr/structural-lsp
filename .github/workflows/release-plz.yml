@@ -1,0 +1,50 @@
+# Publishes when the version in Cargo.toml is not yet on crates.io, then
+# tags it and opens a draft GitHub release, which dist's release.yml fills
+# with the prebuilt binaries and publishes. `release` only, never
+# `release-pr`: this repository is generated from the development
+# repository, so a commit made here would stop the next publish. The version
+# bump and its CHANGELOG entry are made there (process/publishing.md).
+name: Release-plz
+
+permissions:
+  contents: write
+  id-token: write
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-plz:
+    name: Release-plz
+    if: github.repository != 'jbr/structural-lsp-private'
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      # Mint a token from our GitHub App so release-plz's tag push is attributed
+      # to the App, not the built-in GITHUB_TOKEN. GitHub deliberately refuses to
+      # let a GITHUB_TOKEN-pushed tag trigger another workflow, which would leave
+      # dist's release.yml (on: push: tags) silently un-triggered.
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - name: Run release-plz
+        uses: MarcoIeni/release-plz-action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

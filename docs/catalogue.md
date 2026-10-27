@@ -4,8 +4,10 @@ Which language servers structural stands behind for each language it can
 measure, in what order, and what was left out. Every row is a measurement
 made through [`../tests/conformance/`](../process/testing.md): the questions
 `definition`, `references` and `rename` need, asked of every candidate the
-dataset records and this machine can start. Candidate argv comes from the
-dataset (`../reference/servers-list/`), not from us. The ordering rule that
+editor inventories record and this machine can start. Candidate argv is
+what those inventories recorded
+([`../reference/editor-inventories.md`](../reference/editor-inventories.md)),
+not ours. The ordering rule that
 turns a score into an order is [`discovery.md`](discovery.md)'s; the
 shipped entries are generated from this evidence by
 `src/bin/catalogue.rs`, and a test in `src/discovery/catalogue/tests.rs`
@@ -17,8 +19,8 @@ date on every run, is checked in beside it —
 `../tests/conformance/scores/<language>.json` — and a re-run overwrites the
 same path, so a change to the evidence is a reviewable diff.
 
-Consensus is the dataset's per-server source count, read from
-`../reference/servers-list/by_executable.json`: every source recording the
+Consensus is the per-server source count, read from
+`../tests/conformance/consensus.json`: every inventory recording the
 executable, for any language, minus `mason-registry` — an installer index,
 not a selector. Sources partly mirror each other (nvim-lspconfig and the
 Zed extension registry among them), so the count is agreement, not

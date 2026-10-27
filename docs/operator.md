@@ -124,7 +124,7 @@ the host.
 
 ## The MCP front end
 
-`structural serve` builds its host with `operator::mcp::Mcp`. Every event
+`structural-lsp serve` builds its host with `operator::mcp::Mcp`. Every event
 goes to stderr at once, as the default sink writes it, and to the client as
 MCP logging: a `notifications/message` with `level` (`info`, `warning`,
 `error`), `logger: "structural"`, and `data` holding the event's fields:

@@ -17,8 +17,8 @@ fn main() -> std::io::Result<()> {
         eprintln!("usage: fixtures <directory>");
         std::process::exit(2);
     };
-    for written in structural::fixtures::materialize_all(&target)? {
-        let fixture = structural::fixtures::FIXTURES
+    for written in structural_lsp::fixtures::materialize_all(&target)? {
+        let fixture = structural_lsp::fixtures::FIXTURES
             .iter()
             .find(|fixture| written.ends_with(fixture.language))
             .expect("written from the same list");

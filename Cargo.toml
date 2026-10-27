@@ -1,7 +1,31 @@
 [package]
-name = "structural"
+name = "structural-lsp"
 version = "0.1.0"
 edition = "2024"
+description = "An MCP server that gives coding agents LSP-backed definition, references and rename"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/jbr/structural-lsp"
+readme = "README.md"
+keywords = ["mcp", "lsp", "language-server", "agent"]
+categories = ["development-tools", "command-line-utilities"]
+# The package carries the library, the `structural-lsp` binary and the
+# fixtures it compiles in. The development binaries under `src/bin/` stay
+# out, so `cargo install` installs one program (process/publishing.md).
+exclude = [
+    "/src/bin/",
+    "/tests/",
+    "/docs/",
+    "/process/",
+    "/reference/",
+    "/journal/",
+    "/backlog/",
+    "/.github/",
+    "/CLAUDE.md",
+    "/efference.toml",
+    "/scripts/",
+    "/dist-workspace.toml",
+    "/release-plz.toml",
+]
 
 [features]
 # Compiles pending acceptance cases (none today; process/testing.md).
@@ -30,3 +54,9 @@ url = "2"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 signal-hook = "0.4"
+
+# The profile that 'dist' will build with: the release profile with fat LTO,
+# a one-time cost in release CI paid for every downloaded binary.
+[profile.dist]
+inherits = "release"
+lto = "fat"

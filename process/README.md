@@ -11,6 +11,8 @@ sense with the source deleted.**
   flakes are understood.
 - [`reviews.md`](reviews.md) — using other models as reviewers, and the ways
   of asking that have actually found defects.
+- [`publishing.md`](publishing.md) — the public repository is generated
+  from this one; what stays private, releasing, and outside contributions.
 
 Most process lives in [`../CLAUDE.md`](../CLAUDE.md), which is read every
 session; a file lands here when it is too long to inline there without

@@ -130,7 +130,8 @@ pub enum Reason {
     /// `structural.toml` named it.
     Configured,
     /// Chosen on extensions that were derived rather than stated. Carried
-    /// so a heuristic cannot pass as a fact (`reference/servers-list/`).
+    /// so a heuristic cannot pass as a fact
+    /// (`reference/editor-inventories.md`).
     ExtensionsInferred,
 }
 

@@ -9,8 +9,8 @@ fn repo_root() -> PathBuf {
     std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap()
 }
 
-fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) -> String {
-    structural::tools::Definition {
+fn show(state: &structural_lsp::session::Session, symbol: &str, path: Option<&str>) -> String {
+    structural_lsp::tools::Definition {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
         anchor: None,
@@ -27,7 +27,7 @@ fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
 #[test]
 #[ignore = "spawns rust-analyzer on this repository; run explicitly with -- --ignored"]
 fn exact_hits_are_deduplicated_by_definition_target() {
-    let state = structural::session::Session::new(repo_root());
+    let state = structural_lsp::session::Session::new(repo_root());
 
     // `resolve` the function is reachable even though `Resolution` and
     // friends fuzzy-match it (the adapter asks for all symbols, not types
@@ -66,7 +66,7 @@ fn exact_hits_are_deduplicated_by_definition_target() {
 
     // `uses` on this repository: `group_by_target` is called from the
     // shared resolution pipeline, and its unit tests are set apart.
-    let uses = structural::tools::References {
+    let uses = structural_lsp::tools::References {
         symbol: Some("group_by_target".to_string()),
         path: None,
         anchor: None,

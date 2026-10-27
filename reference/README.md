@@ -22,13 +22,13 @@ deleted. It is read when a decision needs evidence, not every session.
   September 2026; the client's filter, not the server, is what narrows an
   answer. The evidence behind the root rule in
   [`../backlog/discovery/selection.md`](../backlog/discovery/selection.md).
-- [`servers-list/`](servers-list/) — thirteen editor inventories (Eglot,
-  lsp-mode, lsp-bridge, nvim-lspconfig, Helix, vim-lsp-settings,
-  kakoune-lsp, Kate, OpenCode, Zed, mason-registry) extracted from source and
-  merged into 2,218 normalized records, with its own confidence tiers in its
-  README. It is the raw input to a server catalogue, not a catalogue: the
-  synthesis — which servers this project stands behind, in what order, with
-  which root rules — has not been done.
+- [`editor-inventories.md`](editor-inventories.md) — what twelve editor
+  LSP clients (Eglot, lsp-mode, lsp-bridge, nvim-lspconfig, Helix,
+  vim-lsp-settings, kakoune-lsp, Kate, OpenCode, Zed built-ins and extensions, mason-registry) ship
+  configuration for, extracted from source in September 2026, and how each
+  selects a server and a root. The input to the catalogue's synthesis
+  ([`../docs/catalogue.md`](../docs/catalogue.md)); its per-executable
+  reduction is `../tests/conformance/consensus.json`.
 - [`design-draft.md`](design-draft.md) — the original design draft
   (2026-09-13), written before anything was implemented. Kept because it
   states the premises the tools are still built on and the open questions

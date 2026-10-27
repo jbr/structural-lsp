@@ -105,11 +105,11 @@ fn scratch_root() -> PathBuf {
 }
 
 fn show(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
-    structural::tools::Definition {
+    structural_lsp::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: None,
@@ -123,11 +123,11 @@ fn show(
 }
 
 fn uses(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
 ) -> anyhow::Result<String> {
-    structural::tools::References {
+    structural_lsp::tools::References {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: None,
@@ -144,7 +144,7 @@ fn uses(
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn a_file_path_nominates_from_the_files_own_outline() {
     let root = scratch_root();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     let ok = |result: anyhow::Result<String>| result.unwrap_or_else(|error| panic!("{error:#}"));
 
     // Qualified names late in a file with more same-named definitions than

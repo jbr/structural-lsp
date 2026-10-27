@@ -15,8 +15,8 @@ fn scratch_root() -> PathBuf {
     std::fs::canonicalize(root).unwrap()
 }
 
-fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) -> String {
-    structural::tools::Definition {
+fn show(state: &structural_lsp::session::Session, symbol: &str, path: Option<&str>) -> String {
+    structural_lsp::tools::Definition {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
         anchor: None,
@@ -30,8 +30,8 @@ fn show(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
     .unwrap_or_else(|error| panic!("show {symbol} {path:?}: {error:#}"))
 }
 
-fn uses(state: &structural::session::Session, symbol: &str, path: Option<&str>) -> String {
-    structural::tools::References {
+fn uses(state: &structural_lsp::session::Session, symbol: &str, path: Option<&str>) -> String {
+    structural_lsp::tools::References {
         symbol: Some(symbol.to_string()),
         path: path.map(str::to_string),
         anchor: None,
@@ -49,7 +49,7 @@ fn uses(state: &structural::session::Session, symbol: &str, path: Option<&str>) 
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn both_servers_answer_from_one_root() {
     let root = scratch_root();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
     // Binding only starts the servers (`docs/ownership.md`); wait for them,
     // as a query would, before asking which are running.
     state.activate(None);

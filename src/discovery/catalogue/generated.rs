@@ -3,7 +3,7 @@
 //!
 //! Inputs: `tests/conformance/scores/<language>.json` (the per-probe
 //! evidence, one run per language, provenance on every row) and
-//! `reference/servers-list/by_executable.json` (the consensus
+//! `tests/conformance/consensus.json` (the consensus
 //! tiebreak: sources minus `mason-registry`). The rules this
 //! implements, and the cuts this set rests on, are
 //! `docs/catalogue.md`.
@@ -13,6 +13,7 @@ use super::{Confidence, Entry, Measurement, Provenance, Score, Serves};
 /// Every measured server of every language the harness covers, in
 /// name order — the name order is not the rank order; [`Entry::rank`]
 /// supplies that.
+#[rustfmt::skip]
 pub(crate) fn entries() -> Vec<Entry> {
     vec![
         Entry {
@@ -31,7 +32,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 11,
             provenance: Provenance {
-                source: "tests/conformance/scores/bash.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/bash.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -51,7 +52,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 11,
             provenance: Provenance {
-                source: "tests/conformance/scores/cpp.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/cpp.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -71,7 +72,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 4,
             provenance: Provenance {
-                source: "tests/conformance/scores/cpp.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/cpp.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -91,7 +92,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 9,
             provenance: Provenance {
-                source: "tests/conformance/scores/elm.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/elm.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -111,7 +112,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 5,
             provenance: Provenance {
-                source: "tests/conformance/scores/erlang.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/erlang.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -131,7 +132,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 3,
             provenance: Provenance {
-                source: "tests/conformance/scores/erlang.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/erlang.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -151,7 +152,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 8,
             provenance: Provenance {
-                source: "tests/conformance/scores/gleam.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/gleam.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -171,7 +172,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 10,
             provenance: Provenance {
-                source: "tests/conformance/scores/go.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/go.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -191,7 +192,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 9,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -211,7 +212,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 6,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -231,7 +232,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 10,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -251,7 +252,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 6,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -271,7 +272,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 9,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -291,7 +292,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 5,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -311,7 +312,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 8,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -331,7 +332,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 3,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -351,7 +352,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 4,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -371,7 +372,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 3,
             provenance: Provenance {
-                source: "tests/conformance/scores/python.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/python.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -391,7 +392,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 6,
             provenance: Provenance {
-                source: "tests/conformance/scores/qml.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/qml.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -411,7 +412,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 8,
             provenance: Provenance {
-                source: "tests/conformance/scores/r.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/r.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -431,7 +432,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 8,
             provenance: Provenance {
-                source: "tests/conformance/scores/ruby.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/ruby.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -451,7 +452,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 6,
             provenance: Provenance {
-                source: "tests/conformance/scores/ruby.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/ruby.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -471,7 +472,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 3,
             provenance: Provenance {
-                source: "tests/conformance/scores/ruby.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/ruby.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -491,7 +492,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 3,
             provenance: Provenance {
-                source: "tests/conformance/scores/ruby.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/ruby.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -511,7 +512,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 3,
             provenance: Provenance {
-                source: "tests/conformance/scores/ruby.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/ruby.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -531,7 +532,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 10,
             provenance: Provenance {
-                source: "tests/conformance/scores/rust.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/rust.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -551,7 +552,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 8,
             provenance: Provenance {
-                source: "tests/conformance/scores/swift.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/swift.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -571,7 +572,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 9,
             provenance: Provenance {
-                source: "tests/conformance/scores/typescript.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/typescript.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -591,7 +592,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 8,
             provenance: Provenance {
-                source: "tests/conformance/scores/typescript.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/typescript.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -611,7 +612,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 5,
             provenance: Provenance {
-                source: "tests/conformance/scores/typescript.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/typescript.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -631,7 +632,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 6,
             provenance: Provenance {
-                source: "tests/conformance/scores/typescript.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/typescript.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },
@@ -651,7 +652,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             }),
             consensus: 4,
             provenance: Provenance {
-                source: "tests/conformance/scores/typescript.json + reference/servers-list/by_executable.json".to_string(),
+                source: "tests/conformance/scores/typescript.json + tests/conformance/consensus.json".to_string(),
                 extensions: Confidence::Exact,
             },
         },

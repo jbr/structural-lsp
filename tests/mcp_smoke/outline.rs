@@ -21,12 +21,12 @@ fn scratch_root() -> PathBuf {
 }
 
 fn outline(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: Option<&str>,
     path: &str,
     page: Option<usize>,
 ) -> anyhow::Result<String> {
-    structural::tools::Definition {
+    structural_lsp::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: Some(path.to_string()),
         anchor: None,
@@ -43,7 +43,7 @@ fn outline(
 #[ignore = "spawns rust-analyzer and pyright; run explicitly with -- --ignored"]
 fn outlines_page_survey_a_directory_and_leave_out_locals() {
     let root = scratch_root();
-    let state = structural::session::Session::new(root.clone());
+    let state = structural_lsp::session::Session::new(root.clone());
 
     // Page 1 of 300 symbols: 200 lines, and the argument that continues.
     let first = outline(&state, None, "rust/src/big.rs", None).unwrap();

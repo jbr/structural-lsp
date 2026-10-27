@@ -39,7 +39,7 @@ impl Server {
     }
 
     pub fn start_args(root: &str, env: &[(&str, String)], args: &[&str]) -> Self {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_structural"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_structural-lsp"));
         command.args(args).env("STRUCTURAL_ROOT", root);
         for (name, value) in env {
             command.env(name, value);

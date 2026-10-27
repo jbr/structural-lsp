@@ -31,9 +31,8 @@ read.
 Every cell is **one observation on the server and version that ran** — the
 same standing as a pending acceptance case below — so the version is
 recorded beside the score and a version that cannot be read is left blank
-rather than guessed. Candidate argv comes from `reference/servers-list/`
-(`scripts/reduce.py installed` prints it with a vote count per form), not
-from us.
+rather than guessed. Candidate argv is what the editor inventories
+recorded for each server (`reference/editor-inventories.md`), not ours.
 
 Reachability has three states and the middle one is the point: not on
 `PATH`, on `PATH` and will not start, and runnable. The probe spawns the
@@ -148,8 +147,8 @@ Three were cleared on 2026-09-18, and what each turned out to be is worth
 keeping:
 
 - the identity acceptance asserted `resolve` was one thing in this
-  repository, and `reference/servers-list/scripts/` had since added a
-  Python one. Both servers were right and the expectation was stale; the
+  repository, and the editor-inventory extraction scripts, then under
+  `reference/`, had since added a Python one. Both servers were right and the expectation was stale; the
   query is now scoped to `src/`, which keeps the real tree and the common
   name while excluding a collision that says nothing about identity.
 - `targeting::…` was a real defect, not a stale expectation: an anchor

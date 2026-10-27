@@ -1,0 +1,5 @@
+[workspace]
+# Leave the GitHub release as a draft with the changelog as its body. dist's
+# release.yml (create-release = false in dist-workspace.toml) uploads the
+# prebuilt binaries and installer to it and publishes it when they are up.
+git_release_draft = true

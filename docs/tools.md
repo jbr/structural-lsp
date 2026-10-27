@@ -1,7 +1,7 @@
 # The tools
 
 Three MCP tools, declared in `src/tools.rs`: `definition`, `references`, `rename` — LSP go-to-definition plus related views, find-all-references, and rename. The
-same three run from argv (`structural definition choose`), since mcplease owns
+same three run from argv (`structural-lsp definition choose`), since mcplease owns
 both dispatch paths. All three take their target the same way and share the
 resolution pipeline ([resolution.md](resolution.md)), so a target that
 `definition` would list as ambiguous is listed identically by the other two.

@@ -29,7 +29,7 @@ use stdio_server::Server;
 /// (`src/fixtures.rs`), so every test builds the one it needs.
 fn fixtures_in(root: &std::path::Path, languages: &[&str]) {
     for language in languages {
-        let fixture = structural::fixtures::get(language).expect("a known fixture");
+        let fixture = structural_lsp::fixtures::get(language).expect("a known fixture");
         fixture
             .materialize(&root.join(language))
             .expect("materialize the fixture");
@@ -41,7 +41,7 @@ fn fixture_root_at(language: &str, tag: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("structural-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
-    structural::fixtures::get(language)
+    structural_lsp::fixtures::get(language)
         .expect("a known fixture")
         .materialize(&root)
         .expect("materialize the fixture");
@@ -63,9 +63,9 @@ fn rust_fixture_root() -> PathBuf {
 #[test]
 #[ignore = "spawns rust-analyzer; run explicitly with -- --ignored"]
 fn in_process_show_resolves_the_fixture_struct() {
-    let state = structural::session::Session::new(rust_fixture_root());
+    let state = structural_lsp::session::Session::new(rust_fixture_root());
     // `choose` is unique in the fixture, so the positive path resolves.
-    let output = structural::tools::Definition {
+    let output = structural_lsp::tools::Definition {
         symbol: Some("choose".to_string()),
         path: None,
         anchor: None,
@@ -97,7 +97,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     );
 
     // A `path` scope narrows to the fixture file and still resolves.
-    let scoped = structural::tools::Definition {
+    let scoped = structural_lsp::tools::Definition {
         symbol: Some("choose".to_string()),
         path: Some("src/lib.rs".to_string()),
         anchor: None,
@@ -114,7 +114,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     // The fixture's `Config` is declared once and re-imported in its tests
     // module; the adapter asks rust-analyzer to exclude imports from the
     // symbol search, so the bare name resolves to the struct.
-    let config = structural::tools::Definition {
+    let config = structural_lsp::tools::Definition {
         symbol: Some("Config".to_string()),
         path: None,
         anchor: None,
@@ -137,7 +137,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     );
 
     // A missing name is a stated result, not an invented candidate.
-    let missing = structural::tools::Definition {
+    let missing = structural_lsp::tools::Definition {
         symbol: Some("definitely_not_here".to_string()),
         path: None,
         anchor: None,
@@ -155,7 +155,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     );
 
     // A qualified name narrows by the container the server reports.
-    let qualified = structural::tools::Definition {
+    let qualified = structural_lsp::tools::Definition {
         symbol: Some("Config::new".to_string()),
         path: None,
         anchor: None,
@@ -180,7 +180,7 @@ fn in_process_show_resolves_the_fixture_struct() {
 
     // `uses` on the same fixture: every call to `choose` is in `run`, the
     // declaration is not a reference, and each hit carries its line.
-    let uses = structural::tools::References {
+    let uses = structural_lsp::tools::References {
         symbol: Some("choose".to_string()),
         path: None,
         anchor: None,
@@ -209,7 +209,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     // the struct and verify through the adapter's alias, not an error. The
     // re-export in `alias` and the `use super::*` glob are not hits by
     // name; the impl headers and the constructor call are.
-    let config_uses = structural::tools::References {
+    let config_uses = structural_lsp::tools::References {
         symbol: Some("Config".to_string()),
         path: None,
         anchor: None,
@@ -257,7 +257,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         .and_then(|counts| counts.split(' ').next())
         .and_then(|count| count.parse().ok())
         .unwrap_or_else(|| panic!("a count in the header: {config_uses}"));
-    let scoped = structural::tools::References {
+    let scoped = structural_lsp::tools::References {
         symbol: Some("Config".to_string()),
         path: None,
         anchor: None,
@@ -275,7 +275,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         )),
         "{scoped}"
     );
-    let continued = structural::tools::References {
+    let continued = structural_lsp::tools::References {
         symbol: Some("Config".to_string()),
         path: None,
         anchor: None,
@@ -290,7 +290,7 @@ fn in_process_show_resolves_the_fixture_struct() {
         format!("{:#}", continued.unwrap_err()).contains("`page: 2` is past the end"),
         "a page past a one-page listing is an error"
     );
-    let missing = structural::tools::References {
+    let missing = structural_lsp::tools::References {
         symbol: Some("Config".to_string()),
         path: None,
         anchor: None,
@@ -307,7 +307,7 @@ fn in_process_show_resolves_the_fixture_struct() {
     );
 
     // A scope escaping the root is rejected.
-    let escaping = structural::tools::Definition {
+    let escaping = structural_lsp::tools::Definition {
         symbol: Some("Config".to_string()),
         path: Some("../semantic-edit-mcp".to_string()),
         anchor: None,
@@ -622,9 +622,9 @@ fn in_process_show_stays_fresh_across_on_disk_edits() {
     )
     .unwrap();
 
-    let state = structural::session::Session::new(scratch.clone());
-    let show = |state: &structural::session::Session, symbol: &str| {
-        structural::tools::Definition {
+    let state = structural_lsp::session::Session::new(scratch.clone());
+    let show = |state: &structural_lsp::session::Session, symbol: &str| {
+        structural_lsp::tools::Definition {
             symbol: Some(symbol.to_string()),
             path: None,
             anchor: None,

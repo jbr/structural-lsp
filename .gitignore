@@ -1,3 +1,5 @@
 /.efference/
 **/target/
 **/__pycache__/
+/.claude/
+/.ruby-lsp/

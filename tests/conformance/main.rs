@@ -19,9 +19,9 @@
 //! is the fixture revision, because the tree is materialized from
 //! `src/fixtures.rs` rather than resident in the repository.
 //!
-//! Candidate commands come from `reference/servers-list/` — see
-//! `scripts/reduce.py installed`, which prints the argv each source
-//! recorded with a vote count. They are not invented here.
+//! Candidate commands are the argv the editor inventories recorded for
+//! each server (`reference/editor-inventories.md`). They are not invented
+//! here.
 //!
 //! ```sh
 //! cargo test --test conformance -- --ignored --nocapture
@@ -163,7 +163,7 @@ fn scratch_root(language: &Language, candidate: &Candidate) -> PathBuf {
     ));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
-    structural::fixtures::get(language.fixture)
+    structural_lsp::fixtures::get(language.fixture)
         .expect("a known fixture")
         .materialize(&root)
         .unwrap();
@@ -239,7 +239,7 @@ fn scratch_root(language: &Language, candidate: &Candidate) -> PathBuf {
 /// a finding to read; a run that probed no server at all means the harness
 /// did not work.
 fn measure(language: &Language) {
-    let fixture = structural::fixtures::get(language.fixture).expect("a known fixture");
+    let fixture = structural_lsp::fixtures::get(language.fixture).expect("a known fixture");
     let mut scorecard = Scorecard::new(
         language.name,
         language.probes.iter().map(|probe| probe.name).collect(),
@@ -261,7 +261,7 @@ fn measure(language: &Language) {
         }
         probed += 1;
         let root = scratch_root(language, candidate);
-        let state = structural::session::Session::new(root.clone());
+        let state = structural_lsp::session::Session::new(root.clone());
         let outcomes = language
             .probes
             .iter()

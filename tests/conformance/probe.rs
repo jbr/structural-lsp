@@ -47,7 +47,7 @@ pub struct Candidate {
 pub struct Probe {
     pub name: &'static str,
     pub needs: &'static str,
-    pub run: fn(&structural::session::Session) -> Outcome,
+    pub run: fn(&structural_lsp::session::Session) -> Outcome,
 }
 
 /// A file computed from the materialized scratch root: where it goes,
@@ -89,12 +89,12 @@ pub struct Language {
 }
 
 pub fn show(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: Option<&str>,
     path: Option<&str>,
     anchor: Option<(&str, &str)>,
 ) -> anyhow::Result<String> {
-    structural::tools::Definition {
+    structural_lsp::tools::Definition {
         symbol: symbol.map(str::to_string),
         path: path.map(str::to_string),
         anchor: anchor.map(|(text, _)| text.to_string()),
@@ -107,8 +107,8 @@ pub fn show(
     .run(state)
 }
 
-pub fn uses(state: &structural::session::Session, symbol: &str) -> anyhow::Result<String> {
-    structural::tools::References {
+pub fn uses(state: &structural_lsp::session::Session, symbol: &str) -> anyhow::Result<String> {
+    structural_lsp::tools::References {
         symbol: Some(symbol.to_string()),
         path: None,
         anchor: None,
@@ -122,11 +122,11 @@ pub fn uses(state: &structural::session::Session, symbol: &str) -> anyhow::Resul
 }
 
 pub fn rename_preview(
-    state: &structural::session::Session,
+    state: &structural_lsp::session::Session,
     symbol: &str,
     new_name: &str,
 ) -> anyhow::Result<String> {
-    structural::tools::Rename {
+    structural_lsp::tools::Rename {
         symbol: Some(symbol.to_string()),
         path: None,
         anchor: None,
