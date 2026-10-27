@@ -153,6 +153,21 @@ impl Server {
         }
     }
 
+    /// The stderr lines no `event` consumed, read to the end of the stream:
+    /// for a process that has exited, everything it and its children
+    /// printed that the test has not yet looked at.
+    pub fn remaining_events(&self) -> Vec<String> {
+        let deadline = Instant::now() + WAIT;
+        let mut lines = Vec::new();
+        while let Ok(line) = self
+            .events
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        {
+            lines.push(line);
+        }
+        lines
+    }
+
     pub fn wait_exit(&mut self) -> std::process::ExitStatus {
         let deadline = Instant::now() + WAIT;
         loop {

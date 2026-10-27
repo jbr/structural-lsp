@@ -52,6 +52,8 @@ while True:
                 release.read(1)
             event('query released')
             reply(msg, [])
+    elif method == 'textDocument/documentSymbol':
+        reply(msg, [])
     elif method == 'shutdown':
         event('shutdown')
         reply(msg, None)
@@ -195,6 +197,15 @@ fn first_signal_finishes_idle_serve_with_stdin_open() {
     let mut server = shim.spawn();
     let pid = started(&server);
     initialize(&mut server);
+    // A completed call is what says the server is published. The MCP
+    // handshake does not wait for the launch, and a launch the signal
+    // reaches before it publishes is dropped rather than sent `shutdown`
+    // (docs/shutdown.md), so signalling straight after `initialize` raced it.
+    let outline = server.request(
+        "tools/call",
+        json!({"name": "definition", "arguments": {"path": "src/lib.rs", "view": "outline"}}),
+    );
+    assert!(outline.get("result").is_some(), "{outline}");
     signal(&server);
     server.event("structural: graceful shutdown requested");
     server.event("mock: shutdown");
@@ -226,9 +237,15 @@ fn cli_help_exits_without_stdin_eof() {
         &shim.env(),
         &["--help"],
     );
-    let pid = started(&server);
     assert!(server.wait_exit().success());
-    dead(pid);
+    // `--help` exits while the eager launch may still be starting, so
+    // whether the mock got as far as printing its pid is timing. What holds
+    // either way: every mock that started is gone.
+    for line in server.remaining_events() {
+        if line.contains("mock: started ") {
+            dead(line.split_whitespace().last().unwrap().parse().unwrap());
+        }
+    }
 }
 
 #[test]
