@@ -258,7 +258,7 @@ fn a_file_scope_resolves_without_the_symbol_index() {
     let resolved = ok(show(&state, Some("Tool::new"), Some("src/tool.rs")));
     assert_eq!(
         resolved,
-        "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
+        "function new · src/tool.rs:7\n    pub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
         "the file's own outline resolved the name the index never had"
     );
 
@@ -506,7 +506,7 @@ fn a_server_that_answered_once_is_not_named() {
     let resolved = ok(show(&state, Some("Tool::new"), Some("src/tool.rs")));
     assert_eq!(
         resolved,
-        "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
+        "function new · src/tool.rs:7\n    pub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
     );
 
     let miss = ok(show(&state, Some("Absent"), None));
@@ -528,7 +528,7 @@ fn a_bare_name_answers_the_definition_site() {
     let scoped = ok(show(&state, Some("Tool::new"), Some("src/tool.rs")));
     assert_eq!(
         scoped,
-        "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
+        "function new · src/tool.rs:7\n    pub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
     );
 
     // Bare `new`: the index names `tool.rs`, while `definition` and
@@ -538,7 +538,7 @@ fn a_bare_name_answers_the_definition_site() {
     let bare = ok(show(&state, Some("new"), None));
     assert_eq!(
         bare,
-        "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
+        "function new · src/tool.rs:7\n    pub fn new(name: String) -> Self {\n        Self { name }\n    }\n",
     );
 
     drop(state);

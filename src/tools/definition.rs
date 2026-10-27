@@ -309,8 +309,7 @@ fn shape_body(
         let end = position_to_offset(text, extent.range.end, encoding)
             .context("the documentSymbol range ends outside the file as read from disk")?;
         if start <= end {
-            let start = shape::extend_start(language, text, start)?;
-            let (body, truncated) = budget(&text[start..end]);
+            let (body, truncated) = budget(extent_body(language, text, start, end)?);
             return Ok((body, truncated.into_iter().collect()));
         }
     }
@@ -333,7 +332,8 @@ fn shape_body(
     };
     let (raw, how) = match shaped {
         Some(item) => (
-            item.decorated_text(text).to_string(),
+            from_line_start(text, item.decorated_range.start, item.decorated_range.end)
+                .to_string(),
             "item found by the Rust grammar instead",
         ),
         None => (

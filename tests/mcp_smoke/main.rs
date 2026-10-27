@@ -168,6 +168,15 @@ fn in_process_show_resolves_the_fixture_struct() {
     .run(&state)
     .expect("show Config::new succeeds");
     assert!(qualified.starts_with("fn new · src/lib.rs:"), "{qualified}");
+    // A method is indented in its `impl`: its body's first line keeps the
+    // indentation every later line keeps, as the file has it.
+    let start = lib.find("    // @decl new | new").unwrap();
+    let end = start + lib[start..].find("\n    }\n").unwrap() + "\n    }".len();
+    assert_eq!(
+        qualified.split_once('\n').map(|(_, body)| body),
+        Some(format!("{}\n", &lib[start..end]).as_str()),
+        "the body reads as the file does"
+    );
 
     // `uses` on the same fixture: every call to `choose` is in `run`, the
     // declaration is not a reference, and each hit carries its line.

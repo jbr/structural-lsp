@@ -69,11 +69,6 @@ pub struct Item {
 }
 
 impl Item {
-    /// The decorated source slice, budgeted by the caller.
-    pub fn decorated_text<'a>(&self, source: &'a str) -> &'a str {
-        &source[self.decorated_range.clone()]
-    }
-
     /// The item's declaration line (first line of the undecorated span),
     /// trimmed — useful for `impl` blocks and as an identity fallback.
     pub fn header(&self, source: &str) -> String {
@@ -266,7 +261,7 @@ impl Config {
         assert_eq!(item.kind, "struct_item");
         assert_eq!(item.display_kind, "struct");
         assert_eq!(item.name.as_deref(), Some("Config"));
-        let decorated = item.decorated_text(SOURCE);
+        let decorated = &SOURCE[item.decorated_range.clone()];
         assert!(
             decorated.starts_with("/// Settings for a session."),
             "{decorated}"
@@ -285,7 +280,7 @@ impl Config {
             .unwrap();
         assert_eq!(item.kind, "function_item");
         assert_eq!(item.name.as_deref(), Some("doubled"));
-        let decorated = item.decorated_text(SOURCE);
+        let decorated = &SOURCE[item.decorated_range.clone()];
         assert!(
             decorated.starts_with("/// Double the limit."),
             "{decorated}"
@@ -332,11 +327,11 @@ impl Config {
         assert_eq!(item.kind, "function_item");
         assert_eq!(item.name.as_deref(), Some("f"));
         // The inner doc belongs to the mod, not the fn.
-        assert!(!item.decorated_text(source).contains("Inner doc."));
+        assert!(!source[item.decorated_range.clone()].contains("Inner doc."));
         let module = item_at(source, source.find("mod inner").unwrap())
             .unwrap()
             .unwrap();
-        assert!(module.decorated_text(source).contains("//! Inner doc."));
+        assert!(source[module.decorated_range.clone()].contains("//! Inner doc."));
     }
 
     #[test]

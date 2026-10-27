@@ -233,7 +233,7 @@ fn stdio_workspace_binds_through_the_host_once() {
             .unwrap_or_default()
             .to_string()
     };
-    let expected = "function new · src/tool.rs:7\npub fn new(name: String) -> Self {\n        Self { name }\n    }\n";
+    let expected = "function new · src/tool.rs:7\n    pub fn new(name: String) -> Self {\n        Self { name }\n    }\n";
     let other_dir = other.to_str().unwrap().to_string();
     for _ in 0..2 {
         let answer = call(json!({
