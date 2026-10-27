@@ -24,11 +24,13 @@ server's lifecycle state without the lock that publication needs.
 server, and the running server for each, indexed alike: `servers[i]` is
 `Some` exactly when slot `i` is `Running`, and both change together under
 the workspace lock. Building one is cheap and starts nothing — it reads the
-tree's evidence and `structural.toml`, asks selection what to run, and lays
-out a slot per plan (`discovery.md`) — so a workspace can answer routing
-questions before anything is running. A `structural.toml` that is present
-but unparsable is kept as a `config_error`: nothing starts, and every call
-says why.
+tree's evidence and its configuration (`structural.toml`, or the embedder's
+source: `servers.md`), asks selection what to run, and lays out a slot per
+plan (`discovery.md`) — so a workspace can answer routing questions before
+anything is running. A configuration that does not load — a
+`structural.toml` that is present but unparsable, or an error from the
+source — is kept as a `config_error`: nothing starts, and every call says
+why.
 
 A slot per plan rather than per configured adapter is what keeps an
 irrelevant server out of the process table: a Python-only tree lays out no
@@ -60,10 +62,15 @@ query. Queries within one workspace are serialized by that workspace's mutex
 A workspace is keyed by `canonical_root`: two callers naming the same tree
 through a symlink, a relative path, or a trailing slash land on one
 workspace. A root that cannot be canonicalized (it does not exist) is kept
-as given, for the error to report. `structural.toml` is read from the root,
-so the canonical root also determines the effective configuration and is a
-sufficient key today; it grows a configuration component the first time
-configuration can come from somewhere else.
+as given, for the error to report. Configuration is a function of the
+root — `structural.toml` read from it, or an embedder's `config::Source`
+called with it — so the canonical root also determines the effective
+configuration and is a sufficient key. The source is called once, when the
+workspace is created; a source that answered differently per caller would
+give every later caller on that root the first caller's configuration,
+which is why it is handed the root and nothing else. The key grows a
+configuration component the first time configuration can differ between
+callers on one root.
 
 ## Interest, not residency
 
@@ -97,7 +104,7 @@ children that outlived every agent until the holding session happened to drop
 — which may be never.
 
 Servers stop when the idle sweep releases them — no strong signal
-addressed to them for the interval, default 30 minutes, `idle_eviction_secs`
+addressed to them for the interval, default 30 minutes, `idle-eviction-secs`
 in `structural.toml` — when the last session holding the workspace drops,
 or at shutdown. The next query reacquires what it needs, exactly as a
 fresh bind would ([`observation.md`](observation.md)).

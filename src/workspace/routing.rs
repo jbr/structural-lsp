@@ -266,7 +266,7 @@ impl Workspace {
     fn nothing_running(&self) -> String {
         let mut text = String::from("no language server is running.\n");
         if let Some(error) = &self.config_error {
-            text.push_str(&format!("  structural.toml: {error}\n"));
+            text.push_str(&format!("  configuration: {error}\n"));
         }
         for slot in &self.slots {
             let state = slot.state();

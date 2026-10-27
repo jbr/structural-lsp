@@ -82,7 +82,7 @@ timer can shorten because the server answers liveness probes
 `$/progress` frame of any kind afterwards, on a three-file tree and on a
 two-hundred-file one alike. It indexes and answers queries the whole time.
 
-`Adapter::progress_create_is_work`, `progress_create_is_work = false` in a
+`Adapter::progress_create_is_work`, `progress-create-is-work = false` in a
 `structural.toml` entry, is how such a server says so. It narrows nothing
 else: progress the server does report still opens and closes tokens
 normally, and the default stays true for every server that begins the work
@@ -156,14 +156,56 @@ from the project rather than from wherever an agent happened to begin.
 Absent: the built-ins alone. Present but
 unparsable: **nothing starts**, and every call reports the parse error —
 silently ignoring it would run the wrong servers. Unknown keys are rejected.
+Keys are kebab-case, the spelling of efference's own configuration, so
+structural's keys read alike when they sit inside it.
+
+The file is one spelling of `config::Config`, a plain serde value with
+public fields. An embedder whose own per-project configuration carries
+these keys gives the host a source instead — `Host::with_config_source`, a
+function from the canonical root to a `Config` — and the file is not read:
+the embedder deserializes the keys out of its own file into `Config`, or
+builds one field by field, and a root it has nothing for answers
+`Config::default()` (the built-ins) or `Config::load` (defer to the file).
+Everything after loading — layout, selection, the error rules above —
+treats both alike, and an error the source returns is the workspace's
+configuration error, as a parse error is. The source is called once per
+workspace, under the host's map lock, with nothing but the root, because
+the root is the workspace's key (`ownership.md`). `settings` is a
+`serde_json::Value` — it goes on the wire as JSON, and a TOML table
+deserializes into it.
+
+`Config` and `ServerEntry` derive `schemars::JsonSchema`, so an embedder
+whose configuration types derive it too gets structural's keys in its
+published schema — `additionalProperties: false` from
+`deny_unknown_fields`, kebab-case names from `rename_all`. Their `///`
+comments are that schema's descriptions, the hover text someone editing
+the file reads: each says what the key means, its values and its default,
+and names no repository path. Nor does it name structural: embedded, these
+keys belong to another product's language-server feature under that
+product's name, and one text has to read right in both. Implementer notes
+on the same items are `//` (`src/config/schema.rs`). A test holds the
+published shape: every key kebab-case and described, no text naming a
+repository path or the tool, and the defaults the hover text states equal
+to `DEFAULT_IDLE_EVICTION` and `DEFAULT_BACKSTOP`.
+
+The schema for `structural.toml` itself is committed as
+`schemas/config.json`, tidied for TOML editors the way efference tidies
+its own: an `Option`'s `null` type and `default: null` are dropped, since
+TOML has no null, and so is a numeric `format`, a Rust width neither
+editor checks. `settings` declares `additionalProperties: true`, because
+Tombi's strict mode reads a table with no declared keys as closed and
+warns on every key in it. The file has no `$id`; a `structural.toml` names
+it with a first line `#:schema <url>` — the file's raw URL in the published
+repository, or a `file://` path to a checkout — which Taplo and Tombi both
+read. A test pins the file to the types (`../process/testing.md`).
 
 ```toml
-idle_eviction_secs = 1800        # workspace-level: release a server no
+idle-eviction-secs = 1800        # workspace-level: release a server no
                                  # query or bind has addressed for this long
 
 [servers.rust-analyzer]          # a built-in's name: override it
 command = ["/opt/ra/rust-analyzer"]
-backstop_secs = 180
+backstop-secs = 180
 
 [servers.gopls]                  # any other name: a generic server
 command = ["gopls", "serve"]     # required

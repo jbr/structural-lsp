@@ -115,6 +115,7 @@ impl Host {
                 let entry = Arc::new(Entry::new(
                     Workspace::new(
                         key.clone(),
+                        &self.config_source,
                         self.lifetime.flag(),
                         Arc::clone(&self.clock),
                         Arc::clone(&watched),

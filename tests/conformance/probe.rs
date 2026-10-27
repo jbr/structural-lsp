@@ -37,7 +37,7 @@ pub struct Candidate {
     ///
     /// For a protocol fact about the server that the entry has to state:
     /// ccls reserves a `$/progress` token at startup and never reports
-    /// through it, so `progress_create_is_work = false` is what lets a
+    /// through it, so `progress-create-is-work = false` is what lets a
     /// readiness wait on it finish at all (`../../docs/servers.md`).
     pub extra_config: &'static str,
 }

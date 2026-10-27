@@ -19,7 +19,7 @@ pub struct Configured {
     /// `None` defers to the built-in, if there is one.
     pub configuration: Option<Value>,
     /// Whether `window/workDoneProgress/create` alone counts as outstanding
-    /// work for this server (`progress_create_is_work` in the entry).
+    /// work for this server (`progress-create-is-work` in the entry).
     pub progress_create_is_work: bool,
 }
 

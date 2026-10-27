@@ -67,7 +67,7 @@ finds a slot already failed reports that to its caller and emits nothing.
 | `LaunchFailed` | error | `Entry::launch`, when the ladder runs out — one event naming every candidate, reason and hint — and `Entry::publish`, when a started server cannot be published within the bound | the preferred candidate / the server |
 | `Fallback` | warning | `Entry::publish`, when the server published is not the ladder's first | the server serving |
 | `Unserved` | warning | `Entry::new` (the first selection) and the observer after each refresh; once per workspace per language | — |
-| `Config` | error | `Entry::new`, when `structural.toml` is present and does not load | — |
+| `Config` | error | `Entry::new`, when the configuration does not load — `structural.toml` present and unparsable, or the embedder's source erred | — |
 | `Released` | info | the observer, after each idle sweep, per server it stopped | the server |
 | `WatchLost` | warning | the observer, when the first watch fails or a working watch is lost | — |
 | `WatchRecovered` | info | the observer, when a lost watch is re-established | — |

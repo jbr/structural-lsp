@@ -22,7 +22,7 @@ impl Entry {
         self.operator.event(&event);
     }
 
-    /// What building the workspace found: a `structural.toml` that does not
+    /// What building the workspace found: a configuration that does not
     /// load, or languages the tree holds that nothing serves.
     pub(super) fn report_built(&self) {
         let (config_error, unserved) = {
@@ -41,8 +41,7 @@ impl Entry {
                 Kind::Config,
                 None,
                 format!(
-                    "{} did not load, so no language server starts here: {error}",
-                    crate::config::FILE_NAME
+                    "the configuration did not load, so no language server starts here: {error}"
                 ),
             );
         }

@@ -10,6 +10,7 @@ use crate::session::Session;
 use fixtures::{alive, asymmetric_fixture, wait_for_launches};
 
 mod binding;
+mod config;
 mod fixtures;
 mod observation;
 mod operator;
@@ -388,34 +389,6 @@ fn shutdown_reaps_a_workspace_a_released_agent_still_holds() {
         "shutdown reaches a workspace the map no longer names: {pids:?}"
     );
     drop(session);
-}
-
-#[test]
-fn a_broken_config_file_is_reported_not_fatal() {
-    let dir =
-        std::env::temp_dir().join(format!("structural-host-badconfig-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    // A present but unusable file: `cmd` is not a key any server entry takes.
-    std::fs::write(
-        dir.join("structural.toml"),
-        "[servers.thing]\ncmd = [\"x\"]\n",
-    )
-    .unwrap();
-
-    let host = Host::new();
-    let session = bound(&host, "a", &dir);
-
-    // The workspace still binds — the MCP surface must come up — and every
-    // call says why it cannot answer.
-    let error = session
-        .workspace()
-        .select(None, None)
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("structural.toml"), "{error}");
-    assert!(error.contains("cmd"), "{error}");
-    host.shutdown();
 }
 
 #[test]

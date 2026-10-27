@@ -104,7 +104,7 @@ while observation goes on.
   would.
 - **The interval is one, not a table.** Default 30 minutes
   (`crate::config::DEFAULT_IDLE_EVICTION`), overridable per workspace
-  by `idle_eviction_secs` in `structural.toml` — the file every other
+  by `idle-eviction-secs` in `structural.toml` — the file every other
   workspace-level key lives in, not per-server.
 - **The sweep runs on the observer thread.** The thread's park is
   bounded by the next slot's expiry, computed without the workspace

@@ -63,6 +63,7 @@ impl Session {
         let entry = Arc::new(Entry::new(
             Workspace::new(
                 crate::host::workspace_key(&view),
+                &crate::config::from_file(),
                 lifetime.flag(),
                 Arc::new(crate::clock::SystemClock),
                 Arc::clone(&watched),

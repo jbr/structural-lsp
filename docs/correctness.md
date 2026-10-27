@@ -24,7 +24,7 @@ The **only** timer is an inactivity backstop for a broken server, and it
 measures silence, not duration: time since the server last sent *any*
 message, reset by progress reports. A server still reporting progress is
 busy, not broken. Default 90 s, configurable per server
-(`backstop_secs`).
+(`backstop-secs`).
 
 A busy server can also be a quiet one — rust-analyzer says nothing for
 minutes while cargo builds proc-macros, with a progress token open — so the

@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "ServerEntry": {
+      "additionalProperties": false,
+      "description": "One language server: a built-in to adjust, a server to add, or one to\nleave out of this project with `disabled = true`.",
+      "properties": {
+        "backstop-secs": {
+          "description": "Seconds the server may stay silent, unanswered probes included, while\na query waits on it, before it is reported broken. Progress\nthe server reports counts as activity, so a server that is slow but\nworking is not cut off. Default `90`.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "command": {
+          "default": [],
+          "description": "The command that starts the server, executable first, as in\n`[\"gopls\", \"serve\"]`. Required for a server other than\n`rust-analyzer` and `pyright`; for those two it replaces the built-in\ncommand.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "disabled": {
+          "default": false,
+          "description": "Leave this server out of this project, whether it is a known server\nor one configured here. A disabled entry needs no other key. Default\n`false`.",
+          "type": "boolean"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default": {},
+          "description": "File extensions, without the dot, for a language id in `languages`,\nas in `{ go = [\"go\"] }`. Needed only for a language without known\nextensions; given, they replace the known ones.",
+          "type": "object"
+        },
+        "languages": {
+          "default": [],
+          "description": "The languages the server serves, by language id, as in `[\"go\"]`.\nRequired for a server other than `rust-analyzer` and `pyright`; for\nthose two it replaces their built-in languages. Common ids such as\n`go`, `typescript` and `cpp` come with their file extensions; any\nother id needs `extensions`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "progress-create-is-work": {
+          "description": "Whether a progress token the server reserves counts as work under\nway, which queries wait for. Default `true`. Set `false` for a server\nthat reserves a token and never reports progress through it, as ccls\ndoes; otherwise every query on it waits indefinitely.",
+          "type": "boolean"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "description": "Settings answered to each `workspace/configuration` request the\nserver sends, the same value for every section it asks about.\nDefault: none, which leaves the server its own defaults. Some servers\nserve nothing without it: deno needs `{ enable = true }`.\nrust-analyzer never asks, so this has no effect on it."
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Which language servers run for this project, and how. Every key is\noptional. With none, each language the project contains gets the\nbest-ranked known server that is installed. An unknown key fails the\nwhole configuration, and then no server starts.",
+  "properties": {
+    "idle-eviction-secs": {
+      "description": "Seconds a running server may go unused — no query routed to it, no\nagent starting work in this project — before it is stopped. The\nnext query that needs it starts it again. Default `1800` (30\nminutes).",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "servers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ServerEntry"
+      },
+      "description": "Servers to adjust, add, or leave out, by name. Naming `rust-analyzer`\nor `pyright` changes only the keys given, and the rest of their\nbuilt-in handling stays. Any other name describes a server in full,\nso `command` and `languages` are required, and replaces any known\nserver of that name. A server starts only in a project with files in\none of its languages.",
+      "type": "object"
+    }
+  },
+  "title": "language server configuration",
+  "type": "object"
+}

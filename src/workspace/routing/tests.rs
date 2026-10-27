@@ -22,6 +22,7 @@ fn two_languages(name: &str) -> Workspace {
     }
     let workspace = Workspace::new(
         root,
+        &crate::config::from_file(),
         Arc::new(AtomicBool::new(false)),
         Arc::new(crate::clock::SystemClock),
         Arc::new(crate::host::observation::Pending::new()),

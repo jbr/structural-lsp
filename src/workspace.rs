@@ -3,7 +3,7 @@
 //! A workspace is created by the [`crate::host::Host`], which keys it by its
 //! canonical root and shares it between every agent or caller bound to it.
 //! Building one is cheap and starts nothing: it reads the tree's evidence
-//! and `structural.toml`, asks selection what to run, and lays out one
+//! and its configuration, asks selection what to run, and lays out one
 //! [`ServerSlot`] per **planned** server (`docs/discovery.md`). Servers
 //! start on demand, through the host entry — which is why a workspace can
 //! exist, and answer routing questions, before anything is running.
@@ -19,7 +19,7 @@
 //! its own threads behind its handle.
 
 use crate::clock::Clock;
-use crate::config::{self, Config, Layout};
+use crate::config::{self, Layout};
 use crate::discovery::catalogue::Catalogue;
 use crate::discovery::evidence::Evidence;
 use crate::discovery::selection::{Selection, select};
@@ -56,16 +56,17 @@ pub struct Workspace {
     /// that slot is `Running`. Both change together, under this workspace's
     /// lock, which is what makes the pairing safe to rely on.
     servers: Vec<Option<LspServer>>,
-    /// A present but unusable `structural.toml`: nothing starts, and every
-    /// call says why.
+    /// A configuration that did not load — a present but unusable
+    /// `structural.toml`, or an error from the embedder's source: nothing
+    /// starts, and every call says why.
     config_error: Option<String>,
     /// What selection proposed for this tree, kept so a call can say why a
     /// server it expected is not here.
     selection: Option<Selection>,
-    /// The layout the initial selection was made under: the config file's
-    /// adapters and overrides. Loaded once — a `structural.toml` change
-    /// still asks for a restart — but kept, so a refresh re-selects under
-    /// the same policy the first selection used.
+    /// The layout the initial selection was made under: the
+    /// configuration's adapters and overrides. Loaded once — a
+    /// `structural.toml` change still asks for a restart — but kept, so a
+    /// refresh re-selects under the same policy the first selection used.
     layout: Option<Layout>,
     /// The stopped flag every slot takes, and a refresh re-takes for new
     /// slots: set by shutdown before anything is stopped, re-checked under
@@ -76,7 +77,7 @@ pub struct Workspace {
     /// tests advance time rather than sleeping through intervals.
     clock: Arc<dyn Clock>,
     /// How long a slot may sit without a strong signal before the idle
-    /// sweep releases it: this workspace's `idle_eviction_secs`, or the
+    /// sweep releases it: this workspace's `idle-eviction-secs`, or the
     /// default. Copied onto the host entry at acquisition, which is where
     /// the sweep runs from.
     idle_eviction: Duration,
@@ -89,7 +90,8 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    /// Read `structural.toml` and lay out a slot per configured server.
+    /// Load the configuration `source` gives for the root and lay out a
+    /// slot per planned server.
     ///
     /// Nothing is started here: a launch goes through the host entry, which
     /// can run and wait for one without holding the workspace lock. The root
@@ -98,6 +100,7 @@ impl Workspace {
     /// kept for the error.
     pub(crate) fn new(
         root: PathBuf,
+        source: &config::Source,
         stopped: Arc<AtomicBool>,
         clock: Arc<dyn Clock>,
         pending: Arc<Pending>,
@@ -115,10 +118,11 @@ impl Workspace {
             idle_eviction: config::DEFAULT_IDLE_EVICTION,
             pending,
         };
-        // Loaded separately from its layout so the interval this file asks
-        // for is read even when a server entry fails to parse — though a
-        // file in error lays out no slots for the interval to govern.
-        let config = match Config::load(&workspace.root) {
+        // Loaded separately from its layout so the interval the
+        // configuration asks for is read even when a server entry fails to
+        // lay out — though a configuration in error lays out no slots for
+        // the interval to govern.
+        let config = match source(&workspace.root) {
             Ok(config) => config,
             Err(error) => {
                 workspace.config_error = Some(format!("{error:#}"));

@@ -13,6 +13,7 @@
 //! workspace, never to run a query.
 
 use crate::clock::{Clock, SystemClock};
+use crate::config::{self, Config};
 use crate::lsp::server::LspServer;
 use crate::operator::{Operator, Stderr};
 use crate::workspace::{ServerSlot, SlotState, Workspace, canonical_root};
@@ -111,7 +112,7 @@ pub(crate) struct Entry {
     /// what the sweep reads (`docs/observation.md`).
     clock: Arc<dyn Clock>,
     /// How long a slot may sit without a strong signal before the sweep
-    /// stops it: the workspace's `idle_eviction_secs`, or the default.
+    /// stops it: the workspace's `idle-eviction-secs`, or the default.
     /// Held here so the sweep's park arithmetic never needs the workspace
     /// lock.
     idle_eviction: Duration,
@@ -335,10 +336,11 @@ impl Drop for Entry {
 
 /// The process's workspaces, keyed by canonical root.
 ///
-/// `structural.toml` is loaded from the workspace root, so today the
-/// canonical root also determines the effective server configuration and is
-/// a sufficient key. It grows a configuration component when a configuration
-/// can come from somewhere other than the root.
+/// A workspace's configuration is a function of its canonical root — the
+/// `structural.toml` there, or what the embedder's [`config::Source`]
+/// answers for it — so the canonical root also determines the effective
+/// server configuration and is a sufficient key. It grows a configuration
+/// component when a configuration can differ between callers on one root.
 pub struct Host {
     workspaces: Mutex<BTreeMap<PathBuf, Arc<Entry>>>,
     /// Workspaces released from `workspaces` that a [`Session`] may still
@@ -362,6 +364,10 @@ pub struct Host {
     /// (`docs/operator.md`). Cloned into each entry; [`Stderr`] unless
     /// the host was built [`with_operator`](Host::with_operator).
     operator: Arc<dyn Operator>,
+    /// Where each new workspace's configuration comes from: the
+    /// `structural.toml` at its root, unless the host was built
+    /// [`with_config_source`](Host::with_config_source).
+    config_source: config::Source,
 }
 
 impl Default for Host {
@@ -387,6 +393,7 @@ impl Host {
             clock: Arc::new(SystemClock),
             source_factory: Mutex::new(observation::default_source_factory()),
             operator: Arc::new(Stderr),
+            config_source: config::from_file(),
         }
     }
 
@@ -397,6 +404,21 @@ impl Host {
     /// has when the workspace is created.
     pub fn with_operator(mut self, operator: Arc<dyn Operator>) -> Self {
         self.operator = operator;
+        self
+    }
+
+    /// Take each workspace's configuration from `source`, called with the
+    /// workspace's canonical root, instead of reading `structural.toml`
+    /// there (`docs/servers.md`). For an embedder whose own configuration
+    /// carries structural's: it returns a typed [`Config`], and a root it
+    /// has nothing for answers [`Config::default`] — the built-ins — or
+    /// [`Config::load`] to defer to the file. Set before any agent binds:
+    /// a workspace reads its configuration once, when it is created.
+    pub fn with_config_source(
+        mut self,
+        source: impl Fn(&Path) -> Result<Config> + Send + Sync + 'static,
+    ) -> Self {
+        self.config_source = Arc::new(source);
         self
     }
 

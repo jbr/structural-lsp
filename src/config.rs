@@ -1,12 +1,14 @@
-//! `structural.toml` at the workspace root: which language servers to run.
+//! A workspace's configuration: which language servers to run. Read from
+//! `structural.toml` at the workspace root, or handed over as a typed
+//! [`Config`] by an embedder through [`Source`].
 //!
 //! ```toml
-//! idle_eviction_secs = 1800        # release a server no query has
+//! idle-eviction-secs = 1800        # release a server no query has
 //!                                  # addressed for this long (default 1800)
 //!
 //! [servers.rust-analyzer]          # a built-in: override its command or backstop
 //! command = ["/opt/ra/rust-analyzer"]
-//! backstop_secs = 180
+//! backstop-secs = 180
 //!
 //! [servers.gopls]                  # any other name: a generic server
 //! command = ["gopls", "serve"]
@@ -20,7 +22,7 @@
 //! [servers.ccls]
 //! command = ["ccls"]
 //! languages = ["cpp"]
-//! progress_create_is_work = false  # reserves a progress token it never uses
+//! progress-create-is-work = false  # reserves a progress token it never uses
 //! ```
 //!
 //! Built-in adapters are on by default; an entry with a built-in's name
@@ -34,80 +36,44 @@
 //! name the catalogue does not know is added generically. What actually
 //! starts is what selection plans from the tree's evidence, so a
 //! configured server whose language is not in the tree lays out no slot.
+//!
+//! The file is one spelling of a [`Config`]. An embedder whose own
+//! configuration carries these keys builds the value itself — by
+//! deserializing its own file into it, or field by field — and returns it
+//! from the [`Source`] it gives the host, and publishes the keys' schema
+//! from the type's `JsonSchema` (`docs/servers.md`). Keys are kebab-case,
+//! as the embedder's are. Everything after loading treats both alike.
 
 use crate::discovery::catalogue::{self, Entry};
 use crate::discovery::selection::Overrides;
 use crate::lsp::adapter::{self, Adapter, DEFAULT_BACKSTOP, Language, configured::Configured};
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
-use serde_json::Value;
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod schema;
+pub use schema::{Config, DEFAULT_IDLE_EVICTION, ServerEntry};
+
 pub const FILE_NAME: &str = "structural.toml";
 
-/// How long a server may sit without a strong signal — a bind or a query
-/// routing to it — before the idle sweep releases it, observation going on
-/// regardless (`docs/observation.md`). One interval for every server, by
-/// the operator's decision, not a table of them; `structural.toml`'
-/// `idle_eviction_secs` may override it, per workspace like the rest of
-/// this file's keys.
-pub const DEFAULT_IDLE_EVICTION: Duration = Duration::from_secs(30 * 60);
+/// Where each workspace's configuration comes from: a function of the
+/// workspace's canonical root, called once when the host creates the
+/// workspace and under the host's map lock, so it must not call back into
+/// the host.
+///
+/// A function of the root alone, because the host keys a workspace by its
+/// root and every caller on that root shares it: a source that answered
+/// differently per caller would hand every later caller the configuration
+/// of whichever one arrived first (`docs/ownership.md`). An error is kept
+/// as the workspace's configuration error — nothing starts, and every call
+/// says why — exactly as a `structural.toml` that does not parse is.
+pub type Source = Arc<dyn Fn(&Path) -> Result<Config> + Send + Sync>;
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Config {
-    #[serde(default)]
-    pub servers: BTreeMap<String, ServerEntry>,
-    /// The workspace's idle-eviction interval, in seconds. Absent: the
-    /// default. This is a resource knob, not selection policy — it rides
-    /// on `Config` because this file is where every workspace-level key
-    /// lives, not because it changes what selection plans.
-    #[serde(default)]
-    pub idle_eviction_secs: Option<u64>,
-}
-
-impl Config {
-    /// The idle-eviction interval this file asks for, or the default.
-    pub fn idle_eviction(&self) -> Duration {
-        self.idle_eviction_secs
-            .map(Duration::from_secs)
-            .unwrap_or(DEFAULT_IDLE_EVICTION)
-    }
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ServerEntry {
-    /// argv, executable first. Required for a generic server.
-    #[serde(default)]
-    pub command: Vec<String>,
-    /// Language ids. Required for a generic server.
-    #[serde(default)]
-    pub languages: Vec<String>,
-    /// Extensions per language id, when the defaults below do not cover it.
-    #[serde(default)]
-    pub extensions: BTreeMap<String, Vec<String>>,
-    /// Take this server out of consideration for this project, built-in or
-    /// not. The one thing configuration could not express before the
-    /// catalogue: a project with no Rust in it can now say so.
-    #[serde(default)]
-    pub disabled: bool,
-    pub backstop_secs: Option<u64>,
-    /// Whether `window/workDoneProgress/create` alone counts as outstanding
-    /// work for this server. Default true, which is right for every server
-    /// that begins the work it reserved a token for. Set it false for a
-    /// server that reserves a token and never reports through it — ccls
-    /// creates one `index` token at startup and sends no `$/progress` at
-    /// all — since counting that create leaves the connection never idle
-    /// and every query on it waiting forever (docs/servers.md).
-    pub progress_create_is_work: Option<bool>,
-    /// Answered to this server's `workspace/configuration` request, one
-    /// copy per requested item. Some servers serve nothing until it
-    /// arrives (docs/servers.md).
-    pub settings: Option<toml::Value>,
+/// The source the front end uses: [`Config::load`], the `structural.toml`
+/// at the root.
+pub fn from_file() -> Source {
+    Arc::new(Config::load)
 }
 
 /// Extensions for language ids a user is likely to name without spelling
@@ -296,19 +262,6 @@ fn languages_of(name: &str, entry: &ServerEntry) -> Result<Vec<Language>> {
         .collect()
 }
 
-/// `settings` as JSON, since that is what goes on the wire.
-fn configuration_of(name: &str, entry: &ServerEntry) -> Result<Option<Value>> {
-    entry
-        .settings
-        .clone()
-        .map(|settings| {
-            serde_json::to_value(settings).with_context(|| {
-                format!("[servers.{name}]: `settings` is not representable as JSON")
-            })
-        })
-        .transpose()
-}
-
 fn override_builtin(builtin: Arc<dyn Adapter>, entry: ServerEntry) -> Result<Configured> {
     let name = builtin.name().to_string();
     let command = if entry.command.is_empty() {
@@ -325,7 +278,6 @@ fn override_builtin(builtin: Arc<dyn Adapter>, entry: ServerEntry) -> Result<Con
         .backstop_secs
         .map(Duration::from_secs)
         .unwrap_or_else(|| builtin.backstop());
-    let configuration = configuration_of(&name, &entry)?;
     let progress_create_is_work = entry
         .progress_create_is_work
         .unwrap_or_else(|| builtin.progress_create_is_work());
@@ -335,7 +287,7 @@ fn override_builtin(builtin: Arc<dyn Adapter>, entry: ServerEntry) -> Result<Con
         languages,
         backstop,
         base: Some(builtin),
-        configuration,
+        configuration: entry.settings,
         progress_create_is_work,
     })
 }
@@ -348,7 +300,6 @@ fn generic(name: String, entry: ServerEntry) -> Result<Configured> {
         bail!("[servers.{name}]: `languages` is required for a server that is not built in");
     }
     let languages = languages_of(&name, &entry)?;
-    let configuration = configuration_of(&name, &entry)?;
     Ok(Configured {
         name,
         command: entry.command,
@@ -358,97 +309,10 @@ fn generic(name: String, entry: ServerEntry) -> Result<Configured> {
             .map(Duration::from_secs)
             .unwrap_or(DEFAULT_BACKSTOP),
         base: None,
-        configuration,
+        configuration: entry.settings,
         progress_create_is_work: entry.progress_create_is_work.unwrap_or(true),
     })
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn absent_config_is_the_builtins() {
-        let adapters = Config::default().layout().unwrap().adapters;
-        let names: Vec<&str> = adapters.iter().map(|a| a.name()).collect();
-        assert_eq!(names, ["rust-analyzer", "pyright"]);
-    }
-
-    #[test]
-    fn a_builtin_entry_overrides_command_and_backstop_only() {
-        let config = Config::parse(
-            r#"
-            [servers.rust-analyzer]
-            command = ["/opt/ra/rust-analyzer", "--log-file", "/tmp/ra.log"]
-            backstop_secs = 180
-            "#,
-        )
-        .unwrap();
-        let adapters = config.layout().unwrap().adapters;
-        let ra = &adapters[0];
-        assert_eq!(ra.name(), "rust-analyzer");
-        assert_eq!(ra.command()[0], "/opt/ra/rust-analyzer");
-        assert_eq!(ra.backstop(), Duration::from_secs(180));
-        assert_eq!(ra.languages()[0].extensions, ["rs"]);
-        // The built-in's knowledge is kept.
-        assert!(
-            ra.initialization_options()
-                .pointer("/workspace/symbol/search/kind")
-                .is_some()
-        );
-        assert!(ra.install_hint().contains("rustup"));
-    }
-
-    #[test]
-    fn a_generic_entry_needs_command_and_languages() {
-        let config = Config::parse(
-            r#"
-            [servers.gopls]
-            command = ["gopls", "serve"]
-            languages = ["go"]
-            "#,
-        )
-        .unwrap();
-        let adapters = config.layout().unwrap().adapters;
-        let gopls = adapters.iter().find(|a| a.name() == "gopls").unwrap();
-        assert_eq!(gopls.command(), ["gopls", "serve"]);
-        assert_eq!(gopls.languages(), [Language::new("go", &["go"])]);
-        assert_eq!(gopls.backstop(), DEFAULT_BACKSTOP);
-
-        let missing = Config::parse("[servers.thing]\nlanguages = [\"go\"]\n")
-            .unwrap()
-            .layout()
-            .err()
-            .expect("command is required");
-        assert!(
-            missing.to_string().contains("`command` is required"),
-            "{missing}"
-        );
-
-        let unknown =
-            Config::parse("[servers.thing]\ncommand = [\"thing\"]\nlanguages = [\"brainfuck\"]\n")
-                .unwrap()
-                .layout()
-                .err()
-                .expect("unknown extensions are an error");
-        assert!(
-            unknown.to_string().contains("no known file extensions"),
-            "{unknown}"
-        );
-
-        let explicit = Config::parse(
-            "[servers.thing]\ncommand = [\"thing\"]\nlanguages = [\"brainfuck\"]\nextensions = { brainfuck = [\"bf\"] }\n",
-        )
-        .unwrap()
-        .layout()
-        .unwrap()
-        .adapters;
-        assert_eq!(explicit.last().unwrap().languages()[0].extensions, ["bf"]);
-    }
-
-    #[test]
-    fn unknown_keys_are_rejected() {
-        let error = Config::parse("[servers.gopls]\ncmd = [\"gopls\"]\n").unwrap_err();
-        assert!(error.to_string().contains("cmd"), "{error}");
-    }
-}
+mod tests;

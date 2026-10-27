@@ -110,6 +110,13 @@ Bound long runs with `gtimeout` and background them. **Do not call an
 unbounded `wait`** — a stuck run cost an hour once. `cargo test -- --ignored`
 spawns real servers and is slow.
 
+## Pinned files
+
+`schemas/config.json` is generated from the configuration types and pinned
+by `the_committed_schema_matches_the_types`, which fails when a key or its
+hover text changes and the file does not. `STRUCTURAL_WRITE_SCHEMA=1 cargo
+test schema` rewrites it; review the diff as part of the change.
+
 ## Pending acceptance cases
 
 Some acceptance cases assert behavior that does not hold yet — they are

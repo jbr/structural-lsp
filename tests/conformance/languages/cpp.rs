@@ -58,7 +58,7 @@ const CANDIDATES: &[Candidate] = &[
         // the tree. Counting that create leaves the connection never idle,
         // so every readiness wait on it blocks forever
         // (`../../journal/2026-09-19-ccls-reserves-a-token.md`).
-        extra_config: "progress_create_is_work = false\n",
+        extra_config: "progress-create-is-work = false\n",
     },
 ];
 

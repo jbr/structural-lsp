@@ -28,6 +28,7 @@ fn workspace(name: &str, files: &[(&str, &str)], config: &str) -> Workspace {
     }
     Workspace::new(
         root,
+        &crate::config::from_file(),
         Arc::new(AtomicBool::new(false)),
         Arc::new(crate::clock::SystemClock),
         Arc::new(crate::host::observation::Pending::new()),

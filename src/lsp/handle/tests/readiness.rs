@@ -92,7 +92,7 @@ fn progress_tokens_gate_readiness_and_server_requests_are_answered() {
 /// ever, so counting the create would leave this connection never idle and
 /// every readiness wait on it blocking forever
 /// (`../../../journal/2026-09-19-ccls-reserves-a-token.md`). A server that
-/// says so through `progress_create_is_work = false` is ready after the
+/// says so through `progress-create-is-work = false` is ready after the
 /// create, and the progress it *does* report still gates readiness.
 #[test]
 fn a_reserved_token_a_server_never_reports_through_does_not_gate_readiness() {

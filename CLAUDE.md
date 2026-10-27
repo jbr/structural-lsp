@@ -80,7 +80,11 @@ The full map, with the doc governing each subsystem, is the table in
 - **No `#[allow(dead_code)]` per item; delete or use.** The one thing a
   crate-wide allow hid here was a real missing backstop.
 - **Doc comments cite the governing doc by filename** (e.g.
-  `(docs/ownership.md)`), not a line number.
+  `(docs/ownership.md)`), not a line number. The exception is a `///` that
+  becomes output: on the configuration types (`src/config/schema.rs`) it is
+  the JSON schema's hover text, so it describes the key for someone editing
+  the file and names no repository path; implementer notes and citations
+  there are `//`.
 - **Register for docs and comments: describe, don't evaluate.** State
   mechanisms and what breaks if they change — no praise words, no banner
   theses. Assume any sentence may be quoted out of context by a future

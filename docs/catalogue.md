@@ -89,7 +89,7 @@ evidence `scores/cpp.json` · 2 candidates
 
 ccls's score understates it and that is a probe fact, not a server fact: its
 references answer with the caller open and its index settled, but its index
-progress is unawaitable by design (`progress_create_is_work = false`, the
+progress is unawaitable by design (`progress-create-is-work = false`, the
 adapter's workaround for a progress token it reserves and never reports
 through), so the probe's wait finishes before its index does
 (`../journal/2026-10-06-ccls-references-needs-the-caller-open.md`). The row

@@ -29,7 +29,7 @@ pub enum Level {
     /// serving, a candidate skipped, a language with no server, a watch lost.
     Warning,
     /// Something an operator has to fix before it will work: a ladder with
-    /// no candidate that starts, a `structural.toml` that does not load.
+    /// no candidate that starts, a configuration that does not load.
     Error,
 }
 
@@ -63,7 +63,8 @@ pub enum Kind {
     Fallback,
     /// The tree gives evidence for a language no plan serves.
     Unserved,
-    /// `structural.toml` is present and does not load, so nothing starts.
+    /// The workspace's configuration — a present `structural.toml`, or
+    /// the embedder's source — does not load, so nothing starts.
     Config,
     /// The idle sweep stopped a server no strong signal had addressed.
     Released,
