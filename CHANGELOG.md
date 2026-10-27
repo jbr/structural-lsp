@@ -7,6 +7,9 @@ newest release first, and what has landed since the last release under
 
 ## [Unreleased]
 
+### Fixed
+- **A chatty server no longer gets a caller's request refused** (docs/transport.md): callers' commands have a queue of their own (`command_cap`, 256) apart from the inbox the server's frames fill, so a burst of notifications blocks the reader and never refuses a query; a caller rings a doorbell in the inbox, and the owner drains the command queue after every wake.
+
 ## [0.1.1] - 2026-10-27
 
 ### Changed

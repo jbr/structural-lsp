@@ -12,6 +12,7 @@ fn test_settings() -> Settings {
         configuration: serde_json::Value::Null,
         probe_after: Duration::from_secs(60),
         inbound_cap: 64,
+        command_cap: 8,
         writer_cap: 8,
         pending_cap: 8,
         progress_token_cap: 8,
@@ -124,7 +125,8 @@ impl ServerHandle {
         ServerHandle {
             label: self.label.clone(),
             inbox: self.inbox.clone(),
-            inbound_cap: self.inbound_cap,
+            commands: self.commands.clone(),
+            command_cap: self.command_cap,
             terminate: Arc::clone(&self.terminate),
             force: Arc::clone(&self.force),
             owner: None,

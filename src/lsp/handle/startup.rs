@@ -17,6 +17,7 @@ pub(super) fn spawn(
     let (stdin, stdout) = child.pipes()?;
 
     let (inbox_tx, inbox_rx) = mpsc::sync_channel::<OwnerMsg>(settings.inbound_cap);
+    let (commands_tx, commands_rx) = mpsc::sync_channel::<Command>(settings.command_cap);
     let (writer_tx, writer_rx) = mpsc::sync_channel::<WriterJob>(settings.writer_cap);
     let terminate = Arc::new(AtomicBool::new(false));
     let force = Arc::new(AtomicBool::new(false));
@@ -50,7 +51,7 @@ pub(super) fn spawn(
         }
     };
 
-    let inbound_cap = settings.inbound_cap;
+    let command_cap = settings.command_cap;
     let progress = ProgressTokens::new(
         settings.progress_token_cap,
         settings.progress_create_is_work,
@@ -61,6 +62,7 @@ pub(super) fn spawn(
         policy,
         child,
         inbox: inbox_rx,
+        commands: commands_rx,
         writer_tx: Some(writer_tx),
         writer: Some(writer),
         reader: Some(reader),
@@ -92,8 +94,9 @@ pub(super) fn spawn(
 
     Ok(ServerHandle {
         label,
-        inbound_cap,
+        command_cap,
         inbox: inbox_tx,
+        commands: commands_tx,
         terminate,
         force,
         owner: Some(owner),

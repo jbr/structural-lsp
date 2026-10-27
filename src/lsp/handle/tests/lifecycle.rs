@@ -113,6 +113,7 @@ fn shutdown_works_under_admission_pressure() {
     let mock = Mock::new("saturate");
     let settings = Settings {
         inbound_cap: 2,
+        command_cap: 2,
         pending_cap: 2,
         ..test_settings()
     };
@@ -147,8 +148,7 @@ fn shutdown_works_under_admission_pressure() {
         // The terminate path exactly as `shutdown`/`Drop` take it, minus
         // the join (the scope holds shared borrows).
         let flagged_at = Instant::now();
-        handle.terminate.store(true, Ordering::SeqCst);
-        let _ = handle.inbox.try_send(OwnerMsg::Admit(Command::Shutdown));
+        handle.terminate();
         thread::sleep(Duration::from_millis(1500));
         stop.store(true, Ordering::SeqCst);
         flagged_at
@@ -244,4 +244,42 @@ fn a_blocked_notification_trips_the_backstop_on_its_own() {
         started.elapsed()
     );
     handle.shutdown().unwrap();
+}
+
+#[test]
+fn a_full_inbox_does_not_refuse_a_caller() {
+    // The inbox a server floods is full; the caller's command queue is
+    // not. Admission is decided by the command queue alone, so the caller
+    // is admitted however far behind the owner is on the server's frames
+    // (docs/transport.md). No owner thread: this is admission itself.
+    let (inbox, _inbox_rx) = mpsc::sync_channel(1);
+    inbox.try_send(OwnerMsg::Doorbell).unwrap();
+    let (commands, commands_rx) = mpsc::sync_channel(1);
+    let handle = ServerHandle {
+        label: "flooded".to_string(),
+        inbox,
+        commands,
+        command_cap: 1,
+        terminate: Arc::new(AtomicBool::new(false)),
+        force: Arc::new(AtomicBool::new(false)),
+        owner: None,
+    };
+    let (reply, _) = mpsc::channel();
+    handle.admit(Command::Snapshot { reply }).unwrap();
+    assert!(matches!(
+        commands_rx.try_recv(),
+        Ok(Command::Snapshot { .. })
+    ));
+
+    // What refuses a caller is its own queue being full.
+    let (reply, _) = mpsc::channel();
+    handle.admit(Command::Snapshot { reply }).unwrap();
+    let (reply, _) = mpsc::channel();
+    let error = handle.admit(Command::Snapshot { reply }).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("command queue full (1 commands)"),
+        "{error}"
+    );
 }

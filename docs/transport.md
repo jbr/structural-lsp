@@ -13,7 +13,7 @@ caller in order to keep the protocol moving.
 
 - **reader** — turns the child's stdout into frames and pushes them,
   blocking, into the owner's inbox. Backpressure lands on the child, never on
-  a caller.
+  a caller: callers' commands go to a queue of their own (below).
 - **owner** — holds *every* piece of protocol state (pending requests, open
   progress tokens, the readiness policy, the diagnostic event log), answers
   server-initiated requests, and is the only thread that touches any of it.
@@ -66,7 +66,8 @@ caller outbound.
 
 | setting | default | bounds |
 | --- | --- | --- |
-| `inbound_cap` | 1024 | messages queued for the owner (server frames and caller commands share it) |
+| `inbound_cap` | 1024 | messages queued for the owner: server frames, the writer's reports, callers' doorbells |
+| `command_cap` | 256 | commands queued by callers for the owner |
 | `writer_cap` | 64 | frames queued for the writer |
 | `pending_cap` | 256 | admitted operations not yet finished |
 | `progress_token_cap` | 4096 | progress tokens open at once; a server past this is treated as broken |
@@ -76,7 +77,19 @@ caller outbound.
 | `shutdown_grace` | 5 s | graceful `shutdown`/`exit` before the child is killed |
 
 A caller whose operation cannot be queued gets an error naming the queue. The
-one place a full queue is fatal is a **required** frame — the reply to a
+queue a caller is admitted to is the command queue, which nothing the server
+sends counts against: a server emitting notifications faster than the owner
+drains them fills the inbox and blocks the reader, and a caller is still
+admitted. When the two shared one inbox, a caller's `try_send` landing on
+the inbox a flood held full was refused, so a notification burst decided
+whether a query was admitted. A caller queues its command and then rings a
+doorbell in the inbox to wake the owner; a doorbell that finds the inbox
+full is dropped, because a full inbox wakes the owner anyway, and the owner
+drains the command queue — at most `command_cap` per wake — after every
+wake, message or tick. Each caller blocks on its own command, so the queue
+holds at most one per calling thread.
+
+The one place a full queue is fatal is a **required** frame — the reply to a
 server-initiated request — which is never dropped silently; the connection is
 terminated instead.
 

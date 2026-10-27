@@ -5,7 +5,11 @@ use super::*;
 
 pub(super) enum OwnerMsg {
     FromServer(Incoming),
-    Admit(Command),
+    /// Commands are waiting in the command queue: a wake-up and nothing
+    /// else. Best effort, like [`OwnerMsg::Written`]: a doorbell that finds
+    /// the inbox full is dropped, because a full inbox wakes the owner
+    /// anyway and the owner drains the command queue on every wake.
+    Doorbell,
     /// The writer wrote (or acknowledged) this tracked frame; the owner may
     /// forget it. Best effort: a full inbox loses it, and the entry then
     /// lingers until its backstop, harmlessly.

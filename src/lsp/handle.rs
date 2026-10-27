@@ -47,9 +47,12 @@
 //! # Bounds
 //!
 //! Every queue is bounded and admission never blocks a caller: the owner's
-//! inbox, the writer queue, the number of admitted-but-unfinished
-//! operations, the number of open progress tokens and the diagnostic event
-//! log all have caps in [`Settings`]. The caps count messages, frames,
+//! inbox, the callers' command queue, the writer queue, the number of
+//! admitted-but-unfinished operations, the number of open progress tokens
+//! and the diagnostic event log all have caps in [`Settings`]. Callers'
+//! commands have a queue of their own, so a server's traffic filling the
+//! inbox never gets a caller refused; a caller rings a doorbell in the
+//! inbox, and the owner drains the command queue on every wake. The caps count messages, frames,
 //! operations and tokens — not bytes; a single frame is bounded only by
 //! [`super::framing::MAX_FRAME_BYTES`] on the way in and by the caller on
 //! the way out. A caller whose operation cannot be queued gets an error
@@ -61,8 +64,8 @@
 //!
 //! [`ServerHandle::shutdown`] and `Drop` both set a terminate flag the owner
 //! checks on every wake *and* try to queue a graceful shutdown command; the
-//! flag is the reliable path when the inbox is full, the command the fast
-//! one. When idle the owner waits at most [`CONTROL_TICK`] between checks,
+//! flag is the reliable path when the command queue is full, the command the
+//! fast one. When idle the owner waits at most [`CONTROL_TICK`] between checks,
 //! so the flag is always noticed. Both paths converge: a bounded graceful
 //! `shutdown`/`exit` attempt, then kill and reap the child **before**
 //! waiting for the writer (a write blocked on a wedged server unblocks only
@@ -132,9 +135,12 @@ const JOIN_GUARD: Duration = Duration::from_secs(2);
 /// count, not a size; see the module docs.
 #[derive(Debug, Clone)]
 pub struct Settings {
-    /// Messages queued for the owner (server frames and caller commands
-    /// share it). The reader blocks when it is full; callers are refused.
+    /// Messages queued for the owner: server frames, the writer's reports
+    /// and callers' doorbells. The reader blocks when it is full.
     pub inbound_cap: usize,
+    /// Commands queued by callers for the owner. Callers are refused when it
+    /// is full; nothing the server sends counts against it.
+    pub command_cap: usize,
     /// Frames queued for the writer thread.
     pub writer_cap: usize,
     /// Admitted operations (requests and readiness waits) not yet finished.
@@ -173,6 +179,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             inbound_cap: 1024,
+            command_cap: 256,
             writer_cap: 64,
             pending_cap: 256,
             progress_token_cap: 4096,
@@ -214,8 +221,10 @@ pub struct Snapshot {
 /// threads by reference; every method takes `&self`.
 pub struct ServerHandle {
     label: String,
+    /// Only for the doorbell; commands go to `commands`.
     inbox: SyncSender<OwnerMsg>,
-    inbound_cap: usize,
+    commands: SyncSender<Command>,
+    command_cap: usize,
     terminate: Arc<AtomicBool>,
     force: Arc<AtomicBool>,
     owner: Option<JoinHandle<()>>,
@@ -371,13 +380,15 @@ impl ServerHandle {
     /// Ask the server to stop, without waiting for it.
     ///
     /// The terminate flag is the path that cannot fail — the owner checks it
-    /// on every wake; the queued command is the fast one when the inbox has
-    /// room. This is what a host uses on a child whose owning thread is still
+    /// on every wake; the queued command is the fast one when the command
+    /// queue has room. This is what a host uses on a child whose owning thread is still
     /// inside `initialize`: that thread gets its error, and the process is
     /// already going away.
     pub fn terminate(&self) {
         self.terminate.store(true, Ordering::SeqCst);
-        let _ = self.inbox.try_send(OwnerMsg::Admit(Command::Shutdown));
+        if self.commands.try_send(Command::Shutdown).is_ok() {
+            ring(&self.inbox);
+        }
     }
 
     /// Enough to stop this server without owning its connection — cloned out
@@ -388,20 +399,23 @@ impl ServerHandle {
             terminate: Arc::clone(&self.terminate),
             force: Arc::clone(&self.force),
             inbox: self.inbox.clone(),
+            commands: self.commands.clone(),
         }
     }
 
     fn admit(&self, command: Command) -> Result<()> {
-        self.inbox
-            .try_send(OwnerMsg::Admit(command))
+        self.commands
+            .try_send(command)
             .map_err(|error| match error {
                 TrySendError::Full(_) => anyhow!(
-                    "{}: local inbound queue full ({} messages); operation not admitted",
+                    "{}: local command queue full ({} commands); operation not admitted",
                     self.label,
-                    self.inbound_cap
+                    self.command_cap
                 ),
                 TrySendError::Disconnected(_) => anyhow!("connection to {} closed", self.label),
-            })
+            })?;
+        ring(&self.inbox);
+        Ok(())
     }
 
     fn begin_teardown(&mut self) {
@@ -432,6 +446,7 @@ pub struct Stopper {
     terminate: Arc<AtomicBool>,
     force: Arc<AtomicBool>,
     inbox: SyncSender<OwnerMsg>,
+    commands: SyncSender<Command>,
 }
 
 impl Stopper {
@@ -450,8 +465,16 @@ impl Stopper {
     /// owning thread's request fails, and the process is torn down.
     pub fn stop(&self) {
         self.terminate.store(true, Ordering::SeqCst);
-        let _ = self.inbox.try_send(OwnerMsg::Admit(Command::Shutdown));
+        if self.commands.try_send(Command::Shutdown).is_ok() {
+            ring(&self.inbox);
+        }
     }
+}
+
+/// Wake the owner to drain the command queue. Best effort: a full inbox
+/// already guarantees a wake ([`OwnerMsg::Doorbell`]).
+fn ring(inbox: &SyncSender<OwnerMsg>) {
+    let _ = inbox.try_send(OwnerMsg::Doorbell);
 }
 
 /// Wire tracing to stderr, enabled by `STRUCTURAL_WIRE` (or the spike's
