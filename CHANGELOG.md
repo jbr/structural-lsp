@@ -7,6 +7,8 @@ newest release first, and what has landed since the last release under
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-27
+
 ### Fixed
 - **Tool descriptions name no repository path** (docs/tools.md): three `///` citations that became `tools/list` text — `(docs/resolution.md)`, `(docs/correctness.md)`, `(docs/tools.md)` — move to `//` comments, so an embedder advertising the tools under its own name shows a model no path it cannot open; a test holds every advertised description, examples aside, to no `docs/`, `backlog/`, `journal/`, `process/` or `src/` path.
 - **A tree that calls for no server says so** (docs/ownership.md): a call in a tree with no language evidence answered "no language server here serves `` files" with an empty `here:` line; it now says nothing in the tree calls for a language server, followed by why each catalogued server is absent.
