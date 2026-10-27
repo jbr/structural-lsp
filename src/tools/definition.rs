@@ -61,14 +61,16 @@ const BODY_BUDGET_BYTES: usize = 12_000;
 /// source instead of a line number because the model's snapshot of a file
 /// may be stale; `focus` names the token inside it (`config` in
 /// `let config = Config::new(3);`). Only exact names resolve, and several
-/// distinct definitions are listed rather than picked (docs/resolution.md).
+/// distinct definitions are listed rather than picked.
 ///
 /// `workspace` answers about another project for one call, and `language`
 /// narrows a name to one language's servers (`{"symbol": "Config",
 /// "language": "python"}`). Before each query, every file in the servers'
 /// languages that was written, created, or deleted since they last
 /// answered is pushed to them from disk, and they are waited for; an edit
-/// made just before the call is seen (docs/correctness.md).
+/// made just before the call is seen.
+// The `///` above is the tool description a model reads, so it names no
+// repository path; it summarizes docs/resolution.md and docs/correctness.md.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "definition")]
 #[group(skip)]

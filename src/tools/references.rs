@@ -49,11 +49,13 @@ const MAX_HITS: usize = 100;
 /// file `path`, `focus` naming the token), which reaches locals and
 /// parameters; `workspace` and `language` work as they do there. `path`
 /// scopes where the symbol is looked up; `within` scopes which references
-/// are listed (docs/tools.md). Files are in path order and
+/// are listed. Files are in path order and
 /// a listing stops at 100 references: what is left is summarized by
 /// directory, largest first, ready to name in `within`, and `page`
 /// continues past it. Tests are split out by a filename/module heuristic;
 /// an inline `#[cfg(test)]` block elsewhere stays with production code.
+// The `///` above is the tool description a model reads, so it names no
+// repository path; `within` and paging are docs/tools.md.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, clap::Args)]
 #[serde(rename = "references")]
 #[group(skip)]

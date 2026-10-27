@@ -7,6 +7,8 @@ pub mod classify;
 pub mod hits;
 pub mod listing;
 pub mod resolution;
+#[cfg(test)]
+mod tests;
 
 mcplease::tools!(
     Session,
