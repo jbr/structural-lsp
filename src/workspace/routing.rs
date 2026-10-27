@@ -130,12 +130,21 @@ impl Workspace {
             if self.config_error.is_some() {
                 bail!("{}", self.nothing_running());
             }
+            let extension = scope
+                .filter(|scope| scope.is_file())
+                .and_then(Path::extension);
+            let Some(extension) = extension else {
+                // With no file extension to route by, every slot is a
+                // candidate, so none is empty only when nothing was laid
+                // out: the tree calls for no language this catalogue serves.
+                bail!(
+                    "no language server is set up here: nothing in this tree calls for one.\n{}",
+                    self.not_planned()
+                );
+            };
             bail!(
                 "no language server here serves `{}` files.\n  here: {}\n{}",
-                scope
-                    .and_then(Path::extension)
-                    .unwrap_or_default()
-                    .to_string_lossy(),
+                extension.to_string_lossy(),
                 self.names(),
                 self.not_planned()
             );

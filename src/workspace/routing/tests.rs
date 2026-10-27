@@ -122,3 +122,33 @@ fn a_valid_language_does_not_depend_on_what_is_running() {
     assert!(error.contains("rust-analyzer: not started"), "{error}");
     assert!(!error.contains("pyright"), "{error}");
 }
+
+#[test]
+fn a_tree_that_calls_for_no_server_says_so_rather_than_naming_an_empty_extension() {
+    let root =
+        std::env::temp_dir().join(format!("structural-routing-{}-empty", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let workspace = Workspace::new(
+        root.clone(),
+        &crate::config::from_file(),
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(crate::clock::SystemClock),
+        Arc::new(crate::host::observation::Pending::new()),
+    );
+    assert!(workspace.slots().is_empty());
+    let error = workspace.select(None, None).unwrap_err().to_string();
+    assert!(
+        error.starts_with(
+            "no language server is set up here: nothing in this tree calls for one.\n"
+        ),
+        "{error}"
+    );
+    assert!(
+        !error.contains("``") && !error.contains("here: \n"),
+        "{error}"
+    );
+    // Why each catalogued server is absent still follows.
+    assert!(error.contains("not here: "), "{error}");
+    let _ = std::fs::remove_dir_all(&root);
+}
