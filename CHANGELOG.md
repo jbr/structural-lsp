@@ -7,6 +7,13 @@ newest release first, and what has landed since the last release under
 
 ## [Unreleased]
 
+## [ 0.2.0] - 2026-11-13
+
+### Changed
+
+- Upgraded the [mcplease](https://github.com/jbr/mcplease) library to 0.6
+
+
 ## [0.1.3] - 2026-10-27
 
 ### Fixed
