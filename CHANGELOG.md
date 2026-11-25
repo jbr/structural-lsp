@@ -7,6 +7,11 @@ newest release first, and what has landed since the last release under
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-25
+
+### Changed
+- Upgraded the [notify](https://github.com/notify-rs/notify) file-watching library to 9
+
 ## [0.2.0] - 2026-11-13
 
 ### Changed
