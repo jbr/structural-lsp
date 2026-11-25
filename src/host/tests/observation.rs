@@ -218,7 +218,7 @@ fn a_new_language_warms_in_an_interested_workspace() {
         "the refreshed layout grew a Python slot"
     );
     assert!(
-        wait_until(|| servers_launched(&rust_only).contains(&"pyright".to_string())),
+        wait_until(|| servers_launched(&rust_only).iter().any(|s| s == "pyright")),
         "a new language in an interested workspace warms its server, not just its slot"
     );
     assert_eq!(
@@ -788,7 +788,7 @@ fn eviction_leaves_observation_intact() {
         "observation still grows the slot list after eviction"
     );
     assert!(
-        wait_until(|| servers_launched(&rust_only).contains(&"pyright".to_string())),
+        wait_until(|| servers_launched(&rust_only).iter().any(|s| s == "pyright")),
         "observation still warms a new language after eviction"
     );
     assert_eq!(
@@ -865,7 +865,7 @@ fn a_watch_failure_degrades_to_a_ticker_and_recovers() {
         "a recovered watch refreshes evidence again"
     );
     assert!(
-        wait_until(|| servers_launched(&rust_only).contains(&"pyright".to_string())),
+        wait_until(|| servers_launched(&rust_only).iter().any(|s| s == "pyright")),
         "a recovered watch warms a new language again"
     );
     host.shutdown();
