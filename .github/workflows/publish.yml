@@ -1,19 +1,17 @@
-# Generates the public repository from this one on every push to main, by
-# running scripts/publish (process/publishing.md). Runs only in the
-# development repository; the push uses a deploy key with write access to
-# the public repository, so the public side's own workflows run on it.
+# Generates the public repository from this one by running scripts/publish
+# (process/publishing.md). Called by ci.yaml's publish job once a push to
+# main has passed CI; workflow_dispatch publishes main without waiting for
+# CI. Runs only in the development repository; the push uses a deploy key
+# with write access to the public repository, so the public side's own
+# workflows run on it.
 name: Publish
 
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    secrets:
+      PUBLIC_DEPLOY_KEY:
+        required: true
   workflow_dispatch:
-
-# One publish at a time, in push order: each is a fast-forward of the last.
-concurrency:
-  group: publish
-  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -23,6 +21,11 @@ jobs:
     name: Publish to the public repository
     if: github.repository == 'jbr/structural-lsp-private'
     runs-on: ubuntu-latest
+    # One publish at a time, a manual one included: each is a fast-forward
+    # of the last. Job-level, so it applies when called from ci.yaml too.
+    concurrency:
+      group: publish
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:

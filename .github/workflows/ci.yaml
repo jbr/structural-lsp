@@ -1,3 +1,7 @@
+# Runs in both repositories. In the development repository a push to main
+# ends in the publish job, which waits for every other job here, so a commit
+# that fails CI is not published and does not reach release-plz
+# (process/publishing.md).
 name: CI
 
 on:
@@ -7,13 +11,20 @@ on:
     branches:
       - main
 
+# A run on main waits for the one in progress instead of cancelling it, so
+# publishes go out in push order. GitHub keeps one waiting run per group: a
+# third push replaces the waiting run, and the newer publish carries its
+# commits. A new push to a pull request cancels the run for the older one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   RUSTFLAGS: -Dwarnings
 
 jobs:
   test:
     name: Build and test
-    if: github.repository != 'jbr/structural-lsp-private'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -35,7 +46,6 @@ jobs:
 
   lints_and_docs:
     name: Lints and docs
-    if: github.repository != 'jbr/structural-lsp-private'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -51,10 +61,13 @@ jobs:
         run: cargo doc --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
+      # What release-plz's `cargo publish` builds: the package as excluded
+      # by Cargo.toml, compiled on its own.
+      - name: Package
+        run: cargo package --locked
 
   coverage:
     name: Coverage
-    if: github.repository != 'jbr/structural-lsp-private'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -66,9 +79,20 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Collect coverage data
         run: cargo llvm-cov --codecov --output-path codecov.json
+      # The Codecov project is the public repository's; development commits
+      # have other hashes.
       - name: Upload coverage to Codecov
+        if: github.repository != 'jbr/structural-lsp-private'
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: codecov.json
           slug: jbr/structural-lsp
+
+  publish:
+    name: Publish
+    needs: [test, lints_and_docs, coverage]
+    if: github.repository == 'jbr/structural-lsp-private' && github.event_name == 'push'
+    uses: ./.github/workflows/publish.yml
+    secrets:
+      PUBLIC_DEPLOY_KEY: ${{ secrets.PUBLIC_DEPLOY_KEY }}

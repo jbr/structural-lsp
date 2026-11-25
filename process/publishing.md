@@ -20,14 +20,28 @@ cargo +stable install --locked --git https://github.com/josh-project/josh --tag 
 conflicts with its `Infallible` impl now that `Infallible` is `!`, and
 `cargo install` does not read josh's own `rust-toolchain.toml`.
 
-`.github/workflows/publish.yml` runs `scripts/publish` on every push to
-`main` of the development repository, `jbr/structural-lsp-private`, so a
-push there is a publish. It pushes with a deploy key that can write to the
-public repository and nothing else; a push made with a deploy key starts
-the public repository's workflows, where one made with a workflow's own
-`GITHUB_TOKEN` would not. Every other workflow skips the development
-repository, so CI and releases run once, on the public side. Sync runs one
-way only: nothing carries a public commit back here unattended.
+A push to `main` of the development repository,
+`jbr/structural-lsp-private`, is a publish once it passes CI. `ci.yaml`
+runs in both repositories: here on every pull request, and on every push to
+`main`, where its last job, `publish`, calls `.github/workflows/publish.yml`
+after the test matrix, lints, docs, the package build and coverage have
+passed. A commit that fails any of them is not published, and so never
+reaches the public side's release workflows. The free plan has no branch
+protection for a private repository, so nothing stops merging a red pull
+request; the `needs:` on the publish job is the gate. Runs of CI on `main`
+queue in push order rather than cancelling one another, so publishes stay
+fast-forwards. `publish.yml`'s `workflow_dispatch` publishes `main` by hand
+without waiting for CI.
+
+The publish pushes with a deploy key that can write to the public
+repository and nothing else; a push made with a deploy key starts the
+public repository's workflows, where one made with a workflow's own
+`GITHUB_TOKEN` would not, so CI runs again there on the published commits.
+Coverage uploads to Codecov only from the public side, whose commit hashes
+the Codecov project records. Release-plz and the clippy SARIF upload skip
+the development repository; dist's `release.yml` runs `dist plan` on pull
+requests in both. Sync runs one way only: nothing carries a public commit
+back here unattended.
 
 `scripts/publish` also runs by hand, with the same checks.
 `scripts/publish --dry-run` filters and checks without pushing. A publish
